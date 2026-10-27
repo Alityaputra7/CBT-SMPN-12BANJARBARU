@@ -1,0 +1,6 @@
+{
+  "name": "CBT SMP Negeri 12 Banjarbaru",
+  "description": "Sistem Ujian Akhir Semester (CBT) SMP Negeri 12 Banjarbaru dengan multi-role (Siswa, Guru, Operator), kode unik 5-menitan, anti-curang, dan analisis nilai.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
