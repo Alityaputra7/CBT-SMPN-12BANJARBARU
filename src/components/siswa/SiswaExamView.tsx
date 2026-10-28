@@ -28,6 +28,8 @@ import { KatexRenderer } from '../common/KatexRenderer';
 interface SiswaExamViewProps {
   student: Student;
   exam: ExamSchedule;
+  availableExams?: ExamSchedule[];
+  onSelectExam?: (exam: ExamSchedule) => void;
   questionBank: QuestionBank;
   session: StudentExamSession;
   onUpdateSession: (updatedSession: StudentExamSession) => void;
@@ -39,6 +41,8 @@ interface SiswaExamViewProps {
 export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   student,
   exam,
+  availableExams = [],
+  onSelectExam,
   questionBank,
   session,
   onUpdateSession,
@@ -55,8 +59,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [violationAlert, setViolationAlert] = useState<{ show: boolean; msg: string; count: number } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const questions = questionBank.questions;
-  const currentQ = questions[currentQuestionIndex];
+
+  // Filter questions for the selected exam's subject, fallback to all questions
+  const subjectQuestions = questionBank.questions.filter(q => q.subjectId === exam.subjectId);
+  const questions = subjectQuestions.length > 0 ? subjectQuestions : questionBank.questions;
+  const currentQ = questions[currentQuestionIndex] || questions[0];
 
   // Auto-save feedback ticker
   const triggerSaveIndicator = () => {
@@ -364,6 +371,44 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </p>
         </div>
 
+        {/* Available Exams Selector */}
+        {availableExams && availableExams.length > 1 && onSelectExam && (
+          <div className="space-y-2">
+            <label className="block text-xs font-bold text-slate-700">
+              Pilih Mata Pelajaran Ujian Hari Ini:
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {availableExams.map(ex => {
+                const isSelected = ex.id === exam.id;
+                const count = questionBank.questions.filter(q => q.subjectId === ex.subjectId).length;
+                return (
+                  <button
+                    key={ex.id}
+                    type="button"
+                    onClick={() => {
+                      onSelectExam(ex);
+                      setCurrentQuestionIndex(0);
+                    }}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected 
+                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20' 
+                        : 'border-slate-200 bg-white hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-900">{ex.subjectName}</span>
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        {count > 0 ? `${count} Soal` : `${questionBank.questions.length} Soal`}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{ex.title}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Student Identity Card */}
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2">
           <div className="flex justify-between">
@@ -380,7 +425,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Mata Pelajaran:</span>
-            <span className="font-medium text-blue-700">{exam.subjectName}</span>
+            <span className="font-bold text-blue-700">{exam.subjectName}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Jumlah Butir Soal:</span>
+            <span className="font-mono font-bold text-emerald-700">{questions.length} Soal Aktif</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Durasi Pengerjaan:</span>
@@ -406,13 +455,22 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </ul>
         </div>
 
-        <button
-          onClick={handleStartExam}
-          className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-        >
-          <Maximize className="w-4 h-4" />
-          <span>Mulai Ujian Sekarang (Masuk Fullscreen)</span>
-        </button>
+        <div className="space-y-2">
+          <button
+            onClick={handleStartExam}
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Maximize className="w-4 h-4" />
+            <span>Mulai Ujian ({questions.length} Soal · Masuk Fullscreen)</span>
+          </button>
+          <button
+            type="button"
+            onClick={onExitExam}
+            className="w-full py-2 px-4 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center"
+          >
+            Keluar dari Sesi Siswa
+          </button>
+        </div>
       </div>
     );
   }

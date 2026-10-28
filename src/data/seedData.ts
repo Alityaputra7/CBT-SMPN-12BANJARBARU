@@ -181,6 +181,8 @@ export const INITIAL_SUBJECTS: Subject[] = [
   { id: 'sbj-seni', code: 'SBD-SMP', name: 'Seni Budaya', grade: 'Semua', assignedTeacherIds: ['guru-9'] }
 ];
 
+import { OFFICIAL_QUESTION_LIST, OFFICIAL_EXAM_SCHEDULES } from './officialQuestions';
+
 export const INITIAL_STUDENTS: Student[] = OFFICIAL_STUDENTS;
 
 export const INITIAL_QUESTION_BANK: QuestionBank = {
@@ -188,134 +190,14 @@ export const INITIAL_QUESTION_BANK: QuestionBank = {
   subjectId: 'sbj-mat',
   subjectName: 'Matematika',
   grade: 'VII',
-  title: 'Bank Soal UAS Semester Ganjil Matematika Kelas VII',
+  title: 'Bank Soal UAS Semester Ganjil SMP Negeri 12 Banjarbaru',
   teacherId: 'guru-1',
   teacherName: 'Ahmad Fathoni',
-  totalQuestions: 7,
-  questions: [
-    {
-      id: 'q-1',
-      bankId: 'qbank-mat-7',
-      number: 1,
-      type: 'pg',
-      prompt: 'Hitunglah nilai dari ekspresi aritmatika berikut:\n$$\\sqrt{144} + 3^2 - 5 \\times 2$$',
-      points: 15,
-      difficulty: 'mudah',
-      options: [
-        { id: 'A', text: '11' },
-        { id: 'B', text: '15' },
-        { id: 'C', text: '21' },
-        { id: 'D', text: '25' }
-      ],
-      correctAnswers: ['A']
-    },
-    {
-      id: 'q-2',
-      bankId: 'qbank-mat-7',
-      number: 2,
-      type: 'pg_kompleks',
-      prompt: 'Perhatikan relasi pertidaksamaan dan himpunan bilangan bulat berikut. Manakah pernyataan yang **BENAR**? (Pilih semua yang tepat)',
-      points: 20,
-      difficulty: 'sedang',
-      options: [
-        { id: 'A', text: 'Bilangan $-15$ lebih kecil daripada $-8$' },
-        { id: 'B', text: 'Hasil perkalian $(-6) \\times (-4)$ adalah $+24$' },
-        { id: 'C', text: 'FPB dari 24 dan 36 adalah 6' },
-        { id: 'D', text: 'Himpunan penyelesaian $2x + 4 > 10$ adalah $x > 3$' }
-      ],
-      correctAnswers: ['A', 'B', 'D']
-    },
-    {
-      id: 'q-3',
-      bankId: 'qbank-mat-7',
-      number: 3,
-      type: 'benar_salah',
-      prompt: 'Sudut siku-siku memiliki besar $90^\\circ$, dan dua sudut yang saling berpelurus (bersuplemen) memiliki jumlah besar sudut sama dengan $180^\\circ$.',
-      points: 15,
-      difficulty: 'mudah',
-      options: [
-        { id: 'BENAR', text: 'BENAR' },
-        { id: 'SALAH', text: 'SALAH' }
-      ],
-      correctAnswers: ['BENAR']
-    },
-    {
-      id: 'q-4',
-      bankId: 'qbank-mat-7',
-      number: 4,
-      type: 'isian',
-      prompt: 'Sebuah persegi panjang memiliki keliling $50\\text{ cm}$. Jika panjangnya adalah $15\\text{ cm}$, berapakah luas persegi panjang tersebut dalam $\\text{cm}^2$? (Tuliskan hanya angkanya)',
-      points: 20,
-      difficulty: 'sedang',
-      options: [],
-      correctAnswerText: '150'
-    },
-    {
-      id: 'q-5',
-      bankId: 'qbank-mat-7',
-      number: 5,
-      type: 'pg',
-      prompt: 'Bentuk sederhana dari operasi aljabar berikut adalah:\n$$\\frac{3x + 9}{3} + 2(x - 4)$$',
-      points: 15,
-      difficulty: 'sedang',
-      options: [
-        { id: 'A', text: '$3x - 5$' },
-        { id: 'B', text: '$3x - 1$' },
-        { id: 'C', text: '$5x - 8$' },
-        { id: 'D', text: '$x + 3$' }
-      ],
-      correctAnswers: ['A']
-    },
-    {
-      id: 'q-6',
-      bankId: 'qbank-mat-7',
-      number: 6,
-      type: 'uraian',
-      prompt: 'Di sebuah koperasi siswa SMP Negeri 12 Banjarbaru, harga 3 buku tulis dan 2 pulpen adalah Rp17.000,00. Sedangkan harga 2 buku tulis dan 5 pulpen adalah Rp26.000,00.\na) Buatlah model matematika dalam sistem persamaan linear dua variabel (SPLDV)!\nb) Tentukan harga masing-masing 1 buku tulis dan 1 pulpen!\nc) Berapakah yang harus dibayar seorang siswa jika membeli 4 buku tulis dan 3 pulpen?',
-      points: 15,
-      difficulty: 'sukar',
-      options: [],
-      essayRubric: 'Rubrik Penilaian: (a) Model matematika benar (skor 5): 3x + 2y = 17000 dan 2x + 5y = 26000. (b) Metode eliminasi/substitusi benar (skor 5): x = Rp3.000, y = Rp4.000. (c) Perhitungan 4x + 3y = 4(3000) + 3(4000) = Rp24.000 (skor 5).'
-    },
-    {
-      id: 'q-7',
-      bankId: 'qbank-mat-7',
-      number: 7,
-      type: 'mencocokkan',
-      prompt: 'Jodohkanlah operasi hitung matematika dan bentuk aljabar berikut dengan nilai pasangan yang tepat:',
-      points: 15,
-      difficulty: 'sedang',
-      options: [],
-      matchingPairs: [
-        { id: 'p-1', leftText: '$$\\sqrt{144}$$', rightText: '12' },
-        { id: 'p-2', leftText: '$$2^4$$', rightText: '16' },
-        { id: 'p-3', leftText: '$$(-5) \\times (-3)$$', rightText: '15' },
-        { id: 'p-4', leftText: '$$\\frac{1}{2} \\times 100$$', rightText: '50' }
-      ]
-    }
-  ]
+  totalQuestions: OFFICIAL_QUESTION_LIST.length,
+  questions: OFFICIAL_QUESTION_LIST
 };
 
-export const INITIAL_EXAMS: ExamSchedule[] = [
-  {
-    id: 'ex-mat-2026',
-    title: 'Ujian Akhir Semester Ganjil - Matematika',
-    subjectId: 'sbj-mat',
-    subjectName: 'Matematika',
-    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
-    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
-    durationMinutes: 90,
-    kkm: 75,
-    randomizeQuestions: true,
-    randomizeOptions: true,
-    questionBankId: 'qbank-mat-7',
-    status: 'ongoing',
-    tokenRequired: true
-  }
-];
+export const INITIAL_EXAMS: ExamSchedule[] = OFFICIAL_EXAM_SCHEDULES;
 
 export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {

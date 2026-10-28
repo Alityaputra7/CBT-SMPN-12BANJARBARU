@@ -60,12 +60,20 @@ export default function App() {
     return syncClassRoomCounts(loadedClasses, initialStds);
   });
   const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS);
-  const [questionBank, setQuestionBank] = useState<QuestionBank>(() => 
-    loadFromStorage(STORAGE_KEYS.QUESTIONS, INITIAL_QUESTION_BANK)
-  );
-  const [exams, setExams] = useState<ExamSchedule[]>(() => 
-    loadFromStorage(STORAGE_KEYS.EXAMS, INITIAL_EXAMS)
-  );
+  const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
+    const loaded = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
+    if (!loaded || loaded.questions.length < INITIAL_QUESTION_BANK.questions.length) {
+      return INITIAL_QUESTION_BANK;
+    }
+    return loaded;
+  });
+  const [exams, setExams] = useState<ExamSchedule[]>(() => {
+    const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
+    if (!loaded || loaded.length < INITIAL_EXAMS.length) {
+      return INITIAL_EXAMS;
+    }
+    return loaded;
+  });
   const [sessions, setSessions] = useState<StudentExamSession[]>(() => {
     const savedSessions = loadFromStorage<StudentExamSession[] | null>(STORAGE_KEYS.SESSIONS, null);
     const loadedStudents = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
@@ -310,8 +318,9 @@ export default function App() {
     handleAddAuditLog(`PELANGGARAN_${type.toUpperCase()}`, `Siswa ${currentStudent.name}: ${details}`);
   };
 
-  // Student active exam
-  const currentExam = exams[0] || INITIAL_EXAMS[0];
+  // Student active exam selection
+  const [selectedExamId, setSelectedExamId] = useState<string>(() => exams[0]?.id || 'ex-mat-2026');
+  const currentExam = exams.find(e => e.id === selectedExamId) || exams[0] || INITIAL_EXAMS[0];
   const currentStudentSession = currentStudent 
     ? sessions.find(s => s.studentId === currentStudent.id) || {
         id: `sess-${currentStudent.id}`,
@@ -480,6 +489,8 @@ export default function App() {
           <SiswaExamView
             student={currentStudent || students[0]}
             exam={currentExam}
+            availableExams={exams}
+            onSelectExam={(ex) => setSelectedExamId(ex.id)}
             questionBank={questionBank}
             session={currentStudentSession}
             onUpdateSession={handleUpdateStudentSession}

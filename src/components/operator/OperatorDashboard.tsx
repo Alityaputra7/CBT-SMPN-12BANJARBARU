@@ -408,14 +408,24 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     const existingIndex = questionBank.questions.findIndex(q => q.id === question.id);
     let updatedQuestions: Question[];
 
+    const finalSubjectId = targetSubjectId || (selectedQSubjectFilter !== 'all' ? selectedQSubjectFilter : 'sbj-mat');
+    const finalClassId = targetClassId || (selectedQClassFilter !== 'all' ? selectedQClassFilter : 'cls-1');
+
+    const preparedQuestion: Question = {
+      ...question,
+      subjectId: finalSubjectId,
+      classId: finalClassId,
+      bankId: `qbank-${finalSubjectId}`
+    };
+
     if (existingIndex >= 0) {
       updatedQuestions = [...questionBank.questions];
-      updatedQuestions[existingIndex] = question;
-      onAddAuditLog('EDIT_SOAL', `Operator memperbarui soal #${question.number} (${question.type})`);
+      updatedQuestions[existingIndex] = preparedQuestion;
+      onAddAuditLog('EDIT_SOAL', `Operator memperbarui soal #${preparedQuestion.number} (${preparedQuestion.type})`);
     } else {
-      question.number = questionBank.questions.length + 1;
-      updatedQuestions = [...questionBank.questions, question];
-      onAddAuditLog('TAMBAH_SOAL', `Operator menambahkan soal baru (${question.type})`);
+      preparedQuestion.number = questionBank.questions.length + 1;
+      updatedQuestions = [...questionBank.questions, preparedQuestion];
+      onAddAuditLog('TAMBAH_SOAL', `Operator menambahkan soal baru untuk mapel ${finalSubjectId} (${preparedQuestion.type})`);
     }
 
     onUpdateQuestionBank({
@@ -425,12 +435,19 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     });
     setEditingQuestion(null);
     setShowQuestionEditorModal(false);
+    alert(`Soal berhasil disimpan dan langsung disinkronkan ke paket ujian peserta.`);
   };
 
   const handleSaveImportedQuestions = (imported: Question[], targetSubjectId: string, targetClassId: string) => {
+    const finalSubjectId = targetSubjectId || (selectedQSubjectFilter !== 'all' ? selectedQSubjectFilter : 'sbj-mat');
+    const finalClassId = targetClassId || (selectedQClassFilter !== 'all' ? selectedQClassFilter : 'cls-1');
     const startingNum = questionBank.questions.length + 1;
+
     const renumbered = imported.map((q, idx) => ({
       ...q,
+      subjectId: finalSubjectId,
+      classId: finalClassId,
+      bankId: `qbank-${finalSubjectId}`,
       number: startingNum + idx
     }));
     const updated = [...questionBank.questions, ...renumbered];
@@ -440,8 +457,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       totalQuestions: updated.length,
       questions: updated
     });
-    onAddAuditLog('IMPOR_SOAL_MASSAL', `Operator berhasil mengimpor ${imported.length} butir soal baru`);
-    alert(`Berhasil menambahkan ${imported.length} butir soal ke bank soal.`);
+    onAddAuditLog('IMPOR_SOAL_MASSAL', `Operator berhasil mengimpor ${imported.length} butir soal baru ke mapel ${finalSubjectId}`);
+    alert(`Berhasil menambahkan ${imported.length} butir soal ke bank soal mapel terpilih. Soal langsung aktif untuk ujian siswa!`);
   };
 
   const handleDeleteQuestion = (qId: string) => {
@@ -1119,7 +1136,18 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 Kelola butir soal berdasarkan mata pelajaran dan kelas (Tipe: PG, PG Kompleks, Esay, Mencocokkan, KaTeX Math & Gambar).
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  onUpdateQuestionBank({ ...questionBank, totalQuestions: questionBank.questions.length });
+                  alert(`Berhasil menyinkronkan ${questionBank.questions.length} butir soal ke semua jadwal ujian siswa.`);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                title="Sinkronkan butir soal terbaru ke lembar ujian siswa"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-emerald-600" />
+                Update Soal ke Ujian
+              </button>
               <button
                 onClick={() => setShowQuestionImportModal(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
@@ -1172,19 +1200,51 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
 
           {/* Questions Grid */}
-          <div className="space-y-3">
-            {questionBank.questions.map((q, idx) => (
-              <div key={q.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-white hover:border-slate-300 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-slate-900 text-sm">Butir Soal #{idx + 1}</span>
-                    <span className="text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                      {q.type.replace('_', ' ')}
-                    </span>
-                    <span className="text-xs text-slate-500 font-mono">
-                      Bobot: {q.points} Poin · {q.difficulty || 'sedang'}
-                    </span>
+          {(() => {
+            const filteredQuestions = questionBank.questions.filter(q => {
+              const matchSubject = selectedQSubjectFilter === 'all' || q.subjectId === selectedQSubjectFilter || (!q.subjectId && selectedQSubjectFilter === 'sbj-mat');
+              const matchClass = selectedQClassFilter === 'all' || q.classId === selectedQClassFilter || (!q.classId);
+              return matchSubject && matchClass;
+            });
+
+            return (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs text-slate-500 px-1">
+                  <span>Menampilkan <strong>{filteredQuestions.length}</strong> dari <strong>{questionBank.questions.length}</strong> butir soal</span>
+                  <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Semua soal otomatis aktif di ujian peserta
+                  </span>
+                </div>
+
+                {filteredQuestions.length === 0 ? (
+                  <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl space-y-3">
+                    <p className="text-slate-500 text-sm">Belum ada butir soal untuk mata pelajaran atau kelas yang dipilih.</p>
+                    <button
+                      onClick={() => setShowQuestionEditorModal(true)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Tambah Soal untuk Mapel Ini
+                    </button>
                   </div>
+                ) : (
+                  filteredQuestions.map((q, idx) => (
+                    <div key={q.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-white hover:border-slate-300 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900 text-sm">Butir Soal #{idx + 1}</span>
+                          <span className="text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                            {q.type.replace('_', ' ')}
+                          </span>
+                          {q.subjectId && (
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {subjects.find(s => s.id === q.subjectId)?.name || q.subjectId}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-500 font-mono">
+                            Bobot: {q.points} Poin · {q.difficulty || 'sedang'}
+                          </span>
+                        </div>
 
                   <div className="flex items-center gap-1.5">
                     <button
@@ -1275,9 +1335,12 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     <span className="font-bold text-slate-800">Rubrik Penskoran:</span> {q.essayRubric}
                   </div>
                 )}
+                    </div>
+                  ))
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })()}
         </div>
       )}
 

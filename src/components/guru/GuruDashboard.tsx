@@ -176,12 +176,22 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     const existingIndex = questionBank.questions.findIndex(q => q.id === question.id);
     let updatedQuestions: Question[];
 
+    const finalSub = targetSubjectId || selectedSubjectFilter || 'sbj-mat';
+    const finalCls = targetClassId || (selectedClassFilter !== 'all' ? selectedClassFilter : 'cls-1');
+
+    const preparedQ: Question = {
+      ...question,
+      subjectId: finalSub,
+      classId: finalCls,
+      bankId: `qbank-${finalSub}`
+    };
+
     if (existingIndex >= 0) {
       updatedQuestions = [...questionBank.questions];
-      updatedQuestions[existingIndex] = question;
+      updatedQuestions[existingIndex] = preparedQ;
     } else {
-      question.number = questionBank.questions.length + 1;
-      updatedQuestions = [...questionBank.questions, question];
+      preparedQ.number = questionBank.questions.length + 1;
+      updatedQuestions = [...questionBank.questions, preparedQ];
     }
 
     onUpdateQuestionBank({
@@ -189,15 +199,22 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       totalQuestions: updatedQuestions.length,
       questions: updatedQuestions
     });
-    setSelectedQuestion(question);
+    setSelectedQuestion(preparedQ);
     setEditingQuestion(null);
     setShowEditorModal(false);
+    alert('Butir soal berhasil disimpan dan langsung aktif untuk peserta ujian.');
   };
 
   const handleSaveImportedQuestions = (imported: Question[], targetSubjectId: string, targetClassId: string) => {
+    const finalSub = targetSubjectId || selectedSubjectFilter || 'sbj-mat';
+    const finalCls = targetClassId || (selectedClassFilter !== 'all' ? selectedClassFilter : 'cls-1');
     const startingNum = questionBank.questions.length + 1;
+
     const renumbered = imported.map((q, idx) => ({
       ...q,
+      subjectId: finalSub,
+      classId: finalCls,
+      bankId: `qbank-${finalSub}`,
       number: startingNum + idx
     }));
     const updated = [...questionBank.questions, ...renumbered];
@@ -208,7 +225,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       questions: updated
     });
     setSelectedQuestion(renumbered[0] || questionBank.questions[0]);
-    alert(`Berhasil mengimpor ${imported.length} butir soal ke bank soal.`);
+    alert(`Berhasil mengimpor ${imported.length} butir soal ke mapel ini. Soal langsung aktif untuk ujian siswa.`);
   };
 
   // Save manual essay grade
@@ -375,36 +392,57 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            {/* Question List Column */}
-            <div className="lg:col-span-4 space-y-2">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wide block px-1">
-                Daftar Butir Soal ({questionBank.questions.length})
-              </span>
+          {/* Question List Column */}
+          {(() => {
+            const filteredGuruQuestions = questionBank.questions.filter(q => {
+              const matchSubject = !selectedSubjectFilter || selectedSubjectFilter === 'all' || q.subjectId === selectedSubjectFilter || (!q.subjectId && selectedSubjectFilter === 'sbj-mat');
+              const matchClass = !selectedClassFilter || selectedClassFilter === 'all' || q.classId === selectedClassFilter || (!q.classId);
+              return matchSubject && matchClass;
+            });
 
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
-                {questionBank.questions.map((q, idx) => (
-                  <div
-                    key={q.id}
-                    onClick={() => setSelectedQuestion(q)}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      selectedQuestion?.id === q.id
-                        ? 'border-blue-500 bg-blue-50/40 shadow-xs'
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-900">Soal No. {idx + 1}</span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
-                        {q.type.replace('_', ' ')} · {q.points} Poin
-                      </span>
+            return (
+              <div className="lg:col-span-4 space-y-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">
+                    Daftar Soal ({filteredGuruQuestions.length})
+                  </span>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                    Aktif di Ujian
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                  {filteredGuruQuestions.length === 0 ? (
+                    <div className="p-4 bg-slate-50 border border-dashed border-slate-300 rounded-xl text-center text-xs text-slate-500">
+                      Belum ada soal untuk mata pelajaran ini. Klik "Input Soal Manual" untuk menambahkan.
                     </div>
-                    <p className="text-xs text-slate-600 mt-1 line-clamp-2">
-                      {q.prompt.replace(/\$\$[\s\S]+?\$\$/g, '[Rumus]').replace(/\$[^\$]+?\$/g, '[Rumus]')}
-                    </p>
-                  </div>
-                ))}
+                  ) : (
+                    filteredGuruQuestions.map((q, idx) => (
+                      <div
+                        key={q.id}
+                        onClick={() => setSelectedQuestion(q)}
+                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                          selectedQuestion?.id === q.id
+                            ? 'border-blue-500 bg-blue-50/40 shadow-xs'
+                            : 'border-slate-200 bg-white hover:bg-slate-50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-900">Soal #{idx + 1}</span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 uppercase">
+                            {q.type.replace('_', ' ')} · {q.points} Poin
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                          {q.prompt.replace(/\$\$[\s\S]+?\$\$/g, '[Rumus]').replace(/\$[^\$]+?\$/g, '[Rumus]')}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+            );
+          })()}
 
             {/* Question Detail & KaTeX Live Preview */}
             <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">

@@ -88,6 +88,9 @@ export interface MatchingPair {
 export interface Question {
   id: string;
   bankId: string;
+  subjectId?: string;
+  classId?: string;
+  grade?: string;
   number: number;
   type: QuestionType;
   prompt: string;
