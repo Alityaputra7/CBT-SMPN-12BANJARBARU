@@ -43,41 +43,57 @@ import { SecurityAndDeployGuide } from './components/common/SecurityAndDeployGui
 import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
-  // App State with local storage persistence
+  // App State with permanent local storage persistence
   const [schoolSetting, setSchoolSetting] = useState<SchoolSetting>(() => 
     loadFromStorage(STORAGE_KEYS.SETTING, INITIAL_SCHOOL_SETTING)
   );
-  const [operator, setOperator] = useState<UserAccount>(INITIAL_OPERATOR);
-  const [teachers, setTeachers] = useState<UserAccount[]>(() => 
-    loadFromStorage(STORAGE_KEYS.TEACHERS, INITIAL_TEACHERS)
+  const [operator, setOperator] = useState<UserAccount>(() => 
+    loadFromStorage(STORAGE_KEYS.OPERATOR, INITIAL_OPERATOR)
   );
-  const [students, setStudents] = useState<Student[]>(() => 
-    loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS)
-  );
+  const [teachers, setTeachers] = useState<UserAccount[]>(() => {
+    const loaded = loadFromStorage<UserAccount[] | null>(STORAGE_KEYS.TEACHERS, null);
+    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
+      return INITIAL_TEACHERS;
+    }
+    return loaded;
+  });
+  const [students, setStudents] = useState<Student[]>(() => {
+    const loaded = loadFromStorage<Student[] | null>(STORAGE_KEYS.STUDENTS, null);
+    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
+      return INITIAL_STUDENTS;
+    }
+    return loaded;
+  });
   const [classes, setClasses] = useState<ClassRoom[]>(() => {
     const loadedClasses = loadFromStorage(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
     const initialStds = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
     return syncClassRoomCounts(loadedClasses, initialStds);
   });
-  const [subjects, setSubjects] = useState<Subject[]>(INITIAL_SUBJECTS);
+  const [subjects, setSubjects] = useState<Subject[]>(() => {
+    const loaded = loadFromStorage<Subject[] | null>(STORAGE_KEYS.SUBJECTS, null);
+    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
+      return INITIAL_SUBJECTS;
+    }
+    return loaded;
+  });
   const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
     const loaded = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
-    if (!loaded || loaded.questions.length < INITIAL_QUESTION_BANK.questions.length) {
+    if (!loaded || !Array.isArray(loaded.questions)) {
       return INITIAL_QUESTION_BANK;
     }
     return loaded;
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
-    if (!loaded || loaded.length < INITIAL_EXAMS.length) {
+    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
       return INITIAL_EXAMS;
     }
     return loaded;
   });
   const [sessions, setSessions] = useState<StudentExamSession[]>(() => {
     const savedSessions = loadFromStorage<StudentExamSession[] | null>(STORAGE_KEYS.SESSIONS, null);
-    const loadedStudents = loadFromStorage(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
-    const loadedExams = loadFromStorage(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
+    const loadedStudents = loadFromStorage<Student[]>(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
+    const loadedExams = loadFromStorage<ExamSchedule[]>(STORAGE_KEYS.EXAMS, INITIAL_EXAMS);
     const baseSessions = savedSessions && savedSessions.length > 0 ? savedSessions : createInitialStudentSessions(loadedStudents);
     return syncStudentSessions(loadedStudents, baseSessions, loadedExams[0] || INITIAL_EXAMS[0]);
   });
@@ -98,17 +114,19 @@ export default function App() {
   // Navigation: 'overview' | 'operator' | 'guru' | 'siswa' | 'panduan' | 'login'
   const [activeSection, setActiveSection] = useState<string>('login');
 
-  // Persistence to localStorage
+  // Persistence to localStorage: ensures ALL data remains saved across logout & page reload
   useEffect(() => {
+    saveToStorage(STORAGE_KEYS.OPERATOR, operator);
     saveToStorage(STORAGE_KEYS.STUDENTS, students);
     saveToStorage(STORAGE_KEYS.TEACHERS, teachers);
     saveToStorage(STORAGE_KEYS.CLASSES, classes);
+    saveToStorage(STORAGE_KEYS.SUBJECTS, subjects);
     saveToStorage(STORAGE_KEYS.QUESTIONS, questionBank);
     saveToStorage(STORAGE_KEYS.EXAMS, exams);
     saveToStorage(STORAGE_KEYS.SESSIONS, sessions);
     saveToStorage(STORAGE_KEYS.SETTING, schoolSetting);
     saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
-  }, [students, teachers, classes, questionBank, exams, sessions, schoolSetting, auditLogs]);
+  }, [operator, students, teachers, classes, subjects, questionBank, exams, sessions, schoolSetting, auditLogs]);
 
   // Single active session map (prevent duplicate login per student)
   const activeSessionsMap: Record<string, boolean> = {};
@@ -150,23 +168,63 @@ export default function App() {
     const updatedSessions = syncStudentSessions(newStudents, sessions, exams[0] || INITIAL_EXAMS[0]);
     setSessions(updatedSessions);
 
+    // Immediate storage flush
+    saveToStorage(STORAGE_KEYS.STUDENTS, newStudents);
+    saveToStorage(STORAGE_KEYS.CLASSES, updatedClasses);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updatedSessions);
+
     triggerSyncNotification(`Data siswa berhasil disinkronkan (${newStudents.length} siswa terdaftar)`);
   };
 
   // Synchronized teacher updater
   const handleUpdateTeachers = (newTeachers: UserAccount[]) => {
     setTeachers(newTeachers);
+    saveToStorage(STORAGE_KEYS.TEACHERS, newTeachers);
     triggerSyncNotification(`Data guru berhasil diperbarui (${newTeachers.length} guru aktif)`);
+  };
+
+  // Synchronized subject updater
+  const handleUpdateSubjects = (newSubjects: Subject[]) => {
+    setSubjects(newSubjects);
+    saveToStorage(STORAGE_KEYS.SUBJECTS, newSubjects);
+    triggerSyncNotification(`Data mata pelajaran diperbarui (${newSubjects.length} mapel terdaftar)`);
+  };
+
+  // Synchronized exams updater
+  const handleUpdateExams = (newExams: ExamSchedule[]) => {
+    setExams(newExams);
+    saveToStorage(STORAGE_KEYS.EXAMS, newExams);
+    triggerSyncNotification(`Jadwal ujian diperbarui (${newExams.length} jadwal aktif)`);
+  };
+
+  // Synchronized setting updater
+  const handleUpdateSetting = (newSetting: SchoolSetting) => {
+    setSchoolSetting(newSetting);
+    saveToStorage(STORAGE_KEYS.SETTING, newSetting);
+    triggerSyncNotification('Pengaturan sekolah berhasil diperbarui');
+  };
+
+  // Synchronized sessions updater
+  const handleUpdateSessions = (newSessions: StudentExamSession[]) => {
+    setSessions(newSessions);
+    saveToStorage(STORAGE_KEYS.SESSIONS, newSessions);
   };
 
   // Synchronized question bank updater: auto-updates exams and active questions
   const handleUpdateQuestionBank = (newBank: QuestionBank) => {
     setQuestionBank(newBank);
+    saveToStorage(STORAGE_KEYS.QUESTIONS, newBank);
+
     // Sync exams with new question count
-    setExams(prev => prev.map((ex, idx) => idx === 0 ? {
-      ...ex,
-      totalQuestions: newBank.questions.length
-    } : ex));
+    setExams(prev => {
+      const updated = prev.map((ex, idx) => idx === 0 ? {
+        ...ex,
+        totalQuestions: newBank.questions.length
+      } : ex);
+      saveToStorage(STORAGE_KEYS.EXAMS, updated);
+      return updated;
+    });
+
     triggerSyncNotification(`Bank soal diperbarui (${newBank.questions.length} butir soal aktif)`);
   };
 
@@ -290,13 +348,30 @@ export default function App() {
   const handleLogout = () => {
     if (currentRole === 'siswa' && currentStudent) {
       // Mark offline
-      setSessions(prev => prev.map(s => {
-        if (s.studentId === currentStudent.id) {
-          return { ...s, isOnline: false };
-        }
-        return s;
-      }));
+      setSessions(prev => {
+        const updated = prev.map(s => {
+          if (s.studentId === currentStudent.id) {
+            return { ...s, isOnline: false };
+          }
+          return s;
+        });
+        saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+        return updated;
+      });
     }
+
+    // Explicitly guarantee all master data & latest edits remain saved in localStorage
+    saveToStorage(STORAGE_KEYS.OPERATOR, operator);
+    saveToStorage(STORAGE_KEYS.STUDENTS, students);
+    saveToStorage(STORAGE_KEYS.TEACHERS, teachers);
+    saveToStorage(STORAGE_KEYS.CLASSES, classes);
+    saveToStorage(STORAGE_KEYS.SUBJECTS, subjects);
+    saveToStorage(STORAGE_KEYS.QUESTIONS, questionBank);
+    saveToStorage(STORAGE_KEYS.EXAMS, exams);
+    saveToStorage(STORAGE_KEYS.SESSIONS, sessions);
+    saveToStorage(STORAGE_KEYS.SETTING, schoolSetting);
+    saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+
     setCurrentRole(null);
     setCurrentUser(null);
     setCurrentStudent(null);
@@ -304,10 +379,13 @@ export default function App() {
   };
 
   const handlePasswordChanged = (newPassword: string) => {
-    setOperator(prev => ({
-      ...prev,
+    const updatedOperator = {
+      ...operator,
+      password: newPassword,
       mustChangePassword: false
-    }));
+    };
+    setOperator(updatedOperator);
+    saveToStorage(STORAGE_KEYS.OPERATOR, updatedOperator);
     setShowPasswordChangeModal(false);
     alert('Kata sandi operator berhasil diperbarui!');
     handleAddAuditLog('GANTI_PASSWORD_OPERATOR', 'Operator memperbarui kata sandi pertama kali');
@@ -449,13 +527,13 @@ export default function App() {
             onUpdateTeachers={handleUpdateTeachers}
             classes={classes}
             subjects={subjects}
-            onUpdateSubjects={setSubjects}
+            onUpdateSubjects={handleUpdateSubjects}
             exams={exams}
-            onUpdateExams={setExams}
+            onUpdateExams={handleUpdateExams}
             sessions={sessions}
-            onUpdateSessions={setSessions}
+            onUpdateSessions={handleUpdateSessions}
             schoolSetting={schoolSetting}
-            onUpdateSetting={setSchoolSetting}
+            onUpdateSetting={handleUpdateSetting}
             auditLogs={auditLogs}
             onAddAuditLog={handleAddAuditLog}
             questionBank={questionBank}
@@ -475,7 +553,7 @@ export default function App() {
             onUpdateQuestionBank={handleUpdateQuestionBank}
             exams={exams}
             sessions={sessions}
-            onUpdateSessions={setSessions}
+            onUpdateSessions={handleUpdateSessions}
             classes={classes}
             subjects={subjects}
             students={students}

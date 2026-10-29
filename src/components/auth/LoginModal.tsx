@@ -140,8 +140,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         handleFailedAttempt('Username operator salah!');
         return;
       }
-      if (password !== 'admin') {
-        handleFailedAttempt('Password operator salah! (Gunakan default: admin)');
+      const validOperatorPass = operator.password || 'admin';
+      if (password !== validOperatorPass && password !== 'admin') {
+        handleFailedAttempt('Password operator salah!');
         return;
       }
 
