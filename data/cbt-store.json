@@ -1,0 +1,5864 @@
+{
+  "version": 2,
+  "lastUpdated": 1793315716631,
+  "data": {
+    "schoolSetting": {
+      "id": "sch-1",
+      "name": "SMP Negeri 12 Banjarbaru",
+      "npsn": "30304612",
+      "address": "Jl. Panglima Batur Barat No. 12, Kel. Loktabat Utara, Kota Banjarbaru, Kalimantan Selatan",
+      "academicYear": "2026/2027",
+      "semester": "Ganjil",
+      "maxViolations": 3,
+      "sebStrictMode": false,
+      "sebConfigKey": "a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9",
+      "logoUrl": "/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg",
+      "allowStudentViewResult": true,
+      "principalTitle": "Plt. Kepala Sekolah",
+      "principalName": "Legiyo, S.Pd",
+      "principalNip": "196907022000031010",
+      "cbtCoordinatorName": "Dwi Setyarini, S.Pd.",
+      "cbtCoordinatorNip": "198502082009032008"
+    },
+    "operator": {
+      "id": "usr-admin",
+      "role": "operator",
+      "usernameOrNip": "admin",
+      "name": "Dwi Setyarini, S.Pd. (Koordinator CBT)",
+      "email": "dwi.setyarini@smpn12bjb.sch.id",
+      "mustChangePassword": true
+    },
+    "students": [
+      {
+        "id": "std-001",
+        "nis": "3132399330",
+        "name": "Ahmad Habibi",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "01"
+      },
+      {
+        "id": "std-002",
+        "nis": "0132881160",
+        "name": "ALFIAN HADI",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "02"
+      },
+      {
+        "id": "std-003",
+        "nis": "3131754629",
+        "name": "Budiannor",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "03"
+      },
+      {
+        "id": "std-004",
+        "nis": "3141422874",
+        "name": "FITRIA NUR RAHMI",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "04"
+      },
+      {
+        "id": "std-005",
+        "nis": "3132010158",
+        "name": "Habibi Ahmad",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "05"
+      },
+      {
+        "id": "std-006",
+        "nis": "3145505379",
+        "name": "LATIFAH MAKIAH",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "06"
+      },
+      {
+        "id": "std-007",
+        "nis": "0148880145",
+        "name": "MOH.KENZIE ADYAFAIRUZ A.R",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "07"
+      },
+      {
+        "id": "std-008",
+        "nis": "3135555783",
+        "name": "Muhammad Alfianor",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "08"
+      },
+      {
+        "id": "std-009",
+        "nis": "3125564079",
+        "name": "Muhammad Anshori",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "09"
+      },
+      {
+        "id": "std-010",
+        "nis": "3139136273",
+        "name": "Muhammad Fahrian",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "10"
+      },
+      {
+        "id": "std-011",
+        "nis": "3134308996",
+        "name": "MUHAMMAD FERDIAN",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "11"
+      },
+      {
+        "id": "std-012",
+        "nis": "3144412100",
+        "name": "MUHAMMAD ILHAM",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "12"
+      },
+      {
+        "id": "std-013",
+        "nis": "3149698681",
+        "name": "MUHAMMAD MUJIB",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "13"
+      },
+      {
+        "id": "std-014",
+        "nis": "3137959503",
+        "name": "MUHAMMAD NADHIF",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "14"
+      },
+      {
+        "id": "std-015",
+        "nis": "3129498237",
+        "name": "MUHAMMAD RAFA",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "15"
+      },
+      {
+        "id": "std-016",
+        "nis": "3144415260",
+        "name": "MUHAMMAD REIZA SAPUTRA",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "16"
+      },
+      {
+        "id": "std-017",
+        "nis": "3137747883",
+        "name": "MUHAMMAD RIDHANI",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "17"
+      },
+      {
+        "id": "std-018",
+        "nis": "3120260162",
+        "name": "MUHAMMAD RIDHO NAZHAN",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "18"
+      },
+      {
+        "id": "std-019",
+        "nis": "3146932216",
+        "name": "MUHAMMAD YAJID",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "19"
+      },
+      {
+        "id": "std-020",
+        "nis": "3145612029",
+        "name": "MUHAMMAD ZAHDAN AL- FAZRI",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "20"
+      },
+      {
+        "id": "std-021",
+        "nis": "3133735735",
+        "name": "NAURA FAUZIA",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "21"
+      },
+      {
+        "id": "std-022",
+        "nis": "3136603611",
+        "name": "NUR ADDIBA",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "22"
+      },
+      {
+        "id": "std-023",
+        "nis": "3128958244",
+        "name": "RAFA RAMADHAN",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "23"
+      },
+      {
+        "id": "std-024",
+        "nis": "3136501354",
+        "name": "Raffa Septha Aldaris",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "24"
+      },
+      {
+        "id": "std-025",
+        "nis": "3132075662",
+        "name": "RAJIB AUFAR",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "25"
+      },
+      {
+        "id": "std-026",
+        "nis": "3139939165",
+        "name": "SELVI ADITYA",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "26"
+      },
+      {
+        "id": "std-027",
+        "nis": "0148794705",
+        "name": "SITI KAUSARI",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "27"
+      },
+      {
+        "id": "std-028",
+        "nis": "3135581014",
+        "name": "Siti Rusna",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "28"
+      },
+      {
+        "id": "std-029",
+        "nis": "3147555173",
+        "name": "SUHAIMAH MAHIRAH",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "P",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "29"
+      },
+      {
+        "id": "std-030",
+        "nis": "3134562253",
+        "name": "Abdurahman",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "01"
+      },
+      {
+        "id": "std-031",
+        "nis": "0122985481",
+        "name": "Ahmad Noor Fikal",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "02"
+      },
+      {
+        "id": "std-032",
+        "nis": "3132805875",
+        "name": "ALDA AKILA",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "03"
+      },
+      {
+        "id": "std-033",
+        "nis": "3127076468",
+        "name": "Asya Rafifa",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "04"
+      },
+      {
+        "id": "std-034",
+        "nis": "3139981469",
+        "name": "Diandra Aqilla Andreani",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "05"
+      },
+      {
+        "id": "std-035",
+        "nis": "3128171218",
+        "name": "Kia Florita Ananda",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "06"
+      },
+      {
+        "id": "std-036",
+        "nis": "3137678381",
+        "name": "M. RIZKI",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "07"
+      },
+      {
+        "id": "std-037",
+        "nis": "3128037314",
+        "name": "Mirna Sari",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "08"
+      },
+      {
+        "id": "std-038",
+        "nis": "0137987449",
+        "name": "Muhammad Asfiannor",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "09"
+      },
+      {
+        "id": "std-039",
+        "nis": "3129900202",
+        "name": "Muhammad Randra",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "10"
+      },
+      {
+        "id": "std-040",
+        "nis": "3126620690",
+        "name": "MUHAMMAD RIFKIAN",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "11"
+      },
+      {
+        "id": "std-041",
+        "nis": "0114923284",
+        "name": "Muhammad Rizki Maulana",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "12"
+      },
+      {
+        "id": "std-042",
+        "nis": "3133823048",
+        "name": "Muhammad Syauqihilali",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "13"
+      },
+      {
+        "id": "std-043",
+        "nis": "3138451288",
+        "name": "MUSHOFFIINA",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "14"
+      },
+      {
+        "id": "std-044",
+        "nis": "0123576517",
+        "name": "Nor Hayati",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "15"
+      },
+      {
+        "id": "std-045",
+        "nis": "3138146085",
+        "name": "Syahira Noor Pahriah",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "P",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "16"
+      },
+      {
+        "id": "std-046",
+        "nis": "3123285224",
+        "name": "Wendi",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "gender": "L",
+        "roomNumber": "Ruang 02",
+        "seatNumber": "17"
+      },
+      {
+        "id": "std-047",
+        "nis": "3136278531",
+        "name": "Abdurahim",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "01"
+      },
+      {
+        "id": "std-048",
+        "nis": "3122040262",
+        "name": "Ahmad Hendra",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "02"
+      },
+      {
+        "id": "std-049",
+        "nis": "3130631738",
+        "name": "ALDY",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "03"
+      },
+      {
+        "id": "std-050",
+        "nis": "0136170581",
+        "name": "Alya Khumaira",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "04"
+      },
+      {
+        "id": "std-051",
+        "nis": "3123017232",
+        "name": "Febriyani Agustina",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "05"
+      },
+      {
+        "id": "std-052",
+        "nis": "3133624481",
+        "name": "MAURA",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "06"
+      },
+      {
+        "id": "std-053",
+        "nis": "3122823062",
+        "name": "Meliya",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "07"
+      },
+      {
+        "id": "std-054",
+        "nis": "0101357758",
+        "name": "MUHAMMAD ADITYA ADHA",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "08"
+      },
+      {
+        "id": "std-055",
+        "nis": "3136739272",
+        "name": "MUHAMMAD AMIN BADALI",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "09"
+      },
+      {
+        "id": "std-056",
+        "nis": "3132861464",
+        "name": "Muhammad Arifin",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "10"
+      },
+      {
+        "id": "std-057",
+        "nis": "3134525138",
+        "name": "MUHAMMAD AZKA",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "11"
+      },
+      {
+        "id": "std-058",
+        "nis": "3124959940",
+        "name": "MUHAMMAD HALEVI",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "12"
+      },
+      {
+        "id": "std-059",
+        "nis": "0133001618",
+        "name": "Muhammad Hilman",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "13"
+      },
+      {
+        "id": "std-060",
+        "nis": "0131661392",
+        "name": "MUHAMMAD NABIL",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "L",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "14"
+      },
+      {
+        "id": "std-061",
+        "nis": "0133855063",
+        "name": "Noor Aulia",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "15"
+      },
+      {
+        "id": "std-062",
+        "nis": "0125605321",
+        "name": "Nor Aliqa",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "16"
+      },
+      {
+        "id": "std-063",
+        "nis": "3124963695",
+        "name": "Nur Alika Hajjah",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "gender": "P",
+        "roomNumber": "Ruang 03",
+        "seatNumber": "17"
+      },
+      {
+        "id": "std-064",
+        "nis": "3123943043",
+        "name": "Ahmad Hambali",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "01"
+      },
+      {
+        "id": "std-065",
+        "nis": "0114505137",
+        "name": "Ahmad Muzakir",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "02"
+      },
+      {
+        "id": "std-066",
+        "nis": "0116731076",
+        "name": "Ahmad Raihan Akbar",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "03"
+      },
+      {
+        "id": "std-067",
+        "nis": "0111720646",
+        "name": "Aina Santi",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "04"
+      },
+      {
+        "id": "std-068",
+        "nis": "0121259564",
+        "name": "Ainun Jariah",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "05"
+      },
+      {
+        "id": "std-069",
+        "nis": "0115007905",
+        "name": "Aisyah",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "06"
+      },
+      {
+        "id": "std-070",
+        "nis": "3128394783",
+        "name": "Alya Meilani",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "07"
+      },
+      {
+        "id": "std-071",
+        "nis": "0125766036",
+        "name": "April Maulana",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "08"
+      },
+      {
+        "id": "std-072",
+        "nis": "3109244006",
+        "name": "Laini",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "09"
+      },
+      {
+        "id": "std-073",
+        "nis": "0117878175",
+        "name": "M. FIKRI HAIKAL",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "10"
+      },
+      {
+        "id": "std-074",
+        "nis": "3112320387",
+        "name": "Muhammad Fathi Alifi",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "11"
+      },
+      {
+        "id": "std-075",
+        "nis": "0114979338",
+        "name": "Muhammad Gozali",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "12"
+      },
+      {
+        "id": "std-076",
+        "nis": "0129514487",
+        "name": "Muhammad Hanafi",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "13"
+      },
+      {
+        "id": "std-077",
+        "nis": "0125677623",
+        "name": "Muhammad Harun Naraya",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "14"
+      },
+      {
+        "id": "std-078",
+        "nis": "3122302256",
+        "name": "MUHAMMAD HASSAN RIFA'AT",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "15"
+      },
+      {
+        "id": "std-079",
+        "nis": "3113351534",
+        "name": "Muhammad Jaylani",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "16"
+      },
+      {
+        "id": "std-080",
+        "nis": "0126076571",
+        "name": "Muhammad Nauza Widhanu Nugraha",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "17"
+      },
+      {
+        "id": "std-081",
+        "nis": "0121711669",
+        "name": "Muhammad Nazrullah",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "18"
+      },
+      {
+        "id": "std-082",
+        "nis": "3114207707",
+        "name": "Muhammad Novaliansyah Rahman",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "19"
+      },
+      {
+        "id": "std-083",
+        "nis": "3113860446",
+        "name": "Muhammad Ripki",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "20"
+      },
+      {
+        "id": "std-084",
+        "nis": "0116048717",
+        "name": "MUHAMMAD RIZA ADITIYA",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "21"
+      },
+      {
+        "id": "std-085",
+        "nis": "0121617425",
+        "name": "Muhammad Zein",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "22"
+      },
+      {
+        "id": "std-086",
+        "nis": "0128269586",
+        "name": "Mutia Rahmi",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "23"
+      },
+      {
+        "id": "std-087",
+        "nis": "0121909520",
+        "name": "Nor Safa",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "24"
+      },
+      {
+        "id": "std-088",
+        "nis": "3126998758",
+        "name": "Norlaila Nisfi",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "25"
+      },
+      {
+        "id": "std-089",
+        "nis": "0126311399",
+        "name": "Nur Sapitri",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "26"
+      },
+      {
+        "id": "std-090",
+        "nis": "0118373341",
+        "name": "RUDI RAHMAN",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "L",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "27"
+      },
+      {
+        "id": "std-091",
+        "nis": "0127124105",
+        "name": "Siti Aminah",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "28"
+      },
+      {
+        "id": "std-092",
+        "nis": "0125774453",
+        "name": "Sofya Adellia Rinanda",
+        "classId": "cls-9",
+        "className": "IX",
+        "gender": "P",
+        "roomNumber": "Ruang 04",
+        "seatNumber": "29"
+      }
+    ],
+    "teachers": [
+      {
+        "id": "guru-1",
+        "role": "guru",
+        "usernameOrNip": "197910132014061002",
+        "name": "Ahmad Fathoni",
+        "email": "ahmad.fathoni@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-mat",
+          "sbj-inf"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-2",
+        "role": "guru",
+        "usernameOrNip": "198502082009032008",
+        "name": "Dwi Setyarini",
+        "email": "dwi.setyarini@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-ipa"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-3",
+        "role": "guru",
+        "usernameOrNip": "196907022000031010",
+        "name": "Legiyo",
+        "email": "legiyo@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-bin"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-4",
+        "role": "guru",
+        "usernameOrNip": "199703022022212002",
+        "name": "Maulida Fitriani",
+        "email": "maulida.fitriani@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-big"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-5",
+        "role": "guru",
+        "usernameOrNip": "199103022022212006",
+        "name": "Nisfi Nor Imaniar",
+        "email": "nisfi.imaniar@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-pai"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-6",
+        "role": "guru",
+        "usernameOrNip": "197006011997021006",
+        "name": "Riswan Hidayat",
+        "email": "riswan.hidayat@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-ips"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-7",
+        "role": "guru",
+        "usernameOrNip": "198105082022211003",
+        "name": "Setya Kariyadi",
+        "email": "setya.kariyadi@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-ppkn"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-8",
+        "role": "guru",
+        "usernameOrNip": "123456789999999999",
+        "name": "Nazma Aulia",
+        "email": "nazma.aulia@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-pjok"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      },
+      {
+        "id": "guru-9",
+        "role": "guru",
+        "usernameOrNip": "262012931000219331",
+        "name": "Alitya Putra Maulidan",
+        "email": "alitya.maulidan@smpn12bjb.sch.id",
+        "password": "guru123",
+        "mustChangePassword": false,
+        "assignedSubjectIds": [
+          "sbj-seni"
+        ],
+        "assignedClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ]
+      }
+    ],
+    "classes": [
+      {
+        "id": "cls-1",
+        "grade": "VII",
+        "name": "VII",
+        "homeroomTeacherName": "Ahmad Fathoni",
+        "totalStudents": 29
+      },
+      {
+        "id": "cls-8a",
+        "grade": "VIII",
+        "name": "VIII-A",
+        "homeroomTeacherName": "Dwi Setyarini",
+        "totalStudents": 17
+      },
+      {
+        "id": "cls-8b",
+        "grade": "VIII",
+        "name": "VIII-B",
+        "homeroomTeacherName": "Legiyo",
+        "totalStudents": 17
+      },
+      {
+        "id": "cls-9",
+        "grade": "IX",
+        "name": "IX",
+        "homeroomTeacherName": "Riswan Hidayat",
+        "totalStudents": 29
+      }
+    ],
+    "subjects": [
+      {
+        "id": "sbj-mat",
+        "code": "MAT-SMP",
+        "name": "Matematika",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-1"
+        ]
+      },
+      {
+        "id": "sbj-ipa",
+        "code": "IPA-SMP",
+        "name": "Ilmu Pengetahuan Alam (IPA)",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-2"
+        ]
+      },
+      {
+        "id": "sbj-bin",
+        "code": "BIN-SMP",
+        "name": "Bahasa Indonesia",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-3"
+        ]
+      },
+      {
+        "id": "sbj-big",
+        "code": "BIG-SMP",
+        "name": "Bahasa Inggris",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-4"
+        ]
+      },
+      {
+        "id": "sbj-pai",
+        "code": "PAI-SMP",
+        "name": "Pendidikan Agama Islam",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-5"
+        ]
+      },
+      {
+        "id": "sbj-ppkn",
+        "code": "PPKN-SMP",
+        "name": "Pendidikan Pancasila (PPKn)",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-7"
+        ]
+      },
+      {
+        "id": "sbj-ips",
+        "code": "IPS-SMP",
+        "name": "Ilmu Pengetahuan Sosial (IPS)",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-6"
+        ]
+      },
+      {
+        "id": "sbj-inf",
+        "code": "INF-SMP",
+        "name": "Informatika",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-1"
+        ]
+      },
+      {
+        "id": "sbj-pjok",
+        "code": "PJOK-SMP",
+        "name": "Pendidikan Jasmani (PJOK)",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-8"
+        ]
+      },
+      {
+        "id": "sbj-seni",
+        "code": "SBD-SMP",
+        "name": "Seni Budaya",
+        "grade": "Semua",
+        "assignedTeacherIds": [
+          "guru-9"
+        ]
+      }
+    ],
+    "exams": [
+      {
+        "id": "ex-mat-2026",
+        "title": "UAS Semester Ganjil - Matematika",
+        "subjectId": "sbj-mat",
+        "subjectName": "Matematika",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-mat-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      },
+      {
+        "id": "ex-ipa-2026",
+        "title": "UAS Semester Ganjil - Ilmu Pengetahuan Alam (IPA)",
+        "subjectId": "sbj-ipa",
+        "subjectName": "Ilmu Pengetahuan Alam (IPA)",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-ipa-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      },
+      {
+        "id": "ex-bin-2026",
+        "title": "UAS Semester Ganjil - Bahasa Indonesia",
+        "subjectId": "sbj-bin",
+        "subjectName": "Bahasa Indonesia",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-bin-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      },
+      {
+        "id": "ex-big-2026",
+        "title": "UAS Semester Ganjil - Bahasa Inggris",
+        "subjectId": "sbj-big",
+        "subjectName": "Bahasa Inggris",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-big-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      },
+      {
+        "id": "ex-pai-2026",
+        "title": "UAS Semester Ganjil - Pendidikan Agama Islam",
+        "subjectId": "sbj-pai",
+        "subjectName": "Pendidikan Agama Islam",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-pai-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      },
+      {
+        "id": "ex-inf-2026",
+        "title": "UAS Semester Ganjil - Informatika",
+        "subjectId": "sbj-inf",
+        "subjectName": "Informatika",
+        "targetClassIds": [
+          "cls-1",
+          "cls-8a",
+          "cls-8b",
+          "cls-9"
+        ],
+        "targetClassNames": [
+          "VII",
+          "VIII-A",
+          "VIII-B",
+          "IX"
+        ],
+        "date": "2026-10-29",
+        "startTime": "07:00",
+        "endTime": "23:59",
+        "durationMinutes": 90,
+        "kkm": 75,
+        "randomizeQuestions": true,
+        "randomizeOptions": true,
+        "questionBankId": "qbank-inf-7",
+        "status": "ongoing",
+        "tokenRequired": true
+      }
+    ],
+    "sessions": [
+      {
+        "id": "sess-std-001",
+        "studentId": "std-001",
+        "studentName": "Ahmad Habibi",
+        "nis": "3132399330",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "submitted",
+        "startedAt": "07:35:10",
+        "submittedAt": "08:45:20",
+        "timeRemainingSeconds": 0,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / Windows 11",
+        "isOnline": false,
+        "lastHeartbeat": 1793311157723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310757723
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B",
+              "D"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793310857723
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310957723
+          },
+          "q-4": {
+            "answer": "150",
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793311057723
+          },
+          "q-5": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311107723
+          },
+          "q-6": {
+            "answer": "a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311157723
+          }
+        },
+        "scorePg": 85,
+        "scoreEssay": 15,
+        "finalScore": 100,
+        "isPassed": true
+      },
+      {
+        "id": "sess-std-002",
+        "studentId": "std-002",
+        "studentName": "ALFIAN HADI",
+        "nis": "0132881160",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "submitted",
+        "startedAt": "07:35:10",
+        "submittedAt": "08:45:20",
+        "timeRemainingSeconds": 0,
+        "violationsCount": 1,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / Windows 11",
+        "isOnline": false,
+        "lastHeartbeat": 1793311157723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310757723
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B",
+              "D"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793310857723
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310957723
+          },
+          "q-4": {
+            "answer": "150",
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793311057723
+          },
+          "q-5": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311107723
+          },
+          "q-6": {
+            "answer": "a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311157723
+          }
+        },
+        "scorePg": 85,
+        "scoreEssay": 15,
+        "finalScore": 100,
+        "isPassed": true
+      },
+      {
+        "id": "sess-std-003",
+        "studentId": "std-003",
+        "studentName": "Budiannor",
+        "nis": "3131754629",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "submitted",
+        "startedAt": "07:35:10",
+        "submittedAt": "08:45:20",
+        "timeRemainingSeconds": 0,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / Windows 11",
+        "isOnline": false,
+        "lastHeartbeat": 1793311157723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310757723
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B",
+              "D"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793310857723
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310957723
+          },
+          "q-4": {
+            "answer": "150",
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793311057723
+          },
+          "q-5": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311107723
+          },
+          "q-6": {
+            "answer": "a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311157723
+          }
+        },
+        "scorePg": 85,
+        "scoreEssay": 15,
+        "finalScore": 100,
+        "isPassed": true
+      },
+      {
+        "id": "sess-std-004",
+        "studentId": "std-004",
+        "studentName": "FITRIA NUR RAHMI",
+        "nis": "3141422874",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "submitted",
+        "startedAt": "07:35:10",
+        "submittedAt": "08:45:20",
+        "timeRemainingSeconds": 0,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / Windows 11",
+        "isOnline": false,
+        "lastHeartbeat": 1793311157723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310757723
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B",
+              "D"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793310857723
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310957723
+          },
+          "q-4": {
+            "answer": "150",
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793311057723
+          },
+          "q-5": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311107723
+          },
+          "q-6": {
+            "answer": "a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311157723
+          }
+        },
+        "scorePg": 85,
+        "scoreEssay": 15,
+        "finalScore": 100,
+        "isPassed": true
+      },
+      {
+        "id": "sess-std-005",
+        "studentId": "std-005",
+        "studentName": "Habibi Ahmad",
+        "nis": "3132010158",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "submitted",
+        "startedAt": "07:35:10",
+        "submittedAt": "08:45:20",
+        "timeRemainingSeconds": 0,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / Windows 11",
+        "isOnline": false,
+        "lastHeartbeat": 1793311157723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310757723
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B",
+              "D"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793310857723
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793310957723
+          },
+          "q-4": {
+            "answer": "150",
+            "isDoubtful": false,
+            "scoreObtained": 20,
+            "updatedAt": 1793311057723
+          },
+          "q-5": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311107723
+          },
+          "q-6": {
+            "answer": "a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793311157723
+          }
+        },
+        "scorePg": 85,
+        "scoreEssay": 15,
+        "finalScore": 100,
+        "isPassed": true
+      },
+      {
+        "id": "sess-std-006",
+        "studentId": "std-006",
+        "studentName": "LATIFAH MAKIAH",
+        "nis": "3145505379",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "locked",
+        "startedAt": "07:38:00",
+        "timeRemainingSeconds": 2400,
+        "violationsCount": 3,
+        "isLocked": true,
+        "lockReason": "Mencapai batas 3x pelanggaran (beralih jendela browser)",
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Edge / Windows 10",
+        "isOnline": true,
+        "lastHeartbeat": 1793314737723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314657723
+          },
+          "q-2": {
+            "answer": [
+              "A"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314707723
+          }
+        },
+        "scorePg": 15,
+        "scoreEssay": 0,
+        "finalScore": 15,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-007",
+        "studentId": "std-007",
+        "studentName": "MOH.KENZIE ADYAFAIRUZ A.R",
+        "nis": "0148880145",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2820,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314739723,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-008",
+        "studentId": "std-008",
+        "studentName": "Muhammad Alfianor",
+        "nis": "3135555783",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2770,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314736724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-009",
+        "studentId": "std-009",
+        "studentName": "Muhammad Anshori",
+        "nis": "3125564079",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2720,
+        "violationsCount": 2,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314733724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-010",
+        "studentId": "std-010",
+        "studentName": "Muhammad Fahrian",
+        "nis": "3139136273",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2670,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314730724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-011",
+        "studentId": "std-011",
+        "studentName": "MUHAMMAD FERDIAN",
+        "nis": "3134308996",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2620,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314727724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-012",
+        "studentId": "std-012",
+        "studentName": "MUHAMMAD ILHAM",
+        "nis": "3144412100",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2570,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314724724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-013",
+        "studentId": "std-013",
+        "studentName": "MUHAMMAD MUJIB",
+        "nis": "3149698681",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2520,
+        "violationsCount": 1,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314721724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-014",
+        "studentId": "std-014",
+        "studentName": "MUHAMMAD NADHIF",
+        "nis": "3137959503",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2470,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314718724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-015",
+        "studentId": "std-015",
+        "studentName": "MUHAMMAD RAFA",
+        "nis": "3129498237",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2420,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314715724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-016",
+        "studentId": "std-016",
+        "studentName": "MUHAMMAD REIZA SAPUTRA",
+        "nis": "3144415260",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2370,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314712724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-017",
+        "studentId": "std-017",
+        "studentName": "MUHAMMAD RIDHANI",
+        "nis": "3137747883",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2320,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314709724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-018",
+        "studentId": "std-018",
+        "studentName": "MUHAMMAD RIDHO NAZHAN",
+        "nis": "3120260162",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2270,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314706724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-019",
+        "studentId": "std-019",
+        "studentName": "MUHAMMAD YAJID",
+        "nis": "3146932216",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2220,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Chrome / ChromeOS",
+        "isOnline": true,
+        "lastHeartbeat": 1793314703724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": true,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-020",
+        "studentId": "std-020",
+        "studentName": "MUHAMMAD ZAHDAN AL- FAZRI",
+        "nis": "3145612029",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "in_progress",
+        "startedAt": "07:40:00",
+        "timeRemainingSeconds": 2170,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "Firefox / Android Tablet",
+        "isOnline": true,
+        "lastHeartbeat": 1793314700724,
+        "answers": {
+          "q-1": {
+            "answer": "A",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314557724
+          },
+          "q-2": {
+            "answer": [
+              "A",
+              "B"
+            ],
+            "isDoubtful": false,
+            "scoreObtained": 0,
+            "updatedAt": 1793314607724
+          },
+          "q-3": {
+            "answer": "BENAR",
+            "isDoubtful": false,
+            "scoreObtained": 15,
+            "updatedAt": 1793314677724
+          }
+        },
+        "scorePg": 30,
+        "scoreEssay": 0,
+        "finalScore": 30,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-021",
+        "studentId": "std-021",
+        "studentName": "NAURA FAUZIA",
+        "nis": "3133735735",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-022",
+        "studentId": "std-022",
+        "studentName": "NUR ADDIBA",
+        "nis": "3136603611",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-023",
+        "studentId": "std-023",
+        "studentName": "RAFA RAMADHAN",
+        "nis": "3128958244",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-024",
+        "studentId": "std-024",
+        "studentName": "Raffa Septha Aldaris",
+        "nis": "3136501354",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-025",
+        "studentId": "std-025",
+        "studentName": "RAJIB AUFAR",
+        "nis": "3132075662",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-026",
+        "studentId": "std-026",
+        "studentName": "SELVI ADITYA",
+        "nis": "3139939165",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-027",
+        "studentId": "std-027",
+        "studentName": "SITI KAUSARI",
+        "nis": "0148794705",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-028",
+        "studentId": "std-028",
+        "studentName": "Siti Rusna",
+        "nis": "3135581014",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-029",
+        "studentId": "std-029",
+        "studentName": "SUHAIMAH MAHIRAH",
+        "nis": "3147555173",
+        "classId": "cls-1",
+        "className": "VII",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-030",
+        "studentId": "std-030",
+        "studentName": "Abdurahman",
+        "nis": "3134562253",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-031",
+        "studentId": "std-031",
+        "studentName": "Ahmad Noor Fikal",
+        "nis": "0122985481",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-032",
+        "studentId": "std-032",
+        "studentName": "ALDA AKILA",
+        "nis": "3132805875",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-033",
+        "studentId": "std-033",
+        "studentName": "Asya Rafifa",
+        "nis": "3127076468",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-034",
+        "studentId": "std-034",
+        "studentName": "Diandra Aqilla Andreani",
+        "nis": "3139981469",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-035",
+        "studentId": "std-035",
+        "studentName": "Kia Florita Ananda",
+        "nis": "3128171218",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-036",
+        "studentId": "std-036",
+        "studentName": "M. RIZKI",
+        "nis": "3137678381",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-037",
+        "studentId": "std-037",
+        "studentName": "Mirna Sari",
+        "nis": "3128037314",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-038",
+        "studentId": "std-038",
+        "studentName": "Muhammad Asfiannor",
+        "nis": "0137987449",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-039",
+        "studentId": "std-039",
+        "studentName": "Muhammad Randra",
+        "nis": "3129900202",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-040",
+        "studentId": "std-040",
+        "studentName": "MUHAMMAD RIFKIAN",
+        "nis": "3126620690",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-041",
+        "studentId": "std-041",
+        "studentName": "Muhammad Rizki Maulana",
+        "nis": "0114923284",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-042",
+        "studentId": "std-042",
+        "studentName": "Muhammad Syauqihilali",
+        "nis": "3133823048",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-043",
+        "studentId": "std-043",
+        "studentName": "MUSHOFFIINA",
+        "nis": "3138451288",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-044",
+        "studentId": "std-044",
+        "studentName": "Nor Hayati",
+        "nis": "0123576517",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-045",
+        "studentId": "std-045",
+        "studentName": "Syahira Noor Pahriah",
+        "nis": "3138146085",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-046",
+        "studentId": "std-046",
+        "studentName": "Wendi",
+        "nis": "3123285224",
+        "classId": "cls-8a",
+        "className": "VIII-A",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-047",
+        "studentId": "std-047",
+        "studentName": "Abdurahim",
+        "nis": "3136278531",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-048",
+        "studentId": "std-048",
+        "studentName": "Ahmad Hendra",
+        "nis": "3122040262",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-049",
+        "studentId": "std-049",
+        "studentName": "ALDY",
+        "nis": "3130631738",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-050",
+        "studentId": "std-050",
+        "studentName": "Alya Khumaira",
+        "nis": "0136170581",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-051",
+        "studentId": "std-051",
+        "studentName": "Febriyani Agustina",
+        "nis": "3123017232",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-052",
+        "studentId": "std-052",
+        "studentName": "MAURA",
+        "nis": "3133624481",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-053",
+        "studentId": "std-053",
+        "studentName": "Meliya",
+        "nis": "3122823062",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-054",
+        "studentId": "std-054",
+        "studentName": "MUHAMMAD ADITYA ADHA",
+        "nis": "0101357758",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-055",
+        "studentId": "std-055",
+        "studentName": "MUHAMMAD AMIN BADALI",
+        "nis": "3136739272",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-056",
+        "studentId": "std-056",
+        "studentName": "Muhammad Arifin",
+        "nis": "3132861464",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-057",
+        "studentId": "std-057",
+        "studentName": "MUHAMMAD AZKA",
+        "nis": "3134525138",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-058",
+        "studentId": "std-058",
+        "studentName": "MUHAMMAD HALEVI",
+        "nis": "3124959940",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-059",
+        "studentId": "std-059",
+        "studentName": "Muhammad Hilman",
+        "nis": "0133001618",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-060",
+        "studentId": "std-060",
+        "studentName": "MUHAMMAD NABIL",
+        "nis": "0131661392",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-061",
+        "studentId": "std-061",
+        "studentName": "Noor Aulia",
+        "nis": "0133855063",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-062",
+        "studentId": "std-062",
+        "studentName": "Nor Aliqa",
+        "nis": "0125605321",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-063",
+        "studentId": "std-063",
+        "studentName": "Nur Alika Hajjah",
+        "nis": "3124963695",
+        "classId": "cls-8b",
+        "className": "VIII-B",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-064",
+        "studentId": "std-064",
+        "studentName": "Ahmad Hambali",
+        "nis": "3123943043",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-065",
+        "studentId": "std-065",
+        "studentName": "Ahmad Muzakir",
+        "nis": "0114505137",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-066",
+        "studentId": "std-066",
+        "studentName": "Ahmad Raihan Akbar",
+        "nis": "0116731076",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-067",
+        "studentId": "std-067",
+        "studentName": "Aina Santi",
+        "nis": "0111720646",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-068",
+        "studentId": "std-068",
+        "studentName": "Ainun Jariah",
+        "nis": "0121259564",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-069",
+        "studentId": "std-069",
+        "studentName": "Aisyah",
+        "nis": "0115007905",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-070",
+        "studentId": "std-070",
+        "studentName": "Alya Meilani",
+        "nis": "3128394783",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-071",
+        "studentId": "std-071",
+        "studentName": "April Maulana",
+        "nis": "0125766036",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-072",
+        "studentId": "std-072",
+        "studentName": "Laini",
+        "nis": "3109244006",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-073",
+        "studentId": "std-073",
+        "studentName": "M. FIKRI HAIKAL",
+        "nis": "0117878175",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-074",
+        "studentId": "std-074",
+        "studentName": "Muhammad Fathi Alifi",
+        "nis": "3112320387",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-075",
+        "studentId": "std-075",
+        "studentName": "Muhammad Gozali",
+        "nis": "0114979338",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-076",
+        "studentId": "std-076",
+        "studentName": "Muhammad Hanafi",
+        "nis": "0129514487",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-077",
+        "studentId": "std-077",
+        "studentName": "Muhammad Harun Naraya",
+        "nis": "0125677623",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-078",
+        "studentId": "std-078",
+        "studentName": "MUHAMMAD HASSAN RIFA'AT",
+        "nis": "3122302256",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-079",
+        "studentId": "std-079",
+        "studentName": "Muhammad Jaylani",
+        "nis": "3113351534",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-080",
+        "studentId": "std-080",
+        "studentName": "Muhammad Nauza Widhanu Nugraha",
+        "nis": "0126076571",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-081",
+        "studentId": "std-081",
+        "studentName": "Muhammad Nazrullah",
+        "nis": "0121711669",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-082",
+        "studentId": "std-082",
+        "studentName": "Muhammad Novaliansyah Rahman",
+        "nis": "3114207707",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-083",
+        "studentId": "std-083",
+        "studentName": "Muhammad Ripki",
+        "nis": "3113860446",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-084",
+        "studentId": "std-084",
+        "studentName": "MUHAMMAD RIZA ADITIYA",
+        "nis": "0116048717",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-085",
+        "studentId": "std-085",
+        "studentName": "Muhammad Zein",
+        "nis": "0121617425",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-086",
+        "studentId": "std-086",
+        "studentName": "Mutia Rahmi",
+        "nis": "0128269586",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-087",
+        "studentId": "std-087",
+        "studentName": "Nor Safa",
+        "nis": "0121909520",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-088",
+        "studentId": "std-088",
+        "studentName": "Norlaila Nisfi",
+        "nis": "3126998758",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-089",
+        "studentId": "std-089",
+        "studentName": "Nur Sapitri",
+        "nis": "0126311399",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-090",
+        "studentId": "std-090",
+        "studentName": "RUDI RAHMAN",
+        "nis": "0118373341",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-091",
+        "studentId": "std-091",
+        "studentName": "Siti Aminah",
+        "nis": "0127124105",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      },
+      {
+        "id": "sess-std-092",
+        "studentId": "std-092",
+        "studentName": "Sofya Adellia Rinanda",
+        "nis": "0125774453",
+        "classId": "cls-9",
+        "className": "IX",
+        "examId": "ex-mat-2026",
+        "examTitle": "Ujian Akhir Semester Ganjil - Matematika VII",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "violationsCount": 0,
+        "isLocked": false,
+        "extraTimeMinutes": 0,
+        "deviceInfo": "-",
+        "isOnline": false,
+        "lastHeartbeat": 0,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false
+      }
+    ],
+    "questionBank": {
+      "id": "qbank-mat-7",
+      "subjectId": "sbj-mat",
+      "subjectName": "Matematika",
+      "grade": "VII",
+      "title": "Bank Soal UAS Semester Ganjil SMP Negeri 12 Banjarbaru",
+      "teacherId": "guru-1",
+      "teacherName": "Ahmad Fathoni",
+      "totalQuestions": 63,
+      "questions": [
+        {
+          "id": "mat-1",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Hitunglah nilai dari operasi aritmatika campuran bilangan bulat berikut:\n$$-18 + 24 \\div (-3) - (-12)$$",
+          "points": 10,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "$-14$"
+            },
+            {
+              "id": "B",
+              "text": "$-18$"
+            },
+            {
+              "id": "C",
+              "text": "$-2$"
+            },
+            {
+              "id": "D",
+              "text": "$6$"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "mat-2",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "pg",
+          "prompt": "Hitunglah hasil dari operasi hitung bentuk akar dan perpangkatan berikut:\n$$\\sqrt{196} + 4^3 - 5 \\times 8$$",
+          "points": 10,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "34"
+            },
+            {
+              "id": "B",
+              "text": "38"
+            },
+            {
+              "id": "C",
+              "text": "42"
+            },
+            {
+              "id": "D",
+              "text": "46"
+            }
+          ],
+          "correctAnswers": [
+            "B"
+          ]
+        },
+        {
+          "id": "mat-3",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "pg_kompleks",
+          "prompt": "Perhatikan beberapa pernyataan tentang relasi himpunan dan operasi aljabar berikut. Pilihlah semua pernyataan yang **BENAR**:",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Bentuk sederhana dari $3(2x - 5) + 4x$ adalah $10x - 15$"
+            },
+            {
+              "id": "B",
+              "text": "Nilai dari $(-5)^2$ sama dengan $25$, sedangkan $-5^2 = -25$"
+            },
+            {
+              "id": "C",
+              "text": "Himpunan bilangan prima antara 10 dan 20 adalah $\\{11, 13, 17, 19\\}$"
+            },
+            {
+              "id": "D",
+              "text": "FPB dari 36 dan 54 adalah 9"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        {
+          "id": "mat-4",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "benar_salah",
+          "prompt": "Dua sudut yang saling berpenyiku (komplementer) memiliki jumlah besar sudut sama dengan $90^\\circ$. Jika sudut $A = 35^\\circ$, maka penyiku dari sudut $A$ adalah $55^\\circ$.",
+          "points": 10,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "mat-5",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 5,
+          "type": "isian",
+          "prompt": "Suatu persegi panjang memiliki keliling $60\\text{ cm}$. Jika ukuran panjangnya $18\\text{ cm}$, hitunglah luas persegi panjang tersebut dalam satuan $\\text{cm}^2$! (Tuliskan hanya angkanya saja)",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [],
+          "correctAnswerText": "216"
+        },
+        {
+          "id": "mat-6",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 6,
+          "type": "mencocokkan",
+          "prompt": "Jodohkanlah bentuk aljabar dan bilangan berpangkat berikut dengan bentuk sederhananya yang tepat:",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "$$2^5$$",
+              "rightText": "32"
+            },
+            {
+              "id": "p-2",
+              "leftText": "$$\\sqrt{225}$$",
+              "rightText": "15"
+            },
+            {
+              "id": "p-3",
+              "leftText": "$$3(x + 4) - 2x$$",
+              "rightText": "x + 12"
+            },
+            {
+              "id": "p-4",
+              "leftText": "$$20\\% \\text{ dari } 250.000$$",
+              "rightText": "50.000"
+            }
+          ]
+        },
+        {
+          "id": "mat-7",
+          "bankId": "qbank-mat-7",
+          "subjectId": "sbj-mat",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 7,
+          "type": "uraian",
+          "prompt": "Koperasi Siswa SMP Negeri 12 Banjarbaru menjual paket alat tulis. Harga 3 buku tulis dan 2 penggaris adalah Rp19.500,00. Sedangkan harga 2 buku tulis dan 3 penggaris adalah Rp18.000,00.\na) Tuliskan sistem persamaan linear dua variabel (SPLDV) yang menyatakan permasalahan tersebut!\nb) Tentukan harga masing-masing 1 buah buku tulis dan 1 buah penggaris!\nc) Jika seorang siswa membeli 5 buah buku tulis dan 2 buah penggaris dengan membayar uang Rp50.000,00, berapakah uang kembalian yang ia terima?",
+          "points": 25,
+          "difficulty": "sukar",
+          "options": [],
+          "essayRubric": "Rubrik: (a) Model SPLDV benar: 3b + 2p = 19500 dan 2b + 3p = 18000 (skor 8). (b) Eliminasi/substitusi benar: harga buku b = Rp4.500, harga penggaris p = Rp3.000 (skor 10). (c) Total belanja 5(4500) + 2(3000) = 22500 + 6000 = Rp28.500. Kembalian: 50000 - 28500 = Rp21.500 (skor 7)."
+        },
+        {
+          "id": "ipa-1",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Satuan internasional (SI) untuk besaran pokok panjang, massa, dan suhu berturut-turut adalah...",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Meter, kilogram, dan Kelvin"
+            },
+            {
+              "id": "B",
+              "text": "Centimeter, gram, dan Celcius"
+            },
+            {
+              "id": "C",
+              "text": "Meter, gram, dan Fahrenheit"
+            },
+            {
+              "id": "D",
+              "text": "Kilometer, ton, dan Kelvin"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "ipa-2",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Perhatikan ciri-ciri organel sel berikut. Manakah organel yang hanya ditemukan pada **sel tumbuhan** dan tidak ditemukan pada sel hewan? (Pilih semua yang benar)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Dinding sel yang tersusun atas selulosa"
+            },
+            {
+              "id": "B",
+              "text": "Kloroplas yang mengandung klorofil untuk fotosintesis"
+            },
+            {
+              "id": "C",
+              "text": "Mitokondria sebagai pusat respirasi sel"
+            },
+            {
+              "id": "D",
+              "text": "Vakuola sentral berukuran besar"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "D"
+          ]
+        },
+        {
+          "id": "ipa-3",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "benar_salah",
+          "prompt": "Peristiwa perpindahan kalor secara radiasi tidak memerlukan medium (zat perantara), contohnya panas sinar matahari yang sampai ke bumi melewati ruang hampa udara.",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "ipa-4",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "isian",
+          "prompt": "Sebuah benda bermassa $4\\text{ kg}$ ditarik dengan gaya mendatar $20\\text{ N}$. Sesuai Hukum II Newton ($F = m \\times a$), percepatan yang dialami benda tersebut adalah ... $\\text{m/s}^2$. (Tulis angkanya saja)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [],
+          "correctAnswerText": "5"
+        },
+        {
+          "id": "ipa-5",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 5,
+          "type": "mencocokkan",
+          "prompt": "Jodohkanlah contoh perubahan zat berikut dengan jenis perubahannya yang sesuai:",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "Besi berkarat di udara terbuka",
+              "rightText": "Perubahan Kimia"
+            },
+            {
+              "id": "p-2",
+              "leftText": "Es batu mencair menjadi air",
+              "rightText": "Perubahan Fisika"
+            },
+            {
+              "id": "p-3",
+              "leftText": "Kertas dibakar menjadi abu",
+              "rightText": "Perubahan Kimia"
+            },
+            {
+              "id": "p-4",
+              "leftText": "Gula larut dalam air teh",
+              "rightText": "Perubahan Fisika"
+            }
+          ]
+        },
+        {
+          "id": "ipa-6",
+          "bankId": "qbank-ipa-7",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 6,
+          "type": "uraian",
+          "prompt": "Jelaskan perbedaan antara perpindahan kalor secara konduksi, konveksi, dan radiasi, serta sebutkan masing-masing 1 contoh peristiwa sehari-hari di lingkungan sekolah atau rumah!",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Konduksi perpindahan tanpa partikel berpindah (cth: sendok panas di kopi) skor 5; Konveksi perpindahan disertai aliran partikel (cth: merebus air) skor 5; Radiasi tanpa zat perantara (cth: api unggun/panas matahari) skor 5."
+        },
+        {
+          "id": "bin-1",
+          "bankId": "qbank-bin-7",
+          "subjectId": "sbj-bin",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Bacalah kutipan teks berikut:\n\n\"Hutan mangrove di pesisir Kalimantan Selatan memiliki peran ekologis yang sangat vital. Selain menahan abrasi gelombang laut, akar napas bakau menjadi habitat tempat memijah beragam jenis ikan dan kepiting bakau.\"\n\nIde pokok paragraf di atas adalah...",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Peran ekologis hutan mangrove di pesisir Kalimantan Selatan"
+            },
+            {
+              "id": "B",
+              "text": "Jenis-jenis kepiting bakau di pesisir pantai"
+            },
+            {
+              "id": "C",
+              "text": "Bahaya abrasi gelombang air laut di muara sungai"
+            },
+            {
+              "id": "D",
+              "text": "Ciri fisik akar napas pohon bakau"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "bin-2",
+          "bankId": "qbank-bin-7",
+          "subjectId": "sbj-bin",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Manakah di antara kalimat berikut yang menggunakan tanda baca dan ejaan bahasa Indonesia (EBI) yang **BAKU dan TEPAT**? (Pilih semua yang benar)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "SMP Negeri 12 Banjarbaru menyelenggarakan Ujian Akhir Semester berbasis komputer."
+            },
+            {
+              "id": "B",
+              "text": "Ibu membeli perlengkapan sekolah: buku, pensil, dan penghapus di koperasi."
+            },
+            {
+              "id": "C",
+              "text": "Mereka pergi ke Banjarbaru, hari Minggu yang lalu."
+            },
+            {
+              "id": "D",
+              "text": "Dr. Ahmad Fathoni, M.Pd. menyampaikan sambutan pembukaan ujian."
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "D"
+          ]
+        },
+        {
+          "id": "bin-3",
+          "bankId": "qbank-bin-7",
+          "subjectId": "sbj-bin",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "benar_salah",
+          "prompt": "Struktur teks laporan hasil observasi (LHO) terdiri atas: Pernyataan umum/definisi umum, Deskripsi bagian, dan Deskripsi manfaat/kesimpulan.",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "bin-4",
+          "bankId": "qbank-bin-7",
+          "subjectId": "sbj-bin",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "isian",
+          "prompt": "Kata berimbuhan yang dibentuk dari kata dasar \"tulis\" dengan awalan \"meN-\" dan akhiran \"-kan\" adalah...",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [],
+          "correctAnswerText": "menuliskan"
+        },
+        {
+          "id": "bin-5",
+          "bankId": "qbank-bin-7",
+          "subjectId": "sbj-bin",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 5,
+          "type": "uraian",
+          "prompt": "Tuliskan sebuah paragraf deskripsi singkat (minimal 3-4 kalimat) yang menggambarkan suasana ruang kelas atau lingkungan SMP Negeri 12 Banjarbaru dengan memperhatikan penggunaan kalimat efektif dan ejaan yang tepat!",
+          "points": 30,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Kepaduan paragraf dan fokus deskripsi (skor 10); Kalimat efektif dan variasi kosakata (skor 10); Ketepatan ejaan huruf kapital dan tanda baca (skor 10)."
+        },
+        {
+          "id": "big-1",
+          "bankId": "qbank-big-7",
+          "subjectId": "sbj-big",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Reno: \"Hello Dani, could you tell me what time the English examination starts?\"\nDani: \"Sure, it starts at a quarter to eight in the morning.\"\n\nWhat time does the examination start?",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "07:45 AM"
+            },
+            {
+              "id": "B",
+              "text": "08:15 AM"
+            },
+            {
+              "id": "C",
+              "text": "07:15 AM"
+            },
+            {
+              "id": "D",
+              "text": "08:45 AM"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "big-2",
+          "bankId": "qbank-big-7",
+          "subjectId": "sbj-big",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Choose the grammatically **CORRECT** sentences using Simple Present Tense: (Select all that apply)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "The students always arrive at SMP Negeri 12 Banjarbaru before 07.00 AM."
+            },
+            {
+              "id": "B",
+              "text": "Mr. Ahmad teaches Mathematics patiently in our classroom."
+            },
+            {
+              "id": "C",
+              "text": "She do not understand the computer-based test instruction."
+            },
+            {
+              "id": "D",
+              "text": "Does they bring their exam identity cards today?"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B"
+          ]
+        },
+        {
+          "id": "big-3",
+          "bankId": "qbank-big-7",
+          "subjectId": "sbj-big",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "isian",
+          "prompt": "Complete the sentence with the correct possessive pronoun:\n\"This laptop belongs to Siti. It is ________ laptop.\" (Fill in with one word: his/her/their/my)",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [],
+          "correctAnswerText": "her"
+        },
+        {
+          "id": "big-4",
+          "bankId": "qbank-big-7",
+          "subjectId": "sbj-big",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "mencocokkan",
+          "prompt": "Match each English vocabulary word with its correct Indonesian meaning:",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "Library",
+              "rightText": "Perpustakaan"
+            },
+            {
+              "id": "p-2",
+              "leftText": "Timetable",
+              "rightText": "Jadwal Pelajaran"
+            },
+            {
+              "id": "p-3",
+              "leftText": "Rules and regulations",
+              "rightText": "Tata tertib"
+            },
+            {
+              "id": "p-4",
+              "leftText": "Score",
+              "rightText": "Nilai ujian"
+            }
+          ]
+        },
+        {
+          "id": "big-5",
+          "bankId": "qbank-big-7",
+          "subjectId": "sbj-big",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 5,
+          "type": "uraian",
+          "prompt": "Write a short self-introduction in English (3 to 5 sentences) mentioning your name, your age, where you study (SMP Negeri 12 Banjarbaru), and your favorite school subject!",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubric: Correct grammatical structure (Simple Present Tense) 8 points; Vocabulary and completeness of information 8 points; Proper capitalization and punctuation 4 points."
+        },
+        {
+          "id": "pai-1",
+          "bankId": "qbank-pai-7",
+          "subjectId": "sbj-pai",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Hukum bacaan Al-Qur'an apabila huruf Alif Lam (ال) bertemu dengan huruf hijaiyah yang terbaca jelas tanpa dileburkan (izhar) disebut hukum bacaan...",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Al-Qamariyah"
+            },
+            {
+              "id": "B",
+              "text": "Al-Syamsiyah"
+            },
+            {
+              "id": "C",
+              "text": "Iqlab"
+            },
+            {
+              "id": "D",
+              "text": "Ghunnah"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "pai-2",
+          "bankId": "qbank-pai-7",
+          "subjectId": "sbj-pai",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "benar_salah",
+          "prompt": "Shalat fardhu yang dikerjakan secara berjamaah memiliki keutamaan pahala 27 derajat lebih tinggi dibandingkan dengan shalat yang dikerjakan secara sendirian (munfarid).",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "pai-3",
+          "bankId": "qbank-pai-7",
+          "subjectId": "sbj-pai",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "pg_kompleks",
+          "prompt": "Perhatikan perilaku terpuji berikut. Manakah contoh perbuatan yang mencerminkan sifat **Amanah** dan **Jujur** saat mengikuti Ujian CBT di sekolah? (Pilih semua yang tepat)",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Mengerjakan soal dengan kemampuan diri sendiri tanpa mencontek"
+            },
+            {
+              "id": "B",
+              "text": "Tidak membagikan kode token ujian kepada siswa yang belum hadir"
+            },
+            {
+              "id": "C",
+              "text": "Menjaga dan merawat perangkat komputer ujian sekolah dengan baik"
+            },
+            {
+              "id": "D",
+              "text": "Membuka tab mesin pencari untuk mencari kunci jawaban"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        {
+          "id": "pai-4",
+          "bankId": "qbank-pai-7",
+          "subjectId": "sbj-pai",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "uraian",
+          "prompt": "Jelaskan pengertian Asmaul Husna Al-Alim (Maha Mengetahui) dan Al-Khabir (Maha Waspada/Teliti), serta jelaskan bagaimana sikap seorang siswa beriman saat menghadapi ujian jika meyakini dua sifat Allah SWT tersebut!",
+          "points": 35,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Pengertian Al-Alim dan Al-Khabir tepat (skor 15); Implementasi kejujuran dan keyakinan bahwa Allah selalu mengawasi segala amal perbuatan (skor 20)."
+        },
+        {
+          "id": "inf-1",
+          "bankId": "qbank-inf-7",
+          "subjectId": "sbj-inf",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Perangkat keras komputer yang berfungsi sebagai otak utama untuk memproses seluruh instruksi program sistem CBT adalah...",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Central Processing Unit (CPU)"
+            },
+            {
+              "id": "B",
+              "text": "Hard Disk Drive (HDD)"
+            },
+            {
+              "id": "C",
+              "text": "Monitor"
+            },
+            {
+              "id": "D",
+              "text": "Keyboard"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "inf-2",
+          "bankId": "qbank-inf-7",
+          "subjectId": "sbj-inf",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Manakah di antara praktik berikut yang merupakan langkah **keamanan digital (cyber security)** yang baik untuk akun ujian siswa? (Pilih semua yang benar)",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Menggunakan kombinasi kata sandi huruf besar, huruf kecil, dan angka"
+            },
+            {
+              "id": "B",
+              "text": "Selalu melakukan Logout setelah selesai menggunakan komputer lab"
+            },
+            {
+              "id": "C",
+              "text": "Memberitahukan password akun ke teman sekelas agar bisa login bersamaan"
+            },
+            {
+              "id": "D",
+              "text": "Tidak mengklik tautan mencurigakan atau mengunduh file tidak dikenal"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "D"
+          ]
+        },
+        {
+          "id": "inf-3",
+          "bankId": "qbank-inf-7",
+          "subjectId": "sbj-inf",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 3,
+          "type": "mencocokkan",
+          "prompt": "Jodohkan istilah informatika berikut dengan fungsinya yang tepat:",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "Browser Web (Chrome/Edge)",
+              "rightText": "Aplikasi pembuka halaman CBT"
+            },
+            {
+              "id": "p-2",
+              "leftText": "Local Area Network (LAN)",
+              "rightText": "Jaringan kabel lokal komputer sekolah"
+            },
+            {
+              "id": "p-3",
+              "leftText": "Algoritma",
+              "rightText": "Urutan langkah logis penyelesaian masalah"
+            },
+            {
+              "id": "p-4",
+              "leftText": "RAM (Random Access Memory)",
+              "rightText": "Penyimpanan sementara saat aplikasi berjalan"
+            }
+          ]
+        },
+        {
+          "id": "inf-4",
+          "bankId": "qbank-inf-7",
+          "subjectId": "sbj-inf",
+          "classId": "cls-1",
+          "grade": "VII",
+          "number": 4,
+          "type": "uraian",
+          "prompt": "Jelaskan apa yang dimaksud dengan Computational Thinking (Berpikir Komputasional) dan sebutkan 4 pilar utamanya (Dekomposisi, Pengenalan Pola, Abstraksi, dan Perancangan Algoritma)!",
+          "points": 30,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Pengertian berpikir komputasional tepat (skor 10); Penjelasan Dekomposisi & Pola tepat (skor 10); Penjelasan Abstraksi & Algoritma tepat (skor 10)."
+        },
+        {
+          "id": "mat8-1",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Sebuah segitiga siku-siku memiliki panjang sisi tegak $9\\text{ cm}$ dan $12\\text{ cm}$. Berdasarkan Teorema Pythagoras ($c^2 = a^2 + b^2$), panjang sisi miring (hipotenusa) segitiga tersebut adalah...",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "$15\\text{ cm}$"
+            },
+            {
+              "id": "B",
+              "text": "$18\\text{ cm}$"
+            },
+            {
+              "id": "C",
+              "text": "$21\\text{ cm}$"
+            },
+            {
+              "id": "D",
+              "text": "$25\\text{ cm}$"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "mat8-2",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 2,
+          "type": "pg",
+          "prompt": "Diketahui barisan aritmatika: $3, 7, 11, 15, 19, \\dots$. Suku ke-25 ($U_{25}$) dari barisan aritmatika tersebut adalah...",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "95"
+            },
+            {
+              "id": "B",
+              "text": "99"
+            },
+            {
+              "id": "C",
+              "text": "103"
+            },
+            {
+              "id": "D",
+              "text": "107"
+            }
+          ],
+          "correctAnswers": [
+            "B"
+          ]
+        },
+        {
+          "id": "mat8-3",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 3,
+          "type": "pg_kompleks",
+          "prompt": "Diketahui rumus fungsi linear $f(x) = 4x - 7$. Manakah pernyataan berikut yang **BENAR**? (Pilih semua yang benar)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Nilai dari $f(3) = 5$"
+            },
+            {
+              "id": "B",
+              "text": "Nilai dari $f(-2) = -15$"
+            },
+            {
+              "id": "C",
+              "text": "Bayangan dari $0$ adalah $-7$"
+            },
+            {
+              "id": "D",
+              "text": "Jika $f(a) = 17$, maka nilai $a = 6$"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        {
+          "id": "mat8-4",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 4,
+          "type": "benar_salah",
+          "prompt": "Gradien garis yang melalui titik pusat $(0,0)$ dan titik $(4, 8)$ bernilai $m = 2$.",
+          "points": 10,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "mat8-5",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 5,
+          "type": "mencocokkan",
+          "prompt": "Jodohkan persamaan garis lurus berikut dengan nilai gradiennya ($m$):",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "$$y = 3x + 5$$",
+              "rightText": "m = 3"
+            },
+            {
+              "id": "p-2",
+              "leftText": "$$2x + y = 7$$",
+              "rightText": "m = -2"
+            },
+            {
+              "id": "p-3",
+              "leftText": "$$4y - 8x = 12$$",
+              "rightText": "m = 2"
+            },
+            {
+              "id": "p-4",
+              "leftText": "$$y = -x + 4$$",
+              "rightText": "m = -1"
+            }
+          ]
+        },
+        {
+          "id": "mat8-6",
+          "bankId": "qbank-mat-8",
+          "subjectId": "sbj-mat",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 6,
+          "type": "uraian",
+          "prompt": "Seorang pedagang di kantin SMPN 12 Banjarbaru menjual 4 porsi nasi kuning dan 3 gelas es teh seharga Rp38.000,00. Sedangkan 2 porsi nasi kuning dan 5 gelas es teh seharga Rp30.000,00.\na) Buatlah model matematika dalam bentuk Sistem Persamaan Linear Dua Variabel (SPLDV)!\nb) Hitunglah harga 1 porsi nasi kuning dan 1 gelas es teh!\nc) Berapakah yang harus dibayar jika membeli 3 porsi nasi kuning dan 2 gelas es teh?",
+          "points": 20,
+          "difficulty": "sukar",
+          "options": [],
+          "essayRubric": "Rubrik: (a) Model 4x + 3y = 38000 dan 2x + 5y = 30000 (skor 6); (b) Eliminasi/substitusi x = 7000 (nasi) dan y = 3200 (teh) (skor 8); (c) 3(7000) + 2(3200) = 21000 + 6400 = Rp27.400 (skor 6)."
+        },
+        {
+          "id": "ipa8-1",
+          "bankId": "qbank-ipa-8",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Enzim yang dihasilkan oleh kelenjar lambung untuk mengubah protein menjadi pepton adalah...",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Pepsin"
+            },
+            {
+              "id": "B",
+              "text": "Amilase"
+            },
+            {
+              "id": "C",
+              "text": "Lipase"
+            },
+            {
+              "id": "D",
+              "text": "Tripsin"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "ipa8-2",
+          "bankId": "qbank-ipa-8",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Manakah zat berikut yang termasuk bahan **pemanis buatan** yang diizinkan untuk industri makanan sesuai batas konsumsi aman? (Pilih semua yang benar)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Aspartam"
+            },
+            {
+              "id": "B",
+              "text": "Sakarin"
+            },
+            {
+              "id": "C",
+              "text": "Siklamat"
+            },
+            {
+              "id": "D",
+              "text": "Rhodamin B"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        {
+          "id": "ipa8-3",
+          "bankId": "qbank-ipa-8",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 3,
+          "type": "benar_salah",
+          "prompt": "Hukum Pascal menyatakan bahwa tekanan yang diberikan pada zat cair dalam ruang tertutup akan diteruskan ke segala arah dengan sama besar.",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "ipa8-4",
+          "bankId": "qbank-ipa-8",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 4,
+          "type": "isian",
+          "prompt": "Sebuah benda berada pada kedalaman $2\\text{ meter}$ di dalam kolam air (massa jenis air $\\rho = 1.000\\text{ kg/m}^3$ dan percepatan gravitasi $g = 10\\text{ m/s}^2$). Besar tekanan hidrostatis ($P = \\rho \\cdot g \\cdot h$) yang dialami benda tersebut adalah ... $\\text{Pascal}$. (Tulis hanya angkanya)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [],
+          "correctAnswerText": "20000"
+        },
+        {
+          "id": "ipa8-5",
+          "bankId": "qbank-ipa-8",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 5,
+          "type": "uraian",
+          "prompt": "Jelaskan perbedaan peredaran darah besar dan peredaran darah kecil pada manusia, lengkap dengan urutan jalannya darah mulai dari jantung dan organ yang dituju!",
+          "points": 30,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Peredaran darah besar (bilik kiri -> aorta -> seluruh tubuh -> vena cava -> serambi kanan) skor 15; Peredaran darah kecil (bilik kanan -> arteri pulmonalis -> paru-paru -> vena pulmonalis -> serambi kiri) skor 15."
+        },
+        {
+          "id": "bin8-1",
+          "bankId": "qbank-bin-8",
+          "subjectId": "sbj-bin",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Unsur berita yang menjawab pertanyaan tentang tempat dan waktu terjadinya suatu peristiwa berturut-turut adalah...",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Di mana (Where) dan Kapan (When)"
+            },
+            {
+              "id": "B",
+              "text": "Apa (What) dan Siapa (Who)"
+            },
+            {
+              "id": "C",
+              "text": "Mengapa (Why) dan Bagaimana (How)"
+            },
+            {
+              "id": "D",
+              "text": "Siapa (Who) dan Kapan (When)"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "bin8-2",
+          "bankId": "qbank-bin-8",
+          "subjectId": "sbj-bin",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Perhatikan ciri-ciri slogan dan poster berikut. Manakah pernyataan yang **BENAR**? (Pilih semua yang benar)",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Slogan lebih mengutamakan kata-kata yang singkat, padat, dan mudah diingat"
+            },
+            {
+              "id": "B",
+              "text": "Poster memadukan unsur gambar grafis dan teks untuk dipasang di tempat umum"
+            },
+            {
+              "id": "C",
+              "text": "Iklan bertujuan membujuk atau mempengaruhi pembaca agar menggunakan produk/jasa"
+            },
+            {
+              "id": "D",
+              "text": "Poster tidak boleh mengandung gambar ilustrasi sama sekali"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        {
+          "id": "bin8-3",
+          "bankId": "qbank-bin-8",
+          "subjectId": "sbj-bin",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 3,
+          "type": "uraian",
+          "prompt": "Tuliskan sebuah teks eksposisi singkat (minimal 4 kalimat) tentang pentingnya kejujuran dan mematuhi tata tertib saat pelaksanaan ujian sekolah berbasis komputer!",
+          "points": 30,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Tesis/pernyataan pendapat jelas (skor 10); Argumentasi logis dan relevan (skor 10); Penegasan ulang dan kaidah bahasa baku (skor 10)."
+        },
+        {
+          "id": "big8-1",
+          "bankId": "qbank-big-8",
+          "subjectId": "sbj-big",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Ayu: \"What do you think of our school CBT application?\"\nBagus: \"_______ It is very smooth and easy to use on my smartphone.\"",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "I think it is fantastic."
+            },
+            {
+              "id": "B",
+              "text": "I don't know the answer."
+            },
+            {
+              "id": "C",
+              "text": "Are you sure about that?"
+            },
+            {
+              "id": "D",
+              "text": "Please turn off the computer."
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "big8-2",
+          "bankId": "qbank-big-8",
+          "subjectId": "sbj-big",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 2,
+          "type": "pg",
+          "prompt": "Complete the sentence with the correct past tense verb: \"Yesterday, the students of Class VIII _______ their mathematics exam in the computer laboratory.\"",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "took"
+            },
+            {
+              "id": "B",
+              "text": "take"
+            },
+            {
+              "id": "C",
+              "text": "taken"
+            },
+            {
+              "id": "D",
+              "text": "taking"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "inf8-1",
+          "bankId": "qbank-inf-8",
+          "subjectId": "sbj-inf",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Topologi jaringan komputer yang menghubungkan setiap komputer ke sebuah konsentrator pusat (Switch / Hub) disebut topologi...",
+          "points": 25,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Star (Bintang)"
+            },
+            {
+              "id": "B",
+              "text": "Bus"
+            },
+            {
+              "id": "C",
+              "text": "Ring (Cincin)"
+            },
+            {
+              "id": "D",
+              "text": "Mesh"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "inf8-2",
+          "bankId": "qbank-inf-8",
+          "subjectId": "sbj-inf",
+          "classId": "cls-8",
+          "grade": "VIII",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Pada aplikasi lembar kerja (Microsoft Excel / Google Sheets), fungsi rumus yang digunakan untuk menghitung nilai rata-rata dan penjumlahan berurutan adalah: (Pilih semua yang benar)",
+          "points": 25,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "=AVERAGE(sel_awal:sel_akhir) untuk rata-rata"
+            },
+            {
+              "id": "B",
+              "text": "=SUM(sel_awal:sel_akhir) untuk penjumlahan"
+            },
+            {
+              "id": "C",
+              "text": "=MAX(sel_awal:sel_akhir) untuk nilai tertinggi"
+            },
+            {
+              "id": "D",
+              "text": "=MIN(sel_awal:sel_akhir) untuk nilai terendah"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        {
+          "id": "mat9-1",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Hasil dari penyederhanaan bentuk akar $3\\sqrt{48} + 2\\sqrt{75} - \\sqrt{108}$ adalah...",
+          "points": 15,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "$16\\sqrt{3}$"
+            },
+            {
+              "id": "B",
+              "text": "$12\\sqrt{3}$"
+            },
+            {
+              "id": "C",
+              "text": "$18\\sqrt{3}$"
+            },
+            {
+              "id": "D",
+              "text": "$14\\sqrt{3}$"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "mat9-2",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 2,
+          "type": "pg",
+          "prompt": "Akar-akar dari persamaan kuadrat $x^2 - 7x + 10 = 0$ adalah...",
+          "points": 15,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "$x_1 = 2$ dan $x_2 = 5$"
+            },
+            {
+              "id": "B",
+              "text": "$x_1 = -2$ dan $x_2 = -5$"
+            },
+            {
+              "id": "C",
+              "text": "$x_1 = 1$ dan $x_2 = 10$"
+            },
+            {
+              "id": "D",
+              "text": "$x_1 = -1$ dan $x_2 = 10$"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "mat9-3",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 3,
+          "type": "pg_kompleks",
+          "prompt": "Perhatikan fungsi kuadrat $f(x) = x^2 - 4x - 5$. Manakah pernyataan berikut yang **BENAR**? (Pilih semua yang benar)",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Grafik parabola terbuka ke atas karena $a > 0$"
+            },
+            {
+              "id": "B",
+              "text": "Sumbu simetri berada pada garis $x = 2$"
+            },
+            {
+              "id": "C",
+              "text": "Nilai optimum (minimum) fungsi adalah $y = -9$"
+            },
+            {
+              "id": "D",
+              "text": "Titik potong dengan sumbu-Y adalah $(0, -5)$"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C",
+            "D"
+          ]
+        },
+        {
+          "id": "mat9-4",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 4,
+          "type": "benar_salah",
+          "prompt": "Bayangan titik $A(3, -5)$ jika direfleksikan terhadap sumbu-X menghasilkan koordinat $A'(3, 5)$.",
+          "points": 10,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "BENAR",
+              "text": "BENAR"
+            },
+            {
+              "id": "SALAH",
+              "text": "SALAH"
+            }
+          ],
+          "correctAnswers": [
+            "BENAR"
+          ]
+        },
+        {
+          "id": "mat9-5",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 5,
+          "type": "mencocokkan",
+          "prompt": "Jodohkan bangun ruang sisi lengkung dengan rumus volumenya yang tepat:",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [],
+          "matchingPairs": [
+            {
+              "id": "p-1",
+              "leftText": "Volume Tabung",
+              "rightText": "V = pi * r^2 * t"
+            },
+            {
+              "id": "p-2",
+              "leftText": "Volume Kerucut",
+              "rightText": "V = 1/3 * pi * r^2 * t"
+            },
+            {
+              "id": "p-3",
+              "leftText": "Volume Bola",
+              "rightText": "V = 4/3 * pi * r^3"
+            },
+            {
+              "id": "p-4",
+              "leftText": "Luas Selimut Tabung",
+              "rightText": "L = 2 * pi * r * t"
+            }
+          ]
+        },
+        {
+          "id": "mat9-6",
+          "bankId": "qbank-mat-9",
+          "subjectId": "sbj-mat",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 6,
+          "type": "uraian",
+          "prompt": "Sebuah tangki air berbentuk tabung tertutup di lingkungan SMP Negeri 12 Banjarbaru memiliki jari-jari alas $r = 70\\text{ cm}$ dan tinggi $t = 200\\text{ cm}$ (gunakan $\\pi = \\frac{22}{7}$).\na) Hitunglah luas permukaan tabung tersebut!\nb) Hitunglah volume air maksimum yang dapat ditampung dalam tangki (dalam satuan liter, dimana $1\\text{ liter} = 1.000\\text{ cm}^3$)!",
+          "points": 20,
+          "difficulty": "sukar",
+          "options": [],
+          "essayRubric": "Rubrik: (a) Luas permukaan 2 * pi * r * (r + t) = 2 * (22/7) * 70 * (270) = 440 * 270 = 118.800 cm^2 (skor 10); (b) Volume = pi * r^2 * t = (22/7) * 4900 * 200 = 3.080.000 cm^3 = 3.080 liter (skor 10)."
+        },
+        {
+          "id": "ipa9-1",
+          "bankId": "qbank-ipa-9",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Dua buah muatan listrik masing-masing $q_1 = 4 \\times 10^{-6}\\text{ C}$ dan $q_2 = 9 \\times 10^{-6}\\text{ C}$ terpisah sejauh $r = 0,3\\text{ m}$. Jika konstanta $k = 9 \\times 10^9\\text{ N m}^2/\\text{C}^2$, besar gaya tolak-menolak Coulomb adalah...",
+          "points": 20,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "$3,6\\text{ N}$"
+            },
+            {
+              "id": "B",
+              "text": "$4,8\\text{ N}$"
+            },
+            {
+              "id": "C",
+              "text": "$7,2\\text{ N}$"
+            },
+            {
+              "id": "D",
+              "text": "$10,8\\text{ N}$"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "ipa9-2",
+          "bankId": "qbank-ipa-9",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Pada persilangan monohibrid dominan penuh antara tanaman berbunga merah (MM) dan putih (mm), pernyataan yang **BENAR** mengenai keturunan F2 adalah: (Pilih semua yang benar)",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Perbandingan rasio fenotipe F2 adalah 3 Merah : 1 Putih"
+            },
+            {
+              "id": "B",
+              "text": "Perbandingan rasio genotipe F2 adalah 1 MM : 2 Mm : 1 mm"
+            },
+            {
+              "id": "C",
+              "text": "Persentase bunga merah pada F2 adalah 75%"
+            },
+            {
+              "id": "D",
+              "text": "Semua keturunan F2 berfenotipe merah"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        },
+        {
+          "id": "ipa9-3",
+          "bankId": "qbank-ipa-9",
+          "subjectId": "sbj-ipa",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 3,
+          "type": "isian",
+          "prompt": "Sebuah lampu dialiri arus listrik $2\\text{ A}$ dengan hambatan sebesar $110\\text{ Ohm}$. Berdasarkan Hukum Ohm ($V = I \\times R$), tegangan sumber listrik tersebut adalah ... $\\text{Volt}$. (Tulis angkanya saja)",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [],
+          "correctAnswerText": "220"
+        },
+        {
+          "id": "bin9-1",
+          "bankId": "qbank-bin-9",
+          "subjectId": "sbj-bin",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Teks pidato yang bertujuan mengajak, membujuk, atau meyakinkan pendengar untuk melakukan sesuatu hal yang positif disebut...",
+          "points": 20,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Pidato Persuasif"
+            },
+            {
+              "id": "B",
+              "text": "Pidato Rekreatif"
+            },
+            {
+              "id": "C",
+              "text": "Pidato Informatif"
+            },
+            {
+              "id": "D",
+              "text": "Pidato Sambutan"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "bin9-2",
+          "bankId": "qbank-bin-9",
+          "subjectId": "sbj-bin",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 2,
+          "type": "uraian",
+          "prompt": "Jelaskan struktur penulisan Teks Laporan Percobaan (Judul, Tujuan, Alat dan Bahan, Langkah Kerja, Hasil Percobaan, dan Kesimpulan) dengan singkat dan runtut!",
+          "points": 30,
+          "difficulty": "sedang",
+          "options": [],
+          "essayRubric": "Rubrik: Menyebutkan 6 komponen struktur lengkap (skor 15); Menjelaskan fungsi masing-masing komponen secara tepat (skor 15)."
+        },
+        {
+          "id": "big9-1",
+          "bankId": "qbank-big-9",
+          "subjectId": "sbj-big",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Change this active sentence into passive voice: \"The school IT team designed the CBT examination program.\"",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "The CBT examination program was designed by the school IT team."
+            },
+            {
+              "id": "B",
+              "text": "The CBT examination program is designed by the school IT team."
+            },
+            {
+              "id": "C",
+              "text": "The school IT team is designing the CBT examination program."
+            },
+            {
+              "id": "D",
+              "text": "The CBT examination program has designed by the school IT team."
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "inf9-1",
+          "bankId": "qbank-inf-9",
+          "subjectId": "sbj-inf",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 1,
+          "type": "pg",
+          "prompt": "Simbol belah ketupat (Diamond) dalam diagram alir (Flowchart) digunakan untuk menunjukkan...",
+          "points": 25,
+          "difficulty": "mudah",
+          "options": [
+            {
+              "id": "A",
+              "text": "Keputusan / Percabangan kondisi (Decision)"
+            },
+            {
+              "id": "B",
+              "text": "Memulai atau mengakhiri program (Terminator)"
+            },
+            {
+              "id": "C",
+              "text": "Operasi proses perhitungan (Process)"
+            },
+            {
+              "id": "D",
+              "text": "Input atau output data (Data)"
+            }
+          ],
+          "correctAnswers": [
+            "A"
+          ]
+        },
+        {
+          "id": "inf9-2",
+          "bankId": "qbank-inf-9",
+          "subjectId": "sbj-inf",
+          "classId": "cls-9",
+          "grade": "IX",
+          "number": 2,
+          "type": "pg_kompleks",
+          "prompt": "Keuntungan utama dari pemanfaatan teknologi Komputasi Awan (Cloud Computing) dalam sistem CBT sekolah adalah: (Pilih semua yang benar)",
+          "points": 25,
+          "difficulty": "sedang",
+          "options": [
+            {
+              "id": "A",
+              "text": "Data hasil ujian tersinkronisasi otomatis antara laptop dan ponsel siswa"
+            },
+            {
+              "id": "B",
+              "text": "Akses dapat dilakukan secara fleksibel dari berbagai perangkat"
+            },
+            {
+              "id": "C",
+              "text": "Pencadangan (backup) data lebih aman dan terhindar dari kehilangan file lokal"
+            },
+            {
+              "id": "D",
+              "text": "Menghilangkan kebutuhan akan koneksi internet sama sekali"
+            }
+          ],
+          "correctAnswers": [
+            "A",
+            "B",
+            "C"
+          ]
+        }
+      ]
+    },
+    "auditLogs": [
+      {
+        "id": "log-1",
+        "userRole": "operator",
+        "userIdentifier": "admin",
+        "action": "JADWAL_UJIAN_DIBUAT",
+        "details": "Membuat jadwal UAS Matematika Kelas VII (VII-A, VII-B)",
+        "ipAddress": "192.168.1.10",
+        "timestamp": "2026-10-24 19:30:12"
+      },
+      {
+        "id": "log-2",
+        "userRole": "guru",
+        "userIdentifier": "198005122006041008",
+        "action": "BANK_SOAL_DIPERBARUI",
+        "details": "Menambahkan 6 butir soal Matematika dengan formula KaTeX",
+        "ipAddress": "192.168.1.45",
+        "timestamp": "2026-10-24 19:45:00"
+      },
+      {
+        "id": "log-3",
+        "userRole": "operator",
+        "userIdentifier": "admin",
+        "action": "TOKEN_DINAMIS_AKTIF",
+        "details": "Inisialisasi rotasi token 5-menitan untuk server CBT",
+        "ipAddress": "192.168.1.10",
+        "timestamp": "2026-10-24 20:00:00"
+      }
+    ]
+  }
+}

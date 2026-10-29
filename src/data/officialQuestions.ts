@@ -564,6 +564,14 @@ export const OFFICIAL_QUESTION_LIST: Question[] = [
   ...GRADE_9_QUESTIONS
 ];
 
+const getTodayDate = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 export const OFFICIAL_EXAM_SCHEDULES = [
   {
     id: 'ex-mat-2026',
@@ -572,9 +580,9 @@ export const OFFICIAL_EXAM_SCHEDULES = [
     subjectName: 'Matematika',
     targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
     targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
     durationMinutes: 90,
     kkm: 75,
     randomizeQuestions: true,
@@ -590,9 +598,9 @@ export const OFFICIAL_EXAM_SCHEDULES = [
     subjectName: 'Ilmu Pengetahuan Alam (IPA)',
     targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
     targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
     durationMinutes: 90,
     kkm: 75,
     randomizeQuestions: true,
@@ -608,9 +616,9 @@ export const OFFICIAL_EXAM_SCHEDULES = [
     subjectName: 'Bahasa Indonesia',
     targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
     targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
     durationMinutes: 90,
     kkm: 75,
     randomizeQuestions: true,
@@ -626,32 +634,14 @@ export const OFFICIAL_EXAM_SCHEDULES = [
     subjectName: 'Bahasa Inggris',
     targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
     targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
     durationMinutes: 90,
     kkm: 75,
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-big-7',
-    status: 'ongoing' as const,
-    tokenRequired: true
-  },
-  {
-    id: 'ex-pai-2026',
-    title: 'UAS Semester Ganjil - Pendidikan Agama Islam',
-    subjectId: 'sbj-pai',
-    subjectName: 'Pendidikan Agama Islam',
-    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
-    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
-    durationMinutes: 90,
-    kkm: 75,
-    randomizeQuestions: true,
-    randomizeOptions: true,
-    questionBankId: 'qbank-pai-7',
     status: 'ongoing' as const,
     tokenRequired: true
   },
@@ -662,14 +652,32 @@ export const OFFICIAL_EXAM_SCHEDULES = [
     subjectName: 'Informatika',
     targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
     targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
-    date: '2026-10-25',
-    startTime: '07:30',
-    endTime: '12:00',
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
     durationMinutes: 90,
     kkm: 75,
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-inf-7',
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-pai-2026',
+    title: 'UAS Semester Ganjil - Pendidikan Agama Islam',
+    subjectId: 'sbj-pai',
+    subjectName: 'Pendidikan Agama Islam',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDate(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-pai-7',
     status: 'ongoing' as const,
     tokenRequired: true
   }

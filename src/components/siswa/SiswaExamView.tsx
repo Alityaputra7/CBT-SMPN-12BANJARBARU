@@ -14,6 +14,13 @@ import {
   LogOut, 
   Sparkles,
   Layers,
+  Calendar,
+  Lock,
+  Unlock,
+  Smartphone,
+  Laptop,
+  CheckCircle2,
+  AlertCircle,
   X
 } from 'lucide-react';
 import { 
@@ -28,6 +35,7 @@ import {
 import { KatexRenderer } from '../common/KatexRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
 import { syncSingleSession } from '../../utils/apiSync';
+import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 
 interface SiswaExamViewProps {
   student: Student;
@@ -65,10 +73,22 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Live Clock to track exam schedule timing in real-time
+  const [nowTime, setNowTime] = useState<Date>(() => new Date());
+  useEffect(() => {
+    const clockTimer = setInterval(() => {
+      setNowTime(new Date());
+    }, 1000);
+    return () => clearInterval(clockTimer);
+  }, []);
+
+  // Real-time schedule validation (strict time window enforcement)
+  const scheduleCheck = validateExamSchedule(exam, nowTime);
+
   // STRICT: Questions MUST belong to this exam's subject AND the student's specific class/grade.
-  // Never fallback to other classes' questions to eliminate cross-class question pile-up.
+  // Sourced directly from questions uploaded/maintained by teachers and operators in the centralized question bank.
   const questions = questionBank.questions.filter(q => {
-    const matchSubject = !exam.subjectId || q.subjectId === exam.subjectId;
+    const matchSubject = !exam.subjectId || q.subjectId === exam.subjectId || (exam.questionBankId && q.bankId === exam.questionBankId);
     const matchClass = isQuestionMatchingClass(q.classId, q.grade, student.classId);
     return matchSubject && matchClass;
   });
@@ -101,9 +121,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleStartExam = async () => {
+    if (!scheduleCheck.canStart) {
+      alert(`Peringatan Akses: ${scheduleCheck.message}`);
+      return;
+    }
+    if (questions.length === 0) {
+      alert(`Soal belum tersedia untuk Kelas ${student.className}. Silakan hubungi guru mapel atau operator.`);
+      return;
+    }
     await enterFullscreen();
     setHasStarted(true);
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       status: 'in_progress',
       startedAt: session.startedAt || new Date().toLocaleTimeString('id-ID'),
@@ -436,38 +464,112 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           );
         })()}
 
-        {/* Student Identity Card */}
-        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2">
+        {/* 1. Schedule Timing Verification Card (Strict Schedule Window) */}
+        <div className={`rounded-xl p-4 border transition-all text-xs space-y-3 ${
+          scheduleCheck.canStart 
+            ? 'bg-emerald-50/70 border-emerald-200' 
+            : scheduleCheck.status === 'upcoming' 
+              ? 'bg-amber-50/80 border-amber-200' 
+              : 'bg-rose-50/80 border-rose-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 font-bold">
+              <Calendar className="w-4 h-4 text-slate-700" />
+              <span className="text-slate-900">Jadwal Pelaksanaan Ujian</span>
+            </div>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs ${scheduleCheck.badgeClass}`}>
+              {scheduleCheck.statusBadge}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+            <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200/80 space-y-1">
+              <span className="text-slate-500 block">Jadwal Tanggal & Waktu:</span>
+              <span className="font-semibold text-slate-900 block">
+                {formatDateIndo(exam.date)}
+              </span>
+              <span className="font-mono text-blue-700 font-bold block">
+                Pukul {exam.startTime} - {exam.endTime} WITA
+              </span>
+            </div>
+            <div className="bg-white/80 p-2.5 rounded-lg border border-slate-200/80 space-y-1">
+              <span className="text-slate-500 block">Waktu Sistem Saat Ini:</span>
+              <span className="font-semibold text-slate-900 block flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                {scheduleCheck.currentTimeString} WITA
+              </span>
+              <span className="text-[10px] text-slate-500 block">
+                {scheduleCheck.isToday ? 'Hari pelaksanaan ujian (Hari ini)' : 'Di luar tanggal pelaksanaan'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-2 pt-1 text-[11px] leading-relaxed">
+            {scheduleCheck.canStart ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            ) : scheduleCheck.status === 'upcoming' ? (
+              <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            ) : (
+              <Lock className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            )}
+            <p className={scheduleCheck.canStart ? 'text-emerald-900 font-medium' : scheduleCheck.status === 'upcoming' ? 'text-amber-900 font-medium' : 'text-rose-900 font-medium'}>
+              {scheduleCheck.message}
+            </p>
+          </div>
+        </div>
+
+        {/* 2. Student Identity & Question Source Card */}
+        <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2.5">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 font-semibold text-slate-700">
+            <span>Identitas Peserta Ujian</span>
+            <span className="text-blue-700 font-mono">Ruang Ujian Mandiri</span>
+          </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Nomor Induk Siswa (NIS):</span>
             <span className="font-mono font-bold text-slate-900">{student.nis}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Nama Lengkap:</span>
+            <span className="text-slate-500">Nama Lengkap Siswa:</span>
             <span className="font-semibold text-slate-900">{student.name}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Rombongan Belajar:</span>
-            <span className="font-bold text-blue-700">Kelas {student.className}</span>
+            <span className="text-slate-500">Rombongan Belajar / Kelas:</span>
+            <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              Kelas {student.className}
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Mata Pelajaran:</span>
             <span className="font-bold text-slate-900">{exam.subjectName}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500">Jumlah Butir Soal Khusus Kelas {student.className}:</span>
-            <span className={`font-mono font-bold ${questions.length > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-              {questions.length} Soal Aktif
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500">Naskah Soal Resmi (Guru & Operator):</span>
+            <span className={`font-mono font-bold px-2 py-0.5 rounded ${questions.length > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+              {questions.length} Butir Soal Khusus Kelas {student.className}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Durasi Pengerjaan:</span>
+            <span className="text-slate-500">Alokasi Waktu Pengerjaan:</span>
             <span className="font-medium text-slate-900">{exam.durationMinutes} Menit</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Kriteria Ketuntasan (KKM):</span>
+            <span className="text-slate-500">Kriteria Ketuntasan Minimal (KKM):</span>
             <span className="font-mono font-bold text-slate-900">{exam.kkm}</span>
           </div>
+        </div>
+
+        {/* 3. Cross-Device Compatibility & Real-Time Sync Banner */}
+        <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-1.5 text-xs text-blue-950">
+          <div className="flex items-center gap-2 font-bold text-blue-900">
+            <div className="flex items-center gap-1">
+              <Smartphone className="w-4 h-4 text-blue-600" />
+              <Laptop className="w-4 h-4 text-emerald-600" />
+            </div>
+            <span>Dukungan Ponsel (HP) & Laptop · Sinkronisasi Otomatis</span>
+          </div>
+          <p className="text-[11px] text-blue-900/90 leading-relaxed">
+            Aplikasi CBT ini dirancang responsif untuk digunakan melalui <strong>telepon genggam (ponsel) maupun laptop</strong>. Data soal yang Anda kerjakan bersumber langsung dari bank soal yang diunggah oleh guru atau operator. Jawaban dan sisa waktu tersinkronisasi terpusat ke server sehingga data di HP dan laptop selalu sama persis.
+          </p>
         </div>
 
         {/* Notice when no questions uploaded yet for this class */}
@@ -478,42 +580,70 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               <span>Paket Soal Belum Tersedia untuk Kelas {student.className}</span>
             </div>
             <p className="text-[11px] text-amber-800 leading-relaxed">
-              Mata pelajaran <strong>{exam.subjectName}</strong> belum memiliki soal yang diunggah untuk <strong>Kelas {student.className}</strong>. Silakan pilih mata pelajaran lain yang terjadwal di atas atau konfirmasi kepada guru pengawas ruang.
+              Mata pelajaran <strong>{exam.subjectName}</strong> belum memiliki soal yang diunggah oleh guru atau operator untuk <strong>Kelas {student.className}</strong>. Silakan pilih mata pelajaran lain yang terjadwal atau hubungi operator/guru pengampu.
             </p>
           </div>
         )}
 
         {/* Anti-Cheat Regulations */}
-        <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2 text-xs text-blue-950">
-          <div className="flex items-center gap-2 font-bold">
-            <ShieldAlert className="w-4 h-4 text-blue-600" />
-            <span>Tata Tertib & Mode Anti-Keluar Aplikasi:</span>
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs text-slate-800">
+          <div className="flex items-center gap-2 font-bold text-slate-900">
+            <ShieldAlert className="w-4 h-4 text-slate-700" />
+            <span>Tata Tertib Ujian CBT:</span>
           </div>
-          <ul className="list-disc pl-5 space-y-1 text-blue-900 text-[11px] leading-relaxed">
-            <li>Ujian dapat dikerjakan melalui <strong>smartphone (ponsel) maupun laptop/PC</strong>.</li>
+          <ul className="list-disc pl-5 space-y-1 text-slate-700 text-[11px] leading-relaxed">
+            <li>Pengerjaan soal hanya dapat dilakukan saat jam jadwal berlangsung (Pukul {exam.startTime} - {exam.endTime} WITA).</li>
             <li>Ujian wajib dilaksanakan dalam mode <strong>Layar Penuh (Fullscreen)</strong>.</li>
-            <li>Dilarang berpindah tab browser, membuka aplikasi lain, atau meminimalkan jendela.</li>
-            <li>Pelanggaran maksimal <strong>{schoolSetting.maxViolations}x</strong>. Jika melampaui, ujian Anda otomatis terkunci dan harus dibuka oleh pengawas.</li>
+            <li>Dilarang berpindah aplikasi, membuka tab lain, atau meminimalkan browser selama ujian berlangsung.</li>
+            <li>Batas toleransi pelanggaran <strong>{schoolSetting.maxViolations}x</strong> sebelum lembar ujian terkunci otomatis.</li>
           </ul>
         </div>
 
-        <div className="space-y-2">
-          <button
-            onClick={handleStartExam}
-            disabled={questions.length === 0}
-            className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <Maximize className="w-4 h-4" />
-            <span>
-              {questions.length > 0
-                ? `Mulai Ujian (${questions.length} Soal · Kelas ${student.className})`
-                : `Soal Belum Tersedia untuk Kelas ${student.className}`}
-            </span>
-          </button>
+        <div className="space-y-2 pt-1">
+          {scheduleCheck.canStart && questions.length > 0 ? (
+            <button
+              onClick={handleStartExam}
+              className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+            >
+              <Maximize className="w-4 h-4" />
+              <span>Mulai Kerjakan Ujian ({questions.length} Soal · Kelas {student.className})</span>
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <button
+                disabled
+                className="w-full py-3.5 px-4 bg-slate-200 text-slate-500 font-semibold rounded-xl text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-slate-300 shadow-none"
+              >
+                {!scheduleCheck.canStart ? (
+                  <>
+                    <Lock className="w-4 h-4 text-slate-400" />
+                    <span>
+                      {scheduleCheck.status === 'upcoming' 
+                        ? `Ujian Belum Dimulai (Jadwal: ${exam.startTime} - ${exam.endTime} WITA)`
+                        : scheduleCheck.status === 'ended'
+                          ? `Waktu Ujian Telah Berakhir (Ditutup Pukul ${exam.endTime} WITA)`
+                          : `Ujian Ditutup (${scheduleCheck.statusBadge})`}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertTriangle className="w-4 h-4 text-amber-500" />
+                    <span>Soal Belum Diunggah untuk Kelas {student.className}</span>
+                  </>
+                )}
+              </button>
+              {!scheduleCheck.canStart && (
+                <p className="text-center text-[11px] text-rose-600 font-medium bg-rose-50 p-2 rounded-lg border border-rose-200">
+                  ⛔ Pengerjaan soal hanya bisa dikerjakan pada saat jadwal yang ditentukan ({formatDateIndo(exam.date)} pukul {exam.startTime} - {exam.endTime} WITA).
+                </p>
+              )}
+            </div>
+          )}
+
           <button
             type="button"
             onClick={onExitExam}
-            className="w-full py-2.5 px-4 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center"
+            className="w-full py-2.5 px-4 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center font-medium"
           >
             Keluar dari Sesi Siswa
           </button>

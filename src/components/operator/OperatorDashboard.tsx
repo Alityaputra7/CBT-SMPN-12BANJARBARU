@@ -450,11 +450,15 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
     const finalSubjectId = targetSubjectId || (selectedQSubjectFilter !== 'all' ? selectedQSubjectFilter : 'sbj-mat');
     const finalClassId = targetClassId || (selectedQClassFilter !== 'all' ? selectedQClassFilter : 'cls-1');
+    const derivedGrade = (finalClassId === 'cls-8' || finalClassId === 'cls-8a' || finalClassId === 'cls-8b')
+      ? 'VIII'
+      : (finalClassId === 'cls-9' ? 'IX' : 'VII');
 
     const preparedQuestion: Question = {
       ...question,
       subjectId: finalSubjectId,
       classId: finalClassId,
+      grade: derivedGrade,
       bankId: `qbank-${finalSubjectId}`
     };
 
@@ -481,12 +485,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const handleSaveImportedQuestions = (imported: Question[], targetSubjectId: string, targetClassId: string) => {
     const finalSubjectId = targetSubjectId || (selectedQSubjectFilter !== 'all' ? selectedQSubjectFilter : 'sbj-mat');
     const finalClassId = targetClassId || (selectedQClassFilter !== 'all' ? selectedQClassFilter : 'cls-1');
+    const derivedGrade = (finalClassId === 'cls-8' || finalClassId === 'cls-8a' || finalClassId === 'cls-8b')
+      ? 'VIII'
+      : (finalClassId === 'cls-9' ? 'IX' : 'VII');
     const startingNum = questionBank.questions.length + 1;
 
     const renumbered = imported.map((q, idx) => ({
       ...q,
       subjectId: finalSubjectId,
       classId: finalClassId,
+      grade: derivedGrade,
       bankId: `qbank-${finalSubjectId}`,
       number: startingNum + idx
     }));
