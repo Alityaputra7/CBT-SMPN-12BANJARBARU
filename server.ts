@@ -85,6 +85,82 @@ try {
   inMemoryStore = getInitialStore();
 }
 
+const JSONBIN_CONFIG = {
+  BIN_ID: '6ae3da16ac6210605a5d7d67',
+  MASTER_KEY: '$2a$10$FInWr6nZAYYAmp8/KXrUoOEuDH5NOQ/0oM82MRBKIjynMzb/H5vXO',
+  BASE_URL: 'https://api.jsonbin.io/v3/b',
+};
+
+async function pushStoreToJsonBin() {
+  try {
+    const activeSessions = (inMemoryStore.sessions || []).filter(s => 
+      s.status !== 'not_started' || 
+      Object.keys(s.answers || {}).length > 0 || 
+      s.isLocked || 
+      s.finalScore > 0 ||
+      s.violationsCount > 0
+    );
+
+    const payload = {
+      version: storeVersion,
+      lastUpdated,
+      schoolSetting: inMemoryStore.schoolSetting,
+      operator: inMemoryStore.operator,
+      students: inMemoryStore.students,
+      teachers: inMemoryStore.teachers,
+      classes: inMemoryStore.classes,
+      subjects: inMemoryStore.subjects,
+      exams: inMemoryStore.exams,
+      activeSessions: activeSessions,
+      questionBank: inMemoryStore.questionBank,
+      auditLogs: (inMemoryStore.auditLogs || []).slice(0, 50),
+    };
+
+    await fetch(`${JSONBIN_CONFIG.BASE_URL}/${JSONBIN_CONFIG.BIN_ID}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_CONFIG.MASTER_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.error('[CBT Server] Error pushing to JSONBin:', err);
+  }
+}
+
+async function loadStoreFromJsonBin() {
+  try {
+    const res = await fetch(`${JSONBIN_CONFIG.BASE_URL}/${JSONBIN_CONFIG.BIN_ID}/latest`, {
+      headers: {
+        'X-Master-Key': JSONBIN_CONFIG.MASTER_KEY,
+        'Cache-Control': 'no-cache',
+      },
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const rec = json.record;
+      if (rec && rec.students) {
+        if (rec.schoolSetting) inMemoryStore.schoolSetting = rec.schoolSetting;
+        if (rec.operator) inMemoryStore.operator = rec.operator;
+        if (Array.isArray(rec.students)) inMemoryStore.students = rec.students;
+        if (Array.isArray(rec.teachers)) inMemoryStore.teachers = rec.teachers;
+        if (Array.isArray(rec.classes)) inMemoryStore.classes = rec.classes;
+        if (Array.isArray(rec.subjects)) inMemoryStore.subjects = rec.subjects;
+        if (Array.isArray(rec.exams)) inMemoryStore.exams = rec.exams;
+        if (rec.questionBank) inMemoryStore.questionBank = rec.questionBank;
+        if (Array.isArray(rec.auditLogs)) inMemoryStore.auditLogs = rec.auditLogs;
+        if (rec.version) storeVersion = rec.version;
+        if (rec.lastUpdated) lastUpdated = rec.lastUpdated;
+        saveStoreToDisk();
+        console.log(`[CBT Server] Successfully hydrated from JSONBin.io (Version ${storeVersion})`);
+      }
+    }
+  } catch (err) {
+    console.warn('[CBT Server] Unable to load from JSONBin on start:', err);
+  }
+}
+
 function saveStoreToDisk() {
   try {
     const payload = {
@@ -99,6 +175,9 @@ function saveStoreToDisk() {
 }
 
 async function startServer() {
+  // Hydrate latest data from JSONBin.io at startup
+  await loadStoreFromJsonBin();
+
   const app = express();
   const PORT = parseInt(process.env.PORT || '3000', 10);
 
@@ -162,6 +241,7 @@ async function startServer() {
     storeVersion++;
     lastUpdated = Date.now();
     saveStoreToDisk();
+    pushStoreToJsonBin();
 
     res.json({
       success: true,
@@ -187,6 +267,7 @@ async function startServer() {
     storeVersion++;
     lastUpdated = Date.now();
     saveStoreToDisk();
+    pushStoreToJsonBin();
 
     res.json({
       success: true,
@@ -201,6 +282,7 @@ async function startServer() {
     storeVersion++;
     lastUpdated = Date.now();
     saveStoreToDisk();
+    pushStoreToJsonBin();
     res.json({
       success: true,
       version: storeVersion,

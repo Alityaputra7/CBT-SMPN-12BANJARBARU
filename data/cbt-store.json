@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "lastUpdated": 1793315716631,
+  "version": 4,
+  "lastUpdated": 1793317610792,
   "data": {
     "schoolSetting": {
       "id": "sch-1",
@@ -5833,31 +5833,13 @@
     },
     "auditLogs": [
       {
-        "id": "log-1",
+        "id": "log-test-sync",
         "userRole": "operator",
         "userIdentifier": "admin",
-        "action": "JADWAL_UJIAN_DIBUAT",
-        "details": "Membuat jadwal UAS Matematika Kelas VII (VII-A, VII-B)",
-        "ipAddress": "192.168.1.10",
-        "timestamp": "2026-10-24 19:30:12"
-      },
-      {
-        "id": "log-2",
-        "userRole": "guru",
-        "userIdentifier": "198005122006041008",
-        "action": "BANK_SOAL_DIPERBARUI",
-        "details": "Menambahkan 6 butir soal Matematika dengan formula KaTeX",
-        "ipAddress": "192.168.1.45",
-        "timestamp": "2026-10-24 19:45:00"
-      },
-      {
-        "id": "log-3",
-        "userRole": "operator",
-        "userIdentifier": "admin",
-        "action": "TOKEN_DINAMIS_AKTIF",
-        "details": "Inisialisasi rotasi token 5-menitan untuk server CBT",
-        "ipAddress": "192.168.1.10",
-        "timestamp": "2026-10-24 20:00:00"
+        "action": "JSONBIN_SYNC_TEST",
+        "details": "Verifikasi sinkronisasi Laptop dan HP via JSONBin.io",
+        "ipAddress": "127.0.0.1",
+        "timestamp": "2026-10-29 23:46"
       }
     ]
   }

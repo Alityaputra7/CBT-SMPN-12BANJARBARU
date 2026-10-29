@@ -88,7 +88,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         </nav>
 
         {/* Zone 3: 1 Primary Action */}
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* JSONBin.io Cloud Sync Status Indicator */}
+          <div 
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg text-[11px] font-medium shadow-2xs" 
+            title="Sinkronisasi Cloud JSONBin.io Aktif (Bin ID: 6ae3da16ac6210605a5d7d67) - Laptop & HP Tersinkronisasi Otomatis"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-semibold">JSONBin Sync</span>
+          </div>
+
           {currentRole ? (
             <div className="flex items-center gap-3">
               <span className="hidden sm:inline-block text-xs text-slate-500 font-medium">
