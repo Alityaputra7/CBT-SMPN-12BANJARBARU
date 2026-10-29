@@ -53,6 +53,8 @@ import { QuestionImportModal } from '../common/QuestionImportModal';
 import { QuestionEditorModal } from '../common/QuestionEditorModal';
 import { ResetExamResultsModal } from '../common/ResetExamResultsModal';
 import { KatexRenderer } from '../common/KatexRenderer';
+import { ExportExamResultsModal } from '../common/ExportExamResultsModal';
+import { exportExamResultsToCSV, getFilteredResultRows } from '../../utils/exportExamResults';
 import { 
   QUESTION_CLASS_GROUPS, 
   isQuestionMatchingClass, 
@@ -207,6 +209,34 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [showQuestionEditorModal, setShowQuestionEditorModal] = useState<boolean>(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [selectedQIds, setSelectedQIds] = useState<string[]>([]);
+
+  // Export Results Modal State
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
+  const [resultsSubjectFilter, setResultsSubjectFilter] = useState<string>('all');
+
+  const handleDirectExportResults = () => {
+    const rows = getFilteredResultRows(
+      sessions,
+      exams,
+      students,
+      subjects,
+      classes,
+      {
+        subjectId: resultsSubjectFilter,
+        classId: selectedClassFilter,
+        statusFilter: 'all'
+      }
+    );
+    const subName = resultsSubjectFilter === 'all' 
+      ? 'Semua_Mapel' 
+      : subjects.find(s => s.id === resultsSubjectFilter)?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Mapel';
+    const clsName = selectedClassFilter === 'all' 
+      ? 'Semua_Kelas' 
+      : selectedClassFilter === 'cls-8' 
+        ? 'Kelas_VIII' 
+        : `Kelas_${classes.find(c => c.id === selectedClassFilter)?.name?.replace(/[^a-zA-Z0-9]/g, '_') || selectedClassFilter}`;
+    exportExamResultsToCSV(rows, `Rekap_Nilai_CBT_SMPN12_${subName}_${clsName}`);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1544,138 +1574,189 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )}
 
       {/* TAB 6: REKAP NILAI */}
-      {activeTab === 'results' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-slate-900">
-                  Rekap Hasil Nilai & Ketuntasan KKM
-                </h3>
-                {lastSyncTime && (
-                  <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                    Sync: {lastSyncTime}
+      {activeTab === 'results' && (() => {
+        const isMatchingClass = (s: StudentExamSession) => {
+          if (selectedClassFilter === 'all') return true;
+          if (selectedClassFilter === 'cls-8') {
+            return s.classId === 'cls-2' || s.classId === 'cls-3' || s.className.includes('VIII') || s.classId === 'cls-8';
+          }
+          return s.classId === selectedClassFilter;
+        };
+
+        const isMatchingSubject = (s: StudentExamSession) => {
+          if (resultsSubjectFilter === 'all') return true;
+          const ex = exams.find(e => e.id === s.examId);
+          return ex?.subjectId === resultsSubjectFilter;
+        };
+
+        const filteredSessions = sessions.filter(s => isMatchingClass(s) && isMatchingSubject(s));
+        const completedSessions = filteredSessions.filter(s => s.status === 'submitted' || s.status === 'force_submitted');
+        const passedSessions = filteredSessions.filter(s => s.finalScore >= 75);
+        const avgScore = completedSessions.length > 0 
+          ? Math.round(completedSessions.reduce((acc, curr) => acc + curr.finalScore, 0) / completedSessions.length)
+          : 0;
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Rekap Hasil Nilai & Ketuntasan KKM
+                  </h3>
+                  {lastSyncTime && (
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Sync: {lastSyncTime}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Rekapitulasi nilai terintegrasi (PG, Kompleks, Isian & Uraian) dengan batas kelulusan KKM 75.00.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleOpenResetBatch}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="Reset hasil ujian massal untuk seluruh peserta atau kelas tertentu"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                  Reset Hasil Ulangan
+                </button>
+                <button
+                  onClick={handleDirectExportResults}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Unduh file Microsoft Excel / CSV dengan encoding UTF-8 BOM"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ekspor Excel (CSV)</span>
+                </button>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Pratinjau Leger Nilai resmi berkop sekolah dan cetak PDF"
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Cetak Leger / PDF</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Metrics & Class/Subject Filter */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Mata Pelajaran:</span>
+                  <select
+                    value={resultsSubjectFilter}
+                    onChange={e => setResultsSubjectFilter(e.target.value)}
+                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
+                  >
+                    <option value="all">Semua Mata Pelajaran</option>
+                    {subjects.map(sub => (
+                      <option key={sub.id} value={sub.id}>{sub.name} ({sub.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Filter Rombel:</span>
+                  <select
+                    value={selectedClassFilter}
+                    onChange={e => setSelectedClassFilter(e.target.value)}
+                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
+                  >
+                    <option value="all">Semua Rombel ({sessions.length} Siswa)</option>
+                    <option value="cls-8">Kelas VIII (Gabungan VIII-A & VIII-B)</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500">Peserta:</span>{' '}
+                  <span className="font-bold text-slate-800 font-mono">{filteredSessions.length}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Tuntas (≥75):</span>{' '}
+                  <span className="font-bold text-emerald-700 font-mono">{passedSessions.length}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Belum Tuntas:</span>{' '}
+                  <span className="font-bold text-rose-600 font-mono">
+                    {completedSessions.length - passedSessions.length}
                   </span>
-                )}
+                </div>
+                <div>
+                  <span className="text-slate-500">Rata-rata:</span>{' '}
+                  <span className="font-bold text-blue-700 font-mono">{avgScore}</span>
+                </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Rekap nilai otomatis gabungan skor pilihan ganda, mencocokkan, dan uraian (KKM: 75).
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={handleOpenResetBatch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
-                title="Reset hasil ujian massal untuk seluruh peserta atau kelas tertentu"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                Reset Semua Hasil Ulangan
-              </button>
-              <button
-                onClick={() => alert('Mengunduh format Rekap_Nilai_UAS_SMPN12_BJB.xlsx')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-xs cursor-pointer"
-              >
-                <Download className="w-3.5 h-3.5 text-slate-500" />
-                Ekspor Excel/PDF
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Metrics & Class Filter */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-600">Filter Rombel:</span>
-              <select
-                value={selectedClassFilter}
-                onChange={e => setSelectedClassFilter(e.target.value)}
-                className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
-              >
-                <option value="all">Semua Rombel ({sessions.length} Siswa)</option>
-                {classes.map(c => (
-                  <option key={c.id} value={c.id}>Kelas {c.name}</option>
-                ))}
-              </select>
             </div>
 
-            <div className="flex items-center gap-4 text-xs">
-              <div>
-                <span className="text-slate-500">Tuntas (≥75):</span>{' '}
-                <span className="font-bold text-emerald-700">
-                  {sessions.filter(s => (selectedClassFilter === 'all' || s.classId === selectedClassFilter) && s.finalScore >= 75).length}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500">Belum Tuntas:</span>{' '}
-                <span className="font-bold text-rose-600">
-                  {sessions.filter(s => (selectedClassFilter === 'all' || s.classId === selectedClassFilter) && s.finalScore < 75 && (s.status === 'submitted' || s.status === 'force_submitted')).length}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500">Rata-rata:</span>{' '}
-                <span className="font-bold text-blue-700 font-mono">
-                  {(() => {
-                    const filtered = sessions.filter(s => (selectedClassFilter === 'all' || s.classId === selectedClassFilter) && (s.status === 'submitted' || s.status === 'force_submitted'));
-                    if (filtered.length === 0) return '0';
-                    return Math.round(filtered.reduce((acc, curr) => acc + curr.finalScore, 0) / filtered.length);
-                  })()}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                  <th className="py-2.5 px-3 font-semibold">NIS</th>
-                  <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
-                  <th className="py-2.5 px-3 font-semibold">Kelas</th>
-                  <th className="py-2.5 px-3 font-semibold">Skor Otomatis</th>
-                  <th className="py-2.5 px-3 font-semibold">Skor Uraian</th>
-                  <th className="py-2.5 px-3 font-semibold">Nilai Akhir</th>
-                  <th className="py-2.5 px-3 font-semibold">Status KKM</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Aksi Reset</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sessions
-                  .filter(s => selectedClassFilter === 'all' || s.classId === selectedClassFilter)
-                  .map(s => (
-                    <tr key={s.id} className="hover:bg-slate-50/60">
-                      <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
-                      <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
-                      <td className="py-2 px-3 text-slate-600">{s.className}</td>
-                      <td className="py-2 px-3 font-mono text-slate-700">{s.scorePg}</td>
-                      <td className="py-2 px-3 font-mono text-slate-700">{s.scoreEssay}</td>
-                      <td className="py-2 px-3 font-mono font-bold text-blue-700">{s.finalScore}</td>
-                      <td className="py-2 px-3">
-                        {s.finalScore >= 75 ? (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                            TUNTAS
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                            BELUM TUNTAS
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <button
-                          onClick={() => handleOpenResetSingle(s)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
-                          title="Reset hasil ulangan siswa ini agar bisa ujian ulang"
-                        >
-                          <RotateCcw className="w-3 h-3 text-rose-600" />
-                          <span>Reset Hasil</span>
-                        </button>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                    <th className="py-2.5 px-3 font-semibold">NIS</th>
+                    <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
+                    <th className="py-2.5 px-3 font-semibold">Kelas</th>
+                    <th className="py-2.5 px-3 font-semibold">Skor Otomatis</th>
+                    <th className="py-2.5 px-3 font-semibold">Skor Uraian</th>
+                    <th className="py-2.5 px-3 font-semibold">Nilai Akhir</th>
+                    <th className="py-2.5 px-3 font-semibold">Status KKM</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Aksi Reset</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-500 italic">
+                        Tidak ada siswa yang cocok dengan filter yang dipilih.
                       </td>
                     </tr>
-                  ))}
-              </tbody>
-            </table>
+                  ) : (
+                    filteredSessions.map(s => (
+                      <tr key={s.id} className="hover:bg-slate-50/60">
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
+                        <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
+                        <td className="py-2 px-3 text-slate-600">{s.className}</td>
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.scorePg}</td>
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.scoreEssay}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-blue-700">{s.finalScore}</td>
+                        <td className="py-2 px-3">
+                          {s.finalScore >= 75 ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                              TUNTAS
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                              BELUM TUNTAS
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            onClick={() => handleOpenResetSingle(s)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                            title="Reset hasil ulangan siswa ini agar bisa ujian ulang"
+                          >
+                            <RotateCcw className="w-3 h-3 text-rose-600" />
+                            <span>Reset Hasil</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 7: KARTU PESERTA */}
       {activeTab === 'cards' && (
@@ -2078,6 +2159,23 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           onConfirmResetBatch={handleConfirmResetBatch}
           userRole="operator"
           currentExamTitle={exams[0]?.title}
+        />
+      )}
+
+      {/* Export & Print Exam Results Modal */}
+      {showExportModal && (
+        <ExportExamResultsModal
+          isOpen={true}
+          onClose={() => setShowExportModal(false)}
+          sessions={sessions}
+          exams={exams}
+          students={students}
+          subjects={subjects}
+          classes={classes}
+          schoolSetting={schoolSetting}
+          isOperator={true}
+          initialSubjectId={resultsSubjectFilter}
+          initialClassId={selectedClassFilter}
         />
       )}
     </div>

@@ -18,7 +18,9 @@ import {
   Layers,
   RotateCcw,
   CheckSquare,
-  Square
+  Square,
+  Printer,
+  FileSpreadsheet
 } from 'lucide-react';
 import { 
   UserAccount, 
@@ -27,13 +29,17 @@ import {
   ExamSchedule, 
   StudentExamSession, 
   ClassRoom,
-  Subject
+  Subject,
+  Student,
+  SchoolSetting
 } from '../../types/cbt';
 import { generateDynamicToken } from '../../utils/tokenGenerator';
 import { KatexRenderer } from '../common/KatexRenderer';
 import { QuestionImportModal } from '../common/QuestionImportModal';
 import { QuestionEditorModal } from '../common/QuestionEditorModal';
 import { ResetExamResultsModal } from '../common/ResetExamResultsModal';
+import { ExportExamResultsModal } from '../common/ExportExamResultsModal';
+import { exportExamResultsToCSV, getFilteredResultRows } from '../../utils/exportExamResults';
 import { 
   QUESTION_CLASS_GROUPS, 
   isQuestionMatchingClass, 
@@ -49,6 +55,8 @@ interface GuruDashboardProps {
   onUpdateSessions: (sessions: StudentExamSession[]) => void;
   classes: ClassRoom[];
   subjects: Subject[];
+  students?: Student[];
+  schoolSetting?: SchoolSetting;
   onResetSingleResult?: (sessionId: string, reason?: string) => void;
   onResetAllResults?: (targetClassId?: string, reason?: string) => void;
   lastSyncTime?: string;
@@ -63,6 +71,8 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   onUpdateSessions,
   classes,
   subjects,
+  students = [],
+  schoolSetting,
   onResetSingleResult,
   onResetAllResults,
   lastSyncTime = ''
@@ -76,7 +86,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
         : [subjects[0]]);
   const teacherSubjectIds = effectiveTeacherSubjects.map(s => s.id);
 
-  const [activeTab, setActiveTab] = useState<'bank' | 'monitor' | 'correction' | 'analysis'>('bank');
+  const [activeTab, setActiveTab] = useState<'bank' | 'monitor' | 'correction' | 'analysis' | 'results'>('bank');
   const [tokenInfo, setTokenInfo] = useState(generateDynamicToken());
   const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
 
@@ -86,6 +96,9 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   // Reset Results Modal State
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [resetTargetSession, setResetTargetSession] = useState<StudentExamSession | null>(null);
+
+  // Export Results Modal State for Guru
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
 
   // Filter state: default to teacher's first assigned subject
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>(
@@ -103,6 +116,29 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   const [selectedEssayQuestion, setSelectedEssayQuestion] = useState<Question | null>(null);
   const [essayGradingScore, setEssayGradingScore] = useState<number>(15);
   const [essayFeedback, setEssayFeedback] = useState<string>('Jawaban dan langkah penyelesaian sudah sangat tepat.');
+
+  // Direct CSV download handler for Guru
+  const handleDirectExportGuruCSV = () => {
+    const rows = getFilteredResultRows(
+      sessions,
+      exams,
+      students,
+      subjects,
+      classes,
+      {
+        subjectId: selectedSubjectFilter,
+        classId: selectedClassFilter,
+        statusFilter: 'all'
+      }
+    );
+    const subName = subjects.find(s => s.id === selectedSubjectFilter)?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'Mapel';
+    const clsName = selectedClassFilter === 'all' 
+      ? 'Semua_Kelas' 
+      : selectedClassFilter === 'cls-8' 
+        ? 'Kelas_VIII' 
+        : `Kelas_${classes.find(c => c.id === selectedClassFilter)?.name?.replace(/[^a-zA-Z0-9]/g, '_') || selectedClassFilter}`;
+    exportExamResultsToCSV(rows, `Rekap_Nilai_CBT_${teacher.name.replace(/[^a-zA-Z0-9]/g, '_')}_${subName}_${clsName}`);
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -441,7 +477,16 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           }`}
         >
           <BarChart3 className="w-3.5 h-3.5" />
-          Analisis Butir & Nilai
+          Analisis Butir
+        </button>
+        <button
+          onClick={() => setActiveTab('results')}
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+            activeTab === 'results' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+          Rekap & Ekspor Nilai
         </button>
       </div>
 
@@ -1006,13 +1051,33 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       {/* TAB 4: ANALISIS BUTIR & NILAI */}
       {activeTab === 'analysis' && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
-          <div className="pb-3 border-b border-slate-100">
-            <h3 className="text-base font-bold text-slate-900">
-              Analisis Butir Soal & Statistik Kelas
-            </h3>
-            <p className="text-xs text-slate-500">
-              Rata-rata kelas, tingkat kesukaran soal, dan daya beda untuk evaluasi kurikulum.
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div>
+              <h3 className="text-base font-bold text-slate-900">
+                Analisis Butir Soal & Statistik Kelas
+              </h3>
+              <p className="text-xs text-slate-500">
+                Rata-rata kelas, tingkat kesukaran soal, dan daya beda untuk evaluasi kurikulum.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDirectExportGuruCSV}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                title="Unduh file Microsoft Excel (.csv)"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Ekspor Excel</span>
+              </button>
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                title="Cetak Leger Nilai resmi atau simpan PDF"
+              >
+                <Printer className="w-3.5 h-3.5 text-blue-600" />
+                <span>Cetak / PDF</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -1062,6 +1127,194 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* TAB 5: REKAP & EKSPOR NILAI SISWA */}
+      {activeTab === 'results' && (() => {
+        const isMatchingClass = (s: StudentExamSession) => {
+          if (selectedClassFilter === 'all') return true;
+          if (selectedClassFilter === 'cls-8') {
+            return s.classId === 'cls-2' || s.classId === 'cls-3' || s.className.includes('VIII') || s.classId === 'cls-8';
+          }
+          return s.classId === selectedClassFilter;
+        };
+
+        const isMatchingSubject = (s: StudentExamSession) => {
+          if (selectedSubjectFilter === 'all') return true;
+          const ex = exams.find(e => e.id === s.examId);
+          const sSubId = ex?.subjectId || effectiveTeacherSubjects[0]?.id;
+          return sSubId === selectedSubjectFilter;
+        };
+
+        const filteredTeacherSessions = sessions.filter(s => isMatchingClass(s) && isMatchingSubject(s));
+        const completedTeacherSessions = filteredTeacherSessions.filter(s => s.status === 'submitted' || s.status === 'force_submitted');
+        const passedTeacherSessions = filteredTeacherSessions.filter(s => s.finalScore >= 75);
+        const avgTeacherScore = completedTeacherSessions.length > 0 
+          ? Math.round(completedTeacherSessions.reduce((acc, curr) => acc + curr.finalScore, 0) / completedTeacherSessions.length)
+          : 0;
+
+        const currentSubName = subjects.find(s => s.id === selectedSubjectFilter)?.name || 'Mata Pelajaran';
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Rekapitulasi Nilai & Ketuntasan Siswa ({currentSubName})
+                  </h3>
+                  {lastSyncTime && (
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Sync: {lastSyncTime}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Daftar nilai hasil ulangan siswa untuk mata pelajaran yang Anda ampu dengan batas kelulusan KKM 75.00.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={handleOpenResetBatch}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="Reset hasil ujian kelas untuk ulangan remedial"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                  Reset Hasil Kelas
+                </button>
+                <button
+                  onClick={handleDirectExportGuruCSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Unduh file Microsoft Excel / CSV UTF-8 BOM"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ekspor Excel (CSV)</span>
+                </button>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shadow-2xs cursor-pointer"
+                  title="Cetak Leger Nilai resmi berkop sekolah atau simpan PDF"
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Cetak Leger / PDF</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filters & Statistics */}
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Mata Pelajaran (Diampu):</span>
+                  <select
+                    value={selectedSubjectFilter}
+                    onChange={e => setSelectedSubjectFilter(e.target.value)}
+                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
+                  >
+                    {effectiveTeacherSubjects.map(sub => (
+                      <option key={sub.id} value={sub.id}>{sub.name} ({sub.code})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-600">Filter Rombel:</span>
+                  <select
+                    value={selectedClassFilter}
+                    onChange={e => setSelectedClassFilter(e.target.value)}
+                    className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
+                  >
+                    <option value="all">Semua Rombel ({sessions.length} Siswa)</option>
+                    <option value="cls-8">Kelas VIII (Gabungan VIII-A & VIII-B)</option>
+                    {classes.map(c => (
+                      <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <div>
+                  <span className="text-slate-500">Peserta:</span>{' '}
+                  <span className="font-bold text-slate-800 font-mono">{filteredTeacherSessions.length}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Tuntas (≥75):</span>{' '}
+                  <span className="font-bold text-emerald-700 font-mono">{passedTeacherSessions.length}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Belum Tuntas:</span>{' '}
+                  <span className="font-bold text-rose-600 font-mono">
+                    {completedTeacherSessions.length - passedTeacherSessions.length}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Rata-rata:</span>{' '}
+                  <span className="font-bold text-blue-700 font-mono">{avgTeacherScore}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                    <th className="py-2.5 px-3 font-semibold">NIS</th>
+                    <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
+                    <th className="py-2.5 px-3 font-semibold">Kelas</th>
+                    <th className="py-2.5 px-3 font-semibold">Skor Otomatis (PG)</th>
+                    <th className="py-2.5 px-3 font-semibold">Skor Uraian</th>
+                    <th className="py-2.5 px-3 font-semibold">Nilai Akhir</th>
+                    <th className="py-2.5 px-3 font-semibold">Status KKM</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredTeacherSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-500 italic">
+                        Belum ada siswa yang tercatat pada filter ini.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTeacherSessions.map(s => (
+                      <tr key={s.id} className="hover:bg-slate-50/60">
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
+                        <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
+                        <td className="py-2 px-3 text-slate-600">{s.className}</td>
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.scorePg}</td>
+                        <td className="py-2 px-3 font-mono text-slate-700">{s.scoreEssay}</td>
+                        <td className="py-2 px-3 font-mono font-bold text-blue-700">{s.finalScore}</td>
+                        <td className="py-2 px-3">
+                          {s.finalScore >= 75 ? (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                              TUNTAS
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                              BELUM TUNTAS
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          <button
+                            onClick={() => handleOpenResetSingle(s)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                            title="Reset hasil ujian siswa ini"
+                          >
+                            <RotateCcw className="w-3 h-3 text-rose-600" />
+                            <span>Reset</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Manual Question Editor Modal for Guru (Only Assigned Subjects) */}
       {showEditorModal && (
@@ -1212,6 +1465,24 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           onConfirmResetBatch={handleConfirmResetBatch}
           userRole="guru"
           currentExamTitle={exams[0]?.title}
+        />
+      )}
+
+      {/* Export & Print Exam Results Modal for Guru */}
+      {showExportModal && (
+        <ExportExamResultsModal
+          isOpen={true}
+          onClose={() => setShowExportModal(false)}
+          sessions={sessions}
+          exams={exams}
+          students={students}
+          subjects={effectiveTeacherSubjects}
+          classes={classes}
+          schoolSetting={schoolSetting}
+          currentTeacher={teacher}
+          isOperator={false}
+          initialSubjectId={selectedSubjectFilter}
+          initialClassId={selectedClassFilter}
         />
       )}
     </div>

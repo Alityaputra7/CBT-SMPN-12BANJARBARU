@@ -478,6 +478,8 @@ export default function App() {
             onUpdateSessions={setSessions}
             classes={classes}
             subjects={subjects}
+            students={students}
+            schoolSetting={schoolSetting}
             onResetSingleResult={handleResetSingleExamResult}
             onResetAllResults={handleResetAllExamResults}
             lastSyncTime={lastSyncTime}
