@@ -258,9 +258,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="text"
+                    inputMode="numeric"
+                    autoComplete="username"
                     required
                     value={nis}
-                    onChange={e => setNis(e.target.value)}
+                    onChange={e => setNis(e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="Contoh: 3132399330"
                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   />
@@ -402,7 +404,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-amber-500" />
             <span>Pintasan Masuk Cepat (Akun Uji Coba):</span>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => fillQuickDemo('siswa')}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   UserRole, 
   UserAccount, 
@@ -32,6 +32,14 @@ import {
   syncClassRoomCounts, 
   clearCbtStorage 
 } from './utils/dataSync';
+import { 
+  fetchServerData, 
+  fetchServerVersion, 
+  syncServerUpdates, 
+  syncSingleSession, 
+  resetServerData 
+} from './utils/apiSync';
+import { isExamMatchingStudentClass } from './utils/classGroups';
 import { Navbar } from './components/layout/Navbar';
 import { DatabaseSchemaViewer } from './components/erd/DatabaseSchemaViewer';
 import { LoginModal } from './components/auth/LoginModal';
@@ -105,6 +113,63 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('id-ID'));
   const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
 
+  // Cross-device sync tracking (ensures mobile phones and laptops stay 100% in sync)
+  const lastKnownVersion = useRef<number>(1);
+  const isSyncingFromServer = useRef<boolean>(false);
+
+  // 1. Initial hydration from server on mount
+  useEffect(() => {
+    fetchServerData().then(serverRes => {
+      if (serverRes && serverRes.success && serverRes.data) {
+        isSyncingFromServer.current = true;
+        lastKnownVersion.current = serverRes.version;
+        const d = serverRes.data;
+        if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
+        if (d.operator) setOperator(d.operator);
+        if (Array.isArray(d.students)) setStudents(d.students);
+        if (Array.isArray(d.teachers)) setTeachers(d.teachers);
+        if (Array.isArray(d.classes)) setClasses(d.classes);
+        if (Array.isArray(d.subjects)) setSubjects(d.subjects);
+        if (Array.isArray(d.exams)) setExams(d.exams);
+        if (Array.isArray(d.sessions)) setSessions(d.sessions);
+        if (d.questionBank) setQuestionBank(d.questionBank);
+        if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+        setTimeout(() => { isSyncingFromServer.current = false; }, 600);
+      }
+    });
+  }, []);
+
+  // 2. Real-time background sync interval (checks every 3 seconds)
+  useEffect(() => {
+    const syncInterval = setInterval(async () => {
+      if (isSyncingFromServer.current) return;
+      const verRes = await fetchServerVersion();
+      if (verRes && verRes.version > lastKnownVersion.current) {
+        const fullRes = await fetchServerData();
+        if (fullRes && fullRes.success && fullRes.data) {
+          isSyncingFromServer.current = true;
+          lastKnownVersion.current = fullRes.version;
+          const d = fullRes.data;
+          if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
+          if (d.operator) setOperator(d.operator);
+          if (Array.isArray(d.students)) setStudents(d.students);
+          if (Array.isArray(d.teachers)) setTeachers(d.teachers);
+          if (Array.isArray(d.classes)) setClasses(d.classes);
+          if (Array.isArray(d.subjects)) setSubjects(d.subjects);
+          if (Array.isArray(d.exams)) setExams(d.exams);
+          if (Array.isArray(d.sessions)) setSessions(d.sessions);
+          if (d.questionBank) setQuestionBank(d.questionBank);
+          if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+          setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+          setTimeout(() => { isSyncingFromServer.current = false; }, 600);
+        }
+      }
+    }, 3000);
+
+    return () => clearInterval(syncInterval);
+  }, []);
+
   // Authentication State
   const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
@@ -173,6 +238,9 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.CLASSES, updatedClasses);
     saveToStorage(STORAGE_KEYS.SESSIONS, updatedSessions);
 
+    // Central server sync (ensures phone and laptop see identical data)
+    syncServerUpdates({ students: newStudents, classes: updatedClasses, sessions: updatedSessions });
+
     triggerSyncNotification(`Data siswa berhasil disinkronkan (${newStudents.length} siswa terdaftar)`);
   };
 
@@ -180,6 +248,7 @@ export default function App() {
   const handleUpdateTeachers = (newTeachers: UserAccount[]) => {
     setTeachers(newTeachers);
     saveToStorage(STORAGE_KEYS.TEACHERS, newTeachers);
+    syncServerUpdates({ teachers: newTeachers });
     triggerSyncNotification(`Data guru berhasil diperbarui (${newTeachers.length} guru aktif)`);
   };
 
@@ -187,6 +256,7 @@ export default function App() {
   const handleUpdateSubjects = (newSubjects: Subject[]) => {
     setSubjects(newSubjects);
     saveToStorage(STORAGE_KEYS.SUBJECTS, newSubjects);
+    syncServerUpdates({ subjects: newSubjects });
     triggerSyncNotification(`Data mata pelajaran diperbarui (${newSubjects.length} mapel terdaftar)`);
   };
 
@@ -194,6 +264,7 @@ export default function App() {
   const handleUpdateExams = (newExams: ExamSchedule[]) => {
     setExams(newExams);
     saveToStorage(STORAGE_KEYS.EXAMS, newExams);
+    syncServerUpdates({ exams: newExams });
 
     // If active selected exam was deleted, fallback to first available
     if (!newExams.some(e => e.id === selectedExamId)) {
@@ -254,6 +325,7 @@ export default function App() {
   const handleUpdateSetting = (newSetting: SchoolSetting) => {
     setSchoolSetting(newSetting);
     saveToStorage(STORAGE_KEYS.SETTING, newSetting);
+    syncServerUpdates({ schoolSetting: newSetting });
     triggerSyncNotification('Pengaturan sekolah berhasil diperbarui');
   };
 
@@ -261,6 +333,7 @@ export default function App() {
   const handleUpdateSessions = (newSessions: StudentExamSession[]) => {
     setSessions(newSessions);
     saveToStorage(STORAGE_KEYS.SESSIONS, newSessions);
+    syncServerUpdates({ sessions: newSessions });
   };
 
   // Synchronized question bank updater: auto-updates exams and active questions
@@ -275,6 +348,7 @@ export default function App() {
         totalQuestions: newBank.questions.length
       } : ex);
       saveToStorage(STORAGE_KEYS.EXAMS, updated);
+      syncServerUpdates({ questionBank: newBank, exams: updated });
       return updated;
     });
 
@@ -286,29 +360,34 @@ export default function App() {
     const primaryExam = exams[0] || INITIAL_EXAMS[0];
     let targetStudentName = '';
     
-    setSessions(prev => prev.map(s => {
-      if (s.id === sessionId) {
-        targetStudentName = s.studentName;
-        return {
-          ...s,
-          status: 'not_started',
-          answers: {},
-          scorePg: 0,
-          scoreEssay: 0,
-          finalScore: 0,
-          isPassed: false,
-          violationsCount: 0,
-          isLocked: false,
-          lockReason: undefined,
-          submittedAt: undefined,
-          timeRemainingSeconds: primaryExam.durationMinutes * 60,
-          extraTimeMinutes: 0,
-          isOnline: false,
-          lastHeartbeat: Date.now()
-        };
-      }
-      return s;
-    }));
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.id === sessionId) {
+          targetStudentName = s.studentName;
+          return {
+            ...s,
+            status: 'not_started' as const,
+            answers: {},
+            scorePg: 0,
+            scoreEssay: 0,
+            finalScore: 0,
+            isPassed: false,
+            violationsCount: 0,
+            isLocked: false,
+            lockReason: undefined,
+            submittedAt: undefined,
+            timeRemainingSeconds: primaryExam.durationMinutes * 60,
+            extraTimeMinutes: 0,
+            isOnline: false,
+            lastHeartbeat: Date.now()
+          };
+        }
+        return s;
+      });
+      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+      syncServerUpdates({ sessions: updated });
+      return updated;
+    });
 
     handleAddAuditLog(
       'RESET_HASIL_SISWA', 
@@ -322,29 +401,34 @@ export default function App() {
     const primaryExam = exams[0] || INITIAL_EXAMS[0];
     let resetCount = 0;
 
-    setSessions(prev => prev.map(s => {
-      if (!targetClassId || targetClassId === 'all' || s.classId === targetClassId) {
-        resetCount++;
-        return {
-          ...s,
-          status: 'not_started',
-          answers: {},
-          scorePg: 0,
-          scoreEssay: 0,
-          finalScore: 0,
-          isPassed: false,
-          violationsCount: 0,
-          isLocked: false,
-          lockReason: undefined,
-          submittedAt: undefined,
-          timeRemainingSeconds: primaryExam.durationMinutes * 60,
-          extraTimeMinutes: 0,
-          isOnline: false,
-          lastHeartbeat: Date.now()
-        };
-      }
-      return s;
-    }));
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (!targetClassId || targetClassId === 'all' || s.classId === targetClassId) {
+          resetCount++;
+          return {
+            ...s,
+            status: 'not_started' as const,
+            answers: {},
+            scorePg: 0,
+            scoreEssay: 0,
+            finalScore: 0,
+            isPassed: false,
+            violationsCount: 0,
+            isLocked: false,
+            lockReason: undefined,
+            submittedAt: undefined,
+            timeRemainingSeconds: primaryExam.durationMinutes * 60,
+            extraTimeMinutes: 0,
+            isOnline: false,
+            lastHeartbeat: Date.now()
+          };
+        }
+        return s;
+      });
+      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+      syncServerUpdates({ sessions: updated });
+      return updated;
+    });
 
     const scopeLabel = !targetClassId || targetClassId === 'all' 
       ? 'seluruh kelas' 
@@ -361,6 +445,7 @@ export default function App() {
   const handleRestoreFactoryData = () => {
     if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 92 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
       clearCbtStorage();
+      resetServerData();
       setStudents(INITIAL_STUDENTS);
       setTeachers(INITIAL_TEACHERS);
       setClasses(INITIAL_CLASSES);
@@ -449,12 +534,22 @@ export default function App() {
     handleAddAuditLog(`PELANGGARAN_${type.toUpperCase()}`, `Siswa ${currentStudent.name}: ${details}`);
   };
 
-  // Student active exam selection
+  // Student active exam selection - strictly filtered for student's class
+  const studentAvailableExams = currentStudent
+    ? exams.filter(ex => isExamMatchingStudentClass(ex, currentStudent.classId, currentStudent.className))
+    : exams;
+
   const [selectedExamId, setSelectedExamId] = useState<string>(() => exams[0]?.id || 'ex-mat-2026');
-  const currentExam = exams.find(e => e.id === selectedExamId) || exams[0] || INITIAL_EXAMS[0];
+
+  // Keep currentExam consistent with student's class
+  const currentExam = currentStudent
+    ? (studentAvailableExams.find(e => e.id === selectedExamId) || studentAvailableExams[0] || exams[0] || INITIAL_EXAMS[0])
+    : (exams.find(e => e.id === selectedExamId) || exams[0] || INITIAL_EXAMS[0]);
+
+  // Session specific to this student AND this specific exam (prevents mixing exam results)
   const currentStudentSession = currentStudent 
-    ? sessions.find(s => s.studentId === currentStudent.id) || {
-        id: `sess-${currentStudent.id}`,
+    ? sessions.find(s => s.studentId === currentStudent.id && s.examId === currentExam.id) || {
+        id: `sess-${currentStudent.id}-${currentExam.id}`,
         studentId: currentStudent.id,
         studentName: currentStudent.name,
         nis: currentStudent.nis,
@@ -467,7 +562,7 @@ export default function App() {
         violationsCount: 0,
         isLocked: false,
         extraTimeMinutes: 0,
-        deviceInfo: 'Browser CBT Siswa',
+        deviceInfo: 'Browser CBT Siswa (HP / Komputer)',
         isOnline: true,
         lastHeartbeat: Date.now(),
         answers: {},
@@ -479,7 +574,16 @@ export default function App() {
     : sessions[0];
 
   const handleUpdateStudentSession = (updatedSession: StudentExamSession) => {
-    setSessions(prev => prev.map(s => s.id === updatedSession.id ? updatedSession : s));
+    setSessions(prev => {
+      const exists = prev.some(s => s.id === updatedSession.id);
+      const updated = exists
+        ? prev.map(s => s.id === updatedSession.id ? updatedSession : s)
+        : [...prev, updatedSession];
+      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+      return updated;
+    });
+    // Instant sync to central server for laptop & phone live synchronization
+    syncSingleSession(updatedSession);
   };
 
   return (
@@ -622,7 +726,7 @@ export default function App() {
           <SiswaExamView
             student={currentStudent || students[0]}
             exam={currentExam}
-            availableExams={exams}
+            availableExams={studentAvailableExams}
             onSelectExam={(ex) => setSelectedExamId(ex.id)}
             questionBank={questionBank}
             session={currentStudentSession}

@@ -1,6 +1,7 @@
 import { Question } from '../types/cbt';
+import { GRADE_8_QUESTIONS, GRADE_9_QUESTIONS } from './grade8and9Questions';
 
-export const OFFICIAL_QUESTION_LIST: Question[] = [
+const GRADE_7_OFFICIAL_QUESTIONS: Question[] = [
   // ==========================================
   // 1. MATEMATIKA (sbj-mat)
   // ==========================================
@@ -555,6 +556,12 @@ export const OFFICIAL_QUESTION_LIST: Question[] = [
     options: [],
     essayRubric: 'Rubrik: Pengertian berpikir komputasional tepat (skor 10); Penjelasan Dekomposisi & Pola tepat (skor 10); Penjelasan Abstraksi & Algoritma tepat (skor 10).'
   }
+];
+
+export const OFFICIAL_QUESTION_LIST: Question[] = [
+  ...GRADE_7_OFFICIAL_QUESTIONS,
+  ...GRADE_8_QUESTIONS,
+  ...GRADE_9_QUESTIONS
 ];
 
 export const OFFICIAL_EXAM_SCHEDULES = [

@@ -35,57 +35,83 @@ export const QUESTION_CLASS_GROUPS: ClassGroupOption[] = [
 ];
 
 /**
- * Checks whether a question matches a selected class filter or a student's class.
+ * Checks whether a question matches a student's class.
+ * Strictly prevents questions from different classes from bleeding into each other.
  * VIII-A and VIII-B students automatically match questions designated for Kelas VIII ('cls-8', 'VIII', 'cls-8a', 'cls-8b').
  */
 export const isQuestionMatchingClass = (
   questionClassId: string | undefined,
   questionGrade: string | undefined,
-  filterOrStudentClassId: string
+  studentClassId: string
 ): boolean => {
-  if (!filterOrStudentClassId || filterOrStudentClassId === 'all') return true;
+  if (!studentClassId) return false;
 
-  // If question doesn't specify class, it applies to all classes
-  if (!questionClassId && !questionGrade) return true;
-
-  // Target: Kelas VIII group or student in VIII-A / VIII-B
+  // Student in Kelas VIII (VIII-A or VIII-B)
   if (
-    filterOrStudentClassId === 'cls-8' || 
-    filterOrStudentClassId === 'VIII' || 
-    filterOrStudentClassId === 'cls-8a' || 
-    filterOrStudentClassId === 'cls-8b'
+    studentClassId === 'cls-8' || 
+    studentClassId === 'cls-8a' || 
+    studentClassId === 'cls-8b' || 
+    studentClassId === 'VIII'
   ) {
     return (
       questionClassId === 'cls-8' ||
       questionClassId === 'cls-8a' ||
       questionClassId === 'cls-8b' ||
-      questionClassId === 'all' ||
-      questionGrade === 'VIII' ||
-      !questionClassId
+      questionGrade === 'VIII'
     );
   }
 
-  // Target: Kelas VII
-  if (filterOrStudentClassId === 'cls-1' || filterOrStudentClassId === 'VII') {
+  // Student in Kelas VII
+  if (studentClassId === 'cls-1' || studentClassId === 'VII') {
     return (
       questionClassId === 'cls-1' ||
-      questionClassId === 'all' ||
-      questionGrade === 'VII' ||
-      !questionClassId
+      questionGrade === 'VII'
     );
   }
 
-  // Target: Kelas IX
-  if (filterOrStudentClassId === 'cls-9' || filterOrStudentClassId === 'IX') {
+  // Student in Kelas IX
+  if (studentClassId === 'cls-9' || studentClassId === 'IX') {
     return (
       questionClassId === 'cls-9' ||
-      questionClassId === 'all' ||
-      questionGrade === 'IX' ||
-      !questionClassId
+      questionGrade === 'IX'
     );
   }
 
-  return questionClassId === filterOrStudentClassId || questionClassId === 'all';
+  return questionClassId === studentClassId;
+};
+
+/**
+ * Checks whether an exam schedule applies to a student's class.
+ */
+export const isExamMatchingStudentClass = (
+  exam: { targetClassIds?: string[]; targetClassNames?: string[] },
+  studentClassId: string,
+  studentClassName?: string
+): boolean => {
+  if (!exam.targetClassIds || exam.targetClassIds.length === 0) return true;
+  if (exam.targetClassIds.includes('all')) return true;
+  if (exam.targetClassIds.includes(studentClassId)) return true;
+
+  // Student in Kelas VIII (cls-8a or cls-8b)
+  if (
+    (studentClassId === 'cls-8a' || studentClassId === 'cls-8b' || studentClassId === 'cls-8') &&
+    (exam.targetClassIds.includes('cls-8') || exam.targetClassIds.includes('cls-8a') || exam.targetClassIds.includes('cls-8b'))
+  ) {
+    return true;
+  }
+
+  // Fallback by class name match (e.g. "VII", "VIII-A", "VIII-B", "IX")
+  if (studentClassName && exam.targetClassNames && Array.isArray(exam.targetClassNames)) {
+    const sName = studentClassName.toUpperCase().trim();
+    return exam.targetClassNames.some(t => {
+      const tn = t.toUpperCase().trim();
+      if (tn === sName) return true;
+      if (sName.startsWith('VIII') && (tn === 'VIII' || tn.startsWith('VIII'))) return true;
+      return false;
+    });
+  }
+
+  return false;
 };
 
 /**

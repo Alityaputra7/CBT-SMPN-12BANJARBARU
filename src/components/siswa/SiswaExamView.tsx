@@ -10,9 +10,11 @@ import {
   ChevronRight, 
   Send, 
   Bookmark, 
-  RefreshCw,
-  LogOut,
-  Sparkles
+  RefreshCw, 
+  LogOut, 
+  Sparkles,
+  Layers,
+  X
 } from 'lucide-react';
 import { 
   Student, 
@@ -24,7 +26,8 @@ import {
   SchoolSetting 
 } from '../../types/cbt';
 import { KatexRenderer } from '../common/KatexRenderer';
-import { isQuestionMatchingClass } from '../../utils/classGroups';
+import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
+import { syncSingleSession } from '../../utils/apiSync';
 
 interface SiswaExamViewProps {
   student: Student;
@@ -58,21 +61,25 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const [violationAlert, setViolationAlert] = useState<{ show: boolean; msg: string; count: number } | null>(null);
+  const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filter questions for the selected exam's subject and student's class (with combined Kelas VIII support)
-  const matchedQuestions = questionBank.questions.filter(q => {
-    const matchSubject = !exam.subjectId || q.subjectId === exam.subjectId || (!q.subjectId && exam.subjectId === 'sbj-mat');
+  // STRICT: Questions MUST belong to this exam's subject AND the student's specific class/grade.
+  // Never fallback to other classes' questions to eliminate cross-class question pile-up.
+  const questions = questionBank.questions.filter(q => {
+    const matchSubject = !exam.subjectId || q.subjectId === exam.subjectId;
     const matchClass = isQuestionMatchingClass(q.classId, q.grade, student.classId);
     return matchSubject && matchClass;
   });
 
-  const subjectQuestions = questionBank.questions.filter(q => q.subjectId === exam.subjectId);
-  const questions = matchedQuestions.length > 0 
-    ? matchedQuestions 
-    : (subjectQuestions.length > 0 ? subjectQuestions : questionBank.questions);
   const currentQ = questions[currentQuestionIndex] || questions[0];
+
+  // Helper to update session state and sync directly to server for mobile/laptop consistency
+  const updateSessionWithSync = (updated: StudentExamSession) => {
+    onUpdateSession(updated);
+    syncSingleSession(updated);
+  };
 
   // Auto-save feedback ticker
   const triggerSaveIndicator = () => {
@@ -200,7 +207,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     if (session.isLocked) return;
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
 
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       answers: {
         ...session.answers,
@@ -224,7 +231,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       ? currentList.filter(id => id !== optionId)
       : [...currentList, optionId].sort();
 
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       answers: {
         ...session.answers,
@@ -242,7 +249,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     if (session.isLocked) return;
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
 
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       answers: {
         ...session.answers,
@@ -259,7 +266,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const handleToggleDoubtful = (questionId: string) => {
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
 
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       answers: {
         ...session.answers,
@@ -287,7 +294,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     currentMap[pairId] = rightVal;
 
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       answers: {
         ...session.answers,
@@ -339,7 +346,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     });
 
     const final = scorePgTotal + session.scoreEssay;
-    onUpdateSession({
+    updateSessionWithSync({
       ...session,
       status: 'submitted',
       submittedAt: new Date().toLocaleTimeString('id-ID'),
@@ -380,43 +387,54 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </p>
         </div>
 
-        {/* Available Exams Selector */}
-        {availableExams && availableExams.length > 1 && onSelectExam && (
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700">
-              Pilih Mata Pelajaran Ujian Hari Ini:
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {availableExams.map(ex => {
-                const isSelected = ex.id === exam.id;
-                const count = questionBank.questions.filter(q => q.subjectId === ex.subjectId).length;
-                return (
-                  <button
-                    key={ex.id}
-                    type="button"
-                    onClick={() => {
-                      onSelectExam(ex);
-                      setCurrentQuestionIndex(0);
-                    }}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                      isSelected 
-                        ? 'border-blue-600 bg-blue-50/60 ring-2 ring-blue-500/20' 
-                        : 'border-slate-200 bg-white hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-900">{ex.subjectName}</span>
-                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
-                        {count > 0 ? `${count} Soal` : `${questionBank.questions.length} Soal`}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{ex.title}</p>
-                  </button>
-                );
-              })}
+        {/* Available Exams Selector (Strictly for Student's Class) */}
+        {(() => {
+          const studentEligibleExams = availableExams.filter(ex => 
+            isExamMatchingStudentClass(ex, student.classId, student.className)
+          );
+          if (!studentEligibleExams || studentEligibleExams.length <= 1 || !onSelectExam) return null;
+
+          return (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                Pilih Jadwal Ujian Terdaftar untuk Kelas {student.className}:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {studentEligibleExams.map(ex => {
+                  const isSelected = ex.id === exam.id;
+                  const count = questionBank.questions.filter(q => 
+                    q.subjectId === ex.subjectId && isQuestionMatchingClass(q.classId, q.grade, student.classId)
+                  ).length;
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => {
+                        onSelectExam(ex);
+                        setCurrentQuestionIndex(0);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected 
+                          ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 shadow-xs' 
+                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">{ex.subjectName}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {count} Soal
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{ex.title}</p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Student Identity Card */}
         <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 text-xs space-y-2">
@@ -430,15 +448,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Rombongan Belajar:</span>
-            <span className="font-medium text-slate-900">{student.className}</span>
+            <span className="font-bold text-blue-700">Kelas {student.className}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Mata Pelajaran:</span>
-            <span className="font-bold text-blue-700">{exam.subjectName}</span>
+            <span className="font-bold text-slate-900">{exam.subjectName}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-slate-500">Jumlah Butir Soal:</span>
-            <span className="font-mono font-bold text-emerald-700">{questions.length} Soal Aktif</span>
+            <span className="text-slate-500">Jumlah Butir Soal Khusus Kelas {student.className}:</span>
+            <span className={`font-mono font-bold ${questions.length > 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+              {questions.length} Soal Aktif
+            </span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Durasi Pengerjaan:</span>
@@ -450,16 +470,29 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
         </div>
 
+        {/* Notice when no questions uploaded yet for this class */}
+        {questions.length === 0 && (
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
+            <div className="flex items-center gap-2 font-bold">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Paket Soal Belum Tersedia untuk Kelas {student.className}</span>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-relaxed">
+              Mata pelajaran <strong>{exam.subjectName}</strong> belum memiliki soal yang diunggah untuk <strong>Kelas {student.className}</strong>. Silakan pilih mata pelajaran lain yang terjadwal di atas atau konfirmasi kepada guru pengawas ruang.
+            </p>
+          </div>
+        )}
+
         {/* Anti-Cheat Regulations */}
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-xs text-amber-900">
+        <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2 text-xs text-blue-950">
           <div className="flex items-center gap-2 font-bold">
-            <ShieldAlert className="w-4 h-4 text-amber-600" />
+            <ShieldAlert className="w-4 h-4 text-blue-600" />
             <span>Tata Tertib & Mode Anti-Keluar Aplikasi:</span>
           </div>
-          <ul className="list-disc pl-5 space-y-1 text-amber-800 text-[11px] leading-relaxed">
+          <ul className="list-disc pl-5 space-y-1 text-blue-900 text-[11px] leading-relaxed">
+            <li>Ujian dapat dikerjakan melalui <strong>smartphone (ponsel) maupun laptop/PC</strong>.</li>
             <li>Ujian wajib dilaksanakan dalam mode <strong>Layar Penuh (Fullscreen)</strong>.</li>
             <li>Dilarang berpindah tab browser, membuka aplikasi lain, atau meminimalkan jendela.</li>
-            <li>Klik kanan, copy, paste, dan pintasan keyboard (F12, Ctrl+C, dll.) dinonaktifkan.</li>
             <li>Pelanggaran maksimal <strong>{schoolSetting.maxViolations}x</strong>. Jika melampaui, ujian Anda otomatis terkunci dan harus dibuka oleh pengawas.</li>
           </ul>
         </div>
@@ -467,15 +500,20 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         <div className="space-y-2">
           <button
             onClick={handleStartExam}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+            disabled={questions.length === 0}
+            className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-semibold rounded-xl text-sm transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer"
           >
             <Maximize className="w-4 h-4" />
-            <span>Mulai Ujian ({questions.length} Soal · Masuk Fullscreen)</span>
+            <span>
+              {questions.length > 0
+                ? `Mulai Ujian (${questions.length} Soal · Kelas ${student.className})`
+                : `Soal Belum Tersedia untuk Kelas ${student.className}`}
+            </span>
           </button>
           <button
             type="button"
             onClick={onExitExam}
-            className="w-full py-2 px-4 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center"
+            className="w-full py-2.5 px-4 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer text-center"
           >
             Keluar dari Sesi Siswa
           </button>
@@ -586,14 +624,46 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         </div>
       )}
 
-      {/* Top Exam Navigation Bar */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex flex-wrap items-center justify-between gap-4">
+      {/* Mobile Sticky Top Bar (Smartphone View) */}
+      <div className="flex md:hidden items-center justify-between bg-white border border-slate-200 rounded-xl p-2.5 shadow-xs sticky top-2 z-20 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-xs font-bold bg-blue-100 text-blue-900 px-2 py-1 rounded-md font-mono shrink-0">
+            #{currentQuestionIndex + 1}/{questions.length}
+          </span>
+          <span className="text-xs font-semibold text-slate-800 truncate" title={exam.subjectName}>
+            {exam.subjectName}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className={`flex items-center gap-1 px-2 py-1 rounded-lg font-mono font-bold text-xs ${
+            timeRemaining < 300 
+              ? 'bg-rose-100 text-rose-800 animate-pulse' 
+              : 'bg-slate-900 text-amber-300'
+          }`}>
+            <Clock className="w-3.5 h-3.5" />
+            <span>{formatTimer(timeRemaining)}</span>
+          </div>
+
+          <button
+            onClick={() => setShowMobileQuestionList(true)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold cursor-pointer shadow-2xs"
+            title="Daftar Nomor Soal"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Soal</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Desktop Exam Navigation Bar */}
+      <div className="hidden md:flex bg-white border border-slate-200 rounded-xl p-3 shadow-xs flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="text-xs">
             <span className="text-slate-400 block">Peserta Ujian:</span>
             <span className="font-semibold text-slate-900">{student.name} ({student.className})</span>
           </div>
-          <div className="hidden sm:block border-l border-slate-200 pl-3 text-xs">
+          <div className="border-l border-slate-200 pl-3 text-xs">
             <span className="text-slate-400 block">Mata Pelajaran:</span>
             <span className="font-semibold text-blue-700">{exam.subjectName}</span>
           </div>
@@ -618,7 +688,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           {!isFullscreen && (
             <button
               onClick={enterFullscreen}
-              className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 rounded-lg"
+              className="p-1.5 text-slate-500 hover:text-slate-800 bg-slate-100 rounded-lg cursor-pointer"
               title="Layar Penuh"
             >
               <Maximize className="w-4 h-4" />
@@ -941,6 +1011,126 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Mobile Floating Action Bar (Smartphone) */}
+      <div className="flex md:hidden items-center justify-between gap-2 sticky bottom-2 z-20 bg-white/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-200 shadow-lg mt-4">
+        <button
+          disabled={currentQuestionIndex === 0}
+          onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+          className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 disabled:opacity-40 rounded-lg min-w-[85px] cursor-pointer"
+        >
+          <ChevronLeft className="w-4 h-4" />
+          <span>Sebelumnya</span>
+        </button>
+
+        <button
+          onClick={() => handleToggleDoubtful(currentQ.id)}
+          className={`inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+            isDoubtful 
+              ? 'bg-amber-400 text-slate-900 border-amber-500 shadow-xs font-bold' 
+              : 'bg-amber-50 text-amber-800 border-amber-200'
+          }`}
+        >
+          <Bookmark className="w-3.5 h-3.5" />
+          <span>{isDoubtful ? 'Ragu ✓' : 'Ragu'}</span>
+        </button>
+
+        {currentQuestionIndex < questions.length - 1 ? (
+          <button
+            onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+            className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs min-w-[85px] cursor-pointer"
+          >
+            <span>Lanjut</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowSubmitConfirm(true)}
+            className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs min-w-[85px] cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Kirim</span>
+          </button>
+        )}
+      </div>
+
+      {/* Mobile Question List Bottom Sheet / Modal */}
+      {showMobileQuestionList && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-xs p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl border border-slate-200 space-y-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div>
+                <h4 className="font-bold text-slate-900 text-sm">Daftar Nomor Soal</h4>
+                <p className="text-[11px] text-slate-500">Kelas {student.className} · {exam.subjectName}</p>
+              </div>
+              <button
+                onClick={() => setShowMobileQuestionList(false)}
+                className="p-1 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-5 gap-2">
+              {questions.map((q, idx) => {
+                const ans = session.answers[q.id]?.answer;
+                const doubtful = session.answers[q.id]?.isDoubtful;
+                const hasAnswer = ans !== undefined && ans !== '' && (!Array.isArray(ans) || ans.length > 0);
+                const isCurrent = currentQuestionIndex === idx;
+
+                let colorClasses = 'bg-slate-50 text-slate-700 border-slate-200';
+                if (doubtful) {
+                  colorClasses = 'bg-amber-400 text-slate-900 border-amber-500 font-bold';
+                } else if (hasAnswer) {
+                  colorClasses = 'bg-emerald-600 text-white border-emerald-600 font-bold';
+                }
+
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => {
+                      setCurrentQuestionIndex(idx);
+                      setShowMobileQuestionList(false);
+                    }}
+                    className={`h-11 rounded-xl border text-xs flex items-center justify-center font-mono font-bold transition-all cursor-pointer ${colorClasses} ${
+                      isCurrent ? 'ring-2 ring-blue-600 ring-offset-2' : ''
+                    }`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 grid grid-cols-3 gap-2 text-[10px] text-slate-600">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-emerald-600 shrink-0" />
+                <span>Dijawab</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-amber-400 shrink-0" />
+                <span>Ragu-ragu</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-slate-100 border border-slate-300 shrink-0" />
+                <span>Belum</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  setShowMobileQuestionList(false);
+                  setShowSubmitConfirm(true);
+                }}
+                className="w-full py-2.5 px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl cursor-pointer"
+              >
+                Selesai & Kumpulkan Ujian
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showSubmitConfirm && (
