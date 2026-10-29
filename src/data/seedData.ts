@@ -23,15 +23,20 @@ export const INITIAL_SCHOOL_SETTING: SchoolSetting = {
   sebStrictMode: false,
   sebConfigKey: 'a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9',
   logoUrl: '/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg',
-  allowStudentViewResult: true
+  allowStudentViewResult: true,
+  principalTitle: 'Plt. Kepala Sekolah',
+  principalName: 'Legiyo, S.Pd',
+  principalNip: '196907022000031010',
+  cbtCoordinatorName: 'Dwi Setyarini, S.Pd.',
+  cbtCoordinatorNip: '198502082009032008'
 };
 
 export const INITIAL_OPERATOR: UserAccount = {
   id: 'usr-admin',
   role: 'operator',
   usernameOrNip: 'admin',
-  name: 'Administrator CBT',
-  email: 'admin.cbt@smpn12bjb.sch.id',
+  name: 'Dwi Setyarini, S.Pd. (Koordinator CBT)',
+  email: 'dwi.setyarini@smpn12bjb.sch.id',
   mustChangePassword: true
 };
 

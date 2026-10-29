@@ -85,10 +85,10 @@ export default function App() {
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
-    if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
-      return INITIAL_EXAMS;
+    if (loaded !== null && Array.isArray(loaded)) {
+      return loaded;
     }
-    return loaded;
+    return INITIAL_EXAMS;
   });
   const [sessions, setSessions] = useState<StudentExamSession[]>(() => {
     const savedSessions = loadFromStorage<StudentExamSession[] | null>(STORAGE_KEYS.SESSIONS, null);
@@ -194,6 +194,59 @@ export default function App() {
   const handleUpdateExams = (newExams: ExamSchedule[]) => {
     setExams(newExams);
     saveToStorage(STORAGE_KEYS.EXAMS, newExams);
+
+    // If active selected exam was deleted, fallback to first available
+    if (!newExams.some(e => e.id === selectedExamId)) {
+      setSelectedExamId(newExams[0]?.id || '');
+    }
+
+    // Auto-sync sessions for any new exam
+    if (newExams.length > 0) {
+      setSessions(prev => {
+        let updated = [...prev];
+        let hasNew = false;
+        newExams.forEach(ex => {
+          students.forEach(std => {
+            const matchesClass = ex.targetClassIds.includes(std.classId) || ex.targetClassIds.length === 0;
+            if (matchesClass) {
+              const sessionExists = updated.some(s => s.studentId === std.id && s.examId === ex.id);
+              if (!sessionExists) {
+                hasNew = true;
+                updated.push({
+                  id: `sess-${std.id}-${ex.id}`,
+                  studentId: std.id,
+                  studentName: std.name,
+                  nis: std.nis,
+                  classId: std.classId,
+                  className: std.className,
+                  examId: ex.id,
+                  examTitle: ex.title,
+                  status: 'not_started',
+                  timeRemainingSeconds: ex.durationMinutes * 60,
+                  violationsCount: 0,
+                  isLocked: false,
+                  extraTimeMinutes: 0,
+                  deviceInfo: 'CBT Siswa',
+                  isOnline: false,
+                  lastHeartbeat: Date.now(),
+                  answers: {},
+                  scorePg: 0,
+                  scoreEssay: 0,
+                  finalScore: 0,
+                  isPassed: false
+                });
+              }
+            }
+          });
+        });
+        if (hasNew) {
+          saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+          return updated;
+        }
+        return prev;
+      });
+    }
+
     triggerSyncNotification(`Jadwal ujian diperbarui (${newExams.length} jadwal aktif)`);
   };
 
@@ -595,7 +648,7 @@ export default function App() {
       )}
 
       {/* Quiet Minimal Footer */}
-      <footer className="border-t border-slate-200 bg-white py-4 mt-12">
+      <footer className="border-t border-slate-200 bg-white py-4 mt-12 print:hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-2">
           <div className="flex items-center gap-2">
             <span>

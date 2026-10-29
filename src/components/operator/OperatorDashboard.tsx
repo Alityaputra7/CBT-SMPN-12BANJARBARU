@@ -180,6 +180,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [selectedStudentForCard, setSelectedStudentForCard] = useState<Student | null>(null);
+  const [selectedCardClassFilter, setSelectedCardClassFilter] = useState<string>('all');
+  const [cardSearchQuery, setCardSearchQuery] = useState<string>('');
 
   // Modals for Teachers
   const [showAddTeacherModal, setShowAddTeacherModal] = useState<boolean>(false);
@@ -567,7 +569,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   return (
     <div className="space-y-6">
       {/* Top Bar Navigation for Operator */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200 print:hidden">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight text-slate-900">
@@ -603,7 +605,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       </div>
 
       {/* Sub Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto">
+      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto print:hidden">
         <button
           onClick={() => setActiveTab('overview')}
           className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
@@ -1514,7 +1516,14 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {exams.map(ex => (
+            {exams.length === 0 ? (
+              <div className="col-span-1 md:col-span-2 py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                <Calendar className="w-8 h-8 text-slate-400 mx-auto mb-2" />
+                <p className="font-semibold text-slate-700">Belum ada jadwal ujian yang dibuat</p>
+                <p className="text-xs text-slate-400 mt-1">Klik tombol "+ Input Pelajaran yang Diujikan" di atas untuk menambahkan jadwal ujian baru.</p>
+              </div>
+            ) : (
+              exams.map(ex => (
               <div key={ex.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/40">
                 <div className="flex items-start justify-between">
                   <div>
@@ -1568,7 +1577,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            )))}
           </div>
         </div>
       )}
@@ -1759,86 +1768,184 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       })()}
 
       {/* TAB 7: KARTU PESERTA */}
-      {activeTab === 'cards' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Cetak Kartu Peserta Ujian & Lembar Kehadiran
-              </h3>
-              <p className="text-xs text-slate-500">
-                Kartu resmi peserta ujian memuat NIS, Nama, Kelas, Ruang, dan Bangku.
-              </p>
+      {activeTab === 'cards' && (() => {
+        const isMatchingCardClass = (std: Student) => {
+          if (selectedCardClassFilter === 'all') return true;
+          if (selectedCardClassFilter === 'cls-8') {
+            return std.classId === 'cls-2' || std.classId === 'cls-3' || std.className.includes('8') || std.className.includes('VIII');
+          }
+          return std.classId === selectedCardClassFilter;
+        };
+
+        const isMatchingSearch = (std: Student) => {
+          if (!cardSearchQuery.trim()) return true;
+          const q = cardSearchQuery.toLowerCase();
+          return std.name.toLowerCase().includes(q) || std.nis.toLowerCase().includes(q);
+        };
+
+        const filteredStudentsForCard = students.filter(s => isMatchingCardClass(s) && isMatchingSearch(s));
+        const cardsToDisplay = selectedStudentForCard ? [selectedStudentForCard] : filteredStudentsForCard;
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6 print:border-none print:p-0 print:shadow-none">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100 print:hidden">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Cetak Kartu Peserta Ujian & Lembar Kehadiran
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Tampilkan seluruh kartu peserta ujian resmi untuk siswa kelas 7, 8A, 8B, dan 9 sekaligus dalam satu kali klik cetak.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer shadow-sm"
+                  title="Cetak seluruh kartu peserta ujian yang tampil langsung ke printer atau file PDF"
+                >
+                  <Printer className="w-4 h-4" />
+                  Cetak Semua Kartu ({cardsToDisplay.length})
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Cetak Semua Kartu
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(selectedStudentForCard ? [selectedStudentForCard] : students.slice(0, 6)).map(std => (
-              <div key={std.id} className="border-2 border-slate-800 rounded-lg p-4 bg-white space-y-3 relative">
-                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-                  <div className="w-8 h-8 rounded-full bg-white p-0.5 border border-slate-200 shrink-0 flex items-center justify-center overflow-hidden">
-                    <img
-                      src={schoolSetting.logoUrl || '/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg'}
-                      alt="Logo"
-                      className="w-full h-full object-contain rounded-full"
-                    />
-                  </div>
-                  <div className="flex-1 text-center pr-2">
-                    <h4 className="text-xs font-bold text-slate-900 tracking-tight">KARTU PESERTA UJIAN</h4>
-                    <p className="text-[10px] text-slate-700 font-semibold uppercase">{schoolSetting.name}</p>
-                    <p className="text-[9px] text-slate-400">T.A. {schoolSetting.academicYear} · Semester {schoolSetting.semester}</p>
-                  </div>
-                </div>
+            {/* Filter & Search Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 print:hidden text-xs">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <span className="font-semibold text-slate-700">Filter Rombel:</span>
+                <select
+                  value={selectedCardClassFilter}
+                  onChange={e => {
+                    setSelectedCardClassFilter(e.target.value);
+                    setSelectedStudentForCard(null);
+                  }}
+                  className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white outline-none font-medium text-xs"
+                >
+                  <option value="all">Semua Rombel ({students.length} Siswa)</option>
+                  <option value="cls-8">Kelas VIII (Gabungan VIII-A & VIII-B)</option>
+                  {classes.map(c => (
+                    <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                  ))}
+                </select>
 
-                <div className="text-xs space-y-1.5 text-slate-700">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">NIS:</span>
-                    <span className="font-mono font-bold">{std.nis}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Nama:</span>
-                    <span className="font-semibold text-right">{std.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Kelas:</span>
-                    <span className="font-medium">{std.className}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Ruang / Sesi:</span>
-                    <span className="font-medium">{std.roomNumber || 'Ruang 01'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Nomor Bangku:</span>
-                    <span className="font-mono font-bold text-blue-700">{std.seatNumber || '01'}</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 border-t border-dashed border-slate-200 flex items-center justify-between text-[10px] text-slate-400">
-                  <span>Banjarbaru, 2026</span>
-                  <span>Kepala Sekolah</span>
+                <div className="relative flex-1 sm:w-64">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={cardSearchQuery}
+                    onChange={e => {
+                      setCardSearchQuery(e.target.value);
+                      setSelectedStudentForCard(null);
+                    }}
+                    placeholder="Cari NIS atau Nama Siswa..."
+                    className="w-full pl-8 pr-7 py-1.5 border border-slate-300 rounded-lg bg-white outline-none text-xs"
+                  />
+                  {cardSearchQuery && (
+                    <button
+                      onClick={() => setCardSearchQuery('')}
+                      className="absolute right-2.5 top-1.5 text-slate-400 hover:text-slate-600 font-bold text-sm"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-          {selectedStudentForCard && (
-            <div className="text-center pt-2">
-              <button
-                onClick={() => setSelectedStudentForCard(null)}
-                className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
-              >
-                ← Tampilkan Semua Kartu Siswa
-              </button>
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-800">
+                  {cardsToDisplay.length} Kartu Siap Cetak
+                </span>
+                {selectedStudentForCard && (
+                  <button
+                    onClick={() => setSelectedStudentForCard(null)}
+                    className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                  >
+                    Reset Filter Siswa
+                  </button>
+                )}
+              </div>
             </div>
-          )}
-        </div>
-      )}
+
+            {cardsToDisplay.length === 0 ? (
+              <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                <p className="font-semibold text-slate-700">Tidak ada kartu siswa yang cocok dengan filter</p>
+                <p className="text-xs text-slate-400 mt-1">Coba sesuaikan pilihan rombel atau kata kunci pencarian Anda.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2 print:gap-4 print:p-0">
+                {cardsToDisplay.map(std => (
+                  <div 
+                    key={std.id} 
+                    className="border-2 border-slate-800 rounded-lg p-3.5 bg-white space-y-2.5 relative break-inside-avoid shadow-xs print:shadow-none print:break-inside-avoid print:border-black"
+                  >
+                    {/* Header Kartu */}
+                    <div className="flex items-center gap-2.5 border-b border-slate-300 pb-2">
+                      <div className="w-10 h-10 rounded-full bg-white p-0.5 border border-slate-300 shrink-0 flex items-center justify-center overflow-hidden">
+                        <img
+                          src={schoolSetting.logoUrl || '/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg'}
+                          alt="Logo Sekolah"
+                          className="w-full h-full object-contain rounded-full"
+                        />
+                      </div>
+                      <div className="flex-1 text-center pr-2">
+                        <h4 className="text-[11px] font-black text-slate-900 tracking-tight uppercase">KARTU PESERTA UJIAN CBT</h4>
+                        <p className="text-[10px] text-slate-800 font-bold uppercase">{schoolSetting.name}</p>
+                        <p className="text-[9px] text-slate-500">T.A. {schoolSetting.academicYear} · Semester {schoolSetting.semester}</p>
+                      </div>
+                    </div>
+
+                    {/* Data Siswa */}
+                    <div className="text-xs space-y-1 text-slate-800">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-500 text-[11px]">Nomor Induk (NIS):</span>
+                        <span className="font-mono font-bold text-slate-900">{std.nis}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-500 text-[11px]">Nama Lengkap:</span>
+                        <span className="font-bold text-slate-900 text-right truncate max-w-[170px]" title={std.name}>{std.name}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-500 text-[11px]">Kelas / Rombel:</span>
+                        <span className="font-medium text-slate-800">{std.className}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-500 text-[11px]">Ruang / Sesi:</span>
+                        <span className="font-medium text-slate-800">{std.roomNumber || 'Ruang CBT 01'}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-slate-500 text-[11px]">Nomor Bangku:</span>
+                        <span className="font-mono font-bold text-blue-700">{std.seatNumber || '01'}</span>
+                      </div>
+                      <div className="flex justify-between items-baseline pt-1 border-t border-slate-100">
+                        <span className="text-slate-400 text-[10px]">Akun Login CBT:</span>
+                        <span className="font-mono text-[10px] text-slate-600">NIS Siswa ({std.nis})</span>
+                      </div>
+                    </div>
+
+                    {/* Tanda Tangan Plt. Kepala Sekolah */}
+                    <div className="pt-2 border-t border-dashed border-slate-300 flex items-end justify-between text-[10px] text-slate-600">
+                      <div>
+                        <span className="text-[9px] text-slate-400 block">Lokasi Ujian</span>
+                        <span className="font-medium">Banjarbaru</span>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] text-slate-500">{schoolSetting.principalTitle || 'Plt. Kepala Sekolah'},</p>
+                        <div className="h-6"></div>
+                        <p className="font-bold text-slate-900 text-[10px] underline leading-tight">
+                          {schoolSetting.principalName || 'Legiyo, S.Pd'}
+                        </p>
+                        <p className="text-[8px] text-slate-500 font-mono">
+                          NIP. {schoolSetting.principalNip || '196907022000031010'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* TAB 8: AUDIT LOGS */}
       {activeTab === 'logs' && (
@@ -1940,7 +2047,69 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               <span className="text-[11px] text-slate-400 mt-1 block">Header validasi x-safeexambrowser-configkey</span>
             </div>
 
-            <div className="md:col-span-2">
+            <div className="md:col-span-2 pt-4 border-t border-slate-200">
+              <h4 className="font-bold text-slate-800 text-sm mb-1">Pejabat Pengesah Surat & Laporan Nilai CBT</h4>
+              <p className="text-slate-500 text-[11px] mb-3">
+                Data pejabat yang akan dicantumkan secara otomatis pada lembar cetak Leger Nilai, surat hasil ujian, dan kartu peserta ujian.
+              </p>
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Sebutan Jabatan Kepala Sekolah</label>
+              <input
+                type="text"
+                value={schoolSetting.principalTitle || 'Plt. Kepala Sekolah'}
+                onChange={e => onUpdateSetting({ ...schoolSetting, principalTitle: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none"
+                placeholder="Plt. Kepala Sekolah"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Nama Kepala Sekolah / Plt.</label>
+              <input
+                type="text"
+                value={schoolSetting.principalName || 'Legiyo, S.Pd'}
+                onChange={e => onUpdateSetting({ ...schoolSetting, principalName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-medium"
+                placeholder="Legiyo, S.Pd"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">NIP Kepala Sekolah / Plt.</label>
+              <input
+                type="text"
+                value={schoolSetting.principalNip || '196907022000031010'}
+                onChange={e => onUpdateSetting({ ...schoolSetting, principalNip: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono"
+                placeholder="196907022000031010"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">Nama Koordinator CBT</label>
+              <input
+                type="text"
+                value={schoolSetting.cbtCoordinatorName || 'Dwi Setyarini, S.Pd.'}
+                onChange={e => onUpdateSetting({ ...schoolSetting, cbtCoordinatorName: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-medium"
+                placeholder="Dwi Setyarini, S.Pd."
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">NIP Koordinator CBT</label>
+              <input
+                type="text"
+                value={schoolSetting.cbtCoordinatorNip || '198502082009032008'}
+                onChange={e => onUpdateSetting({ ...schoolSetting, cbtCoordinatorNip: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono"
+                placeholder="198502082009032008"
+              />
+            </div>
+
+            <div className="md:col-span-2 pt-4 border-t border-slate-200">
               <label className="block font-semibold text-slate-700 mb-1">Logo Satuan Pendidikan</label>
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-full border border-slate-200 p-0.5 overflow-hidden shrink-0 bg-white shadow-xs">

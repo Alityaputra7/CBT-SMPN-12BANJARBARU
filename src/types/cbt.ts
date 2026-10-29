@@ -28,6 +28,11 @@ export interface SchoolSetting {
   sebConfigKey: string;
   logoUrl?: string;
   allowStudentViewResult: boolean;
+  principalTitle?: string;
+  principalName?: string;
+  principalNip?: string;
+  cbtCoordinatorName?: string;
+  cbtCoordinatorNip?: string;
 }
 
 export interface UserAccount {

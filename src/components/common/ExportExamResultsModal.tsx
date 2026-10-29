@@ -350,12 +350,16 @@ export const ExportExamResultsModal: React.FC<ExportExamResultsModalProps> = ({
                 <span className="font-bold text-blue-700">75.00</span>
               </div>
               <div>
-                <span className="text-slate-500 block">Guru Pengampu / Operator:</span>
-                <span className="font-bold text-slate-900">{isOperator ? 'Operator CBT Administrator' : teacherName}</span>
+                <span className="text-slate-500 block">Guru Pengampu / Koordinator CBT:</span>
+                <span className="font-bold text-slate-900">
+                  {isOperator ? (schoolSetting?.cbtCoordinatorName || 'Dwi Setyarini, S.Pd.') : teacherName}
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block">NIP:</span>
-                <span className="font-mono text-slate-900">{isOperator ? '198503152009041001' : teacherNip}</span>
+                <span className="font-mono text-slate-900">
+                  {isOperator ? (schoolSetting?.cbtCoordinatorNip || '198502082009032008') : teacherNip}
+                </span>
               </div>
               <div>
                 <span className="text-slate-500 block">Waktu Cetak Dokumen:</span>
@@ -424,24 +428,30 @@ export const ExportExamResultsModal: React.FC<ExportExamResultsModalProps> = ({
               <div className="space-y-16">
                 <p className="text-slate-600">
                   Mengetahui,<br />
-                  <strong>Kepala SMP Negeri 12 Banjarbaru</strong>
+                  <strong>{schoolSetting?.principalTitle || 'Plt. Kepala SMP Negeri 12 Banjarbaru'}</strong>
                 </p>
                 <div>
-                  <p className="font-bold underline text-slate-900 uppercase">H. Akhmad Ridhani, M.Pd.</p>
-                  <p className="font-mono text-slate-600">NIP. 196805121994121002</p>
+                  <p className="font-bold underline text-slate-900 uppercase">
+                    {schoolSetting?.principalName || 'Legiyo, S.Pd'}
+                  </p>
+                  <p className="font-mono text-slate-600">
+                    NIP. {schoolSetting?.principalNip || '196907022000031010'}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-16">
                 <p className="text-slate-600">
                   Banjarbaru, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br />
-                  <strong>{isOperator ? 'Koordinator CBT / Proktor' : 'Guru Pengampu Mata Pelajaran'}</strong>
+                  <strong>{isOperator ? 'Koordinator CBT' : 'Guru Pengampu Mata Pelajaran'}</strong>
                 </p>
                 <div>
                   <p className="font-bold underline text-slate-900 uppercase">
-                    {isOperator ? 'Muhammad Rizky Pratama, S.Kom' : teacherName}
+                    {isOperator ? (schoolSetting?.cbtCoordinatorName || 'Dwi Setyarini, S.Pd.') : teacherName}
                   </p>
-                  <p className="font-mono text-slate-600">NIP. {isOperator ? '198503152009041001' : teacherNip}</p>
+                  <p className="font-mono text-slate-600">
+                    NIP. {isOperator ? (schoolSetting?.cbtCoordinatorNip || '198502082009032008') : teacherNip}
+                  </p>
                 </div>
               </div>
             </div>
