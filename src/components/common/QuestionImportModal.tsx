@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Question, QuestionType, Subject, ClassRoom } from '../../types/cbt';
 import { KatexRenderer } from './KatexRenderer';
+import { QUESTION_CLASS_GROUPS } from '../../utils/classGroups';
 
 interface QuestionImportModalProps {
   isOpen: boolean;
@@ -35,9 +36,15 @@ export const QuestionImportModal: React.FC<QuestionImportModalProps> = ({
   initialClassId,
   isOperator = false
 }) => {
+  const normalizeClassId = (cId?: string) => {
+    if (cId === 'cls-8a' || cId === 'cls-8b' || cId === 'cls-8') return 'cls-8';
+    if (cId === 'cls-9') return 'cls-9';
+    return cId || 'cls-1';
+  };
+
   const [selectedFormat, setSelectedFormat] = useState<'csv' | 'excel' | 'word'>('csv');
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || subjects[0]?.id || '');
-  const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId || classes[0]?.id || '');
+  const [selectedClassId, setSelectedClassId] = useState<string>(normalizeClassId(initialClassId));
   const [rawInputText, setRawInputText] = useState<string>('');
   const [parsedQuestions, setParsedQuestions] = useState<Question[]>([]);
   const [parsingErrors, setParsingErrors] = useState<string[]>([]);
@@ -180,9 +187,14 @@ Bobot: 15`;
           return;
         }
 
+        const gradeVal = selectedClassId === 'cls-8' ? 'VIII' : (selectedClassId === 'cls-9' ? 'IX' : 'VII');
+
         const newQ: Question = {
           id: `imp-${Date.now()}-${idx}`,
-          bankId: 'custom-bank',
+          bankId: `qbank-${selectedSubjectId}`,
+          subjectId: selectedSubjectId,
+          classId: selectedClassId,
+          grade: gradeVal,
           number: idx + 1,
           type: qType,
           prompt,
@@ -255,9 +267,14 @@ Bobot: 15`;
           }).filter(p => p.leftText && p.rightText);
         }
 
+        const gradeVal = selectedClassId === 'cls-8' ? 'VIII' : (selectedClassId === 'cls-9' ? 'IX' : 'VII');
+
         questions.push({
           id: `imp-${Date.now()}-${index}`,
-          bankId: 'custom-bank',
+          bankId: `qbank-${selectedSubjectId}`,
+          subjectId: selectedSubjectId,
+          classId: selectedClassId,
+          grade: gradeVal,
           number: questions.length + 1,
           type: qType,
           prompt,
@@ -341,12 +358,17 @@ Bobot: 15`;
             <select
               value={selectedClassId}
               onChange={e => setSelectedClassId(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium text-blue-700"
             >
-              {classes.map(c => (
-                <option key={c.id} value={c.id}>Kelas {c.name} ({c.totalStudents} siswa)</option>
+              {QUESTION_CLASS_GROUPS.map(cg => (
+                <option key={cg.id} value={cg.id}>
+                  {cg.name}
+                </option>
               ))}
             </select>
+            <p className="text-[11px] text-slate-500 mt-1">
+              * Kelas VIII-A dan VIII-B otomatis digabung dalam 1 paket soal (hanya 1x upload).
+            </p>
           </div>
         </div>
 

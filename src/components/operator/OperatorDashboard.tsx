@@ -26,7 +26,9 @@ import {
   Copy,
   Calendar,
   Layers,
-  UserPlus
+  UserPlus,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { 
   Student, 
@@ -51,6 +53,11 @@ import { QuestionImportModal } from '../common/QuestionImportModal';
 import { QuestionEditorModal } from '../common/QuestionEditorModal';
 import { ResetExamResultsModal } from '../common/ResetExamResultsModal';
 import { KatexRenderer } from '../common/KatexRenderer';
+import { 
+  QUESTION_CLASS_GROUPS, 
+  isQuestionMatchingClass, 
+  getQuestionClassLabel 
+} from '../../utils/classGroups';
 
 interface OperatorDashboardProps {
   students: Student[];
@@ -199,6 +206,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [showQuestionImportModal, setShowQuestionImportModal] = useState<boolean>(false);
   const [showQuestionEditorModal, setShowQuestionEditorModal] = useState<boolean>(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [selectedQIds, setSelectedQIds] = useState<string[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -461,6 +469,37 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     alert(`Berhasil menambahkan ${imported.length} butir soal ke bank soal mapel terpilih. Soal langsung aktif untuk ujian siswa!`);
   };
 
+  const handleToggleSelectQ = (qId: string) => {
+    setSelectedQIds(prev => 
+      prev.includes(qId) ? prev.filter(id => id !== qId) : [...prev, qId]
+    );
+  };
+
+  const handleToggleSelectAllQ = (visibleQuestions: Question[]) => {
+    const visibleIds = visibleQuestions.map(q => q.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedQIds.includes(id));
+    if (allSelected) {
+      setSelectedQIds(prev => prev.filter(id => !visibleIds.includes(id)));
+    } else {
+      setSelectedQIds(prev => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
+
+  const handleBulkDeleteQ = () => {
+    if (selectedQIds.length === 0) return;
+    if (confirm(`Apakah Anda yakin ingin menghapus ${selectedQIds.length} butir soal terpilih? Tindakan ini tidak dapat dibatalkan.`)) {
+      const remainingQuestions = questionBank.questions.filter(q => !selectedQIds.includes(q.id));
+      onUpdateQuestionBank({
+        ...questionBank,
+        totalQuestions: remainingQuestions.length,
+        questions: remainingQuestions
+      });
+      onAddAuditLog('HAPUS_SOAL_MASSAL', `Operator menghapus ${selectedQIds.length} butir soal secara massal`);
+      setSelectedQIds([]);
+      alert(`Berhasil menghapus ${selectedQIds.length} butir soal.`);
+    }
+  };
+
   const handleDeleteQuestion = (qId: string) => {
     if (confirm('Hapus butir soal ini dari bank soal?')) {
       const filtered = questionBank.questions.filter(q => q.id !== qId);
@@ -469,6 +508,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         totalQuestions: filtered.length,
         questions: filtered
       });
+      setSelectedQIds(prev => prev.filter(id => id !== qId));
       onAddAuditLog('HAPUS_SOAL', `Operator menghapus butir soal`);
     }
   };
@@ -1185,32 +1225,88 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Filter Kelas / Rombel:</label>
+              <label className="block font-semibold text-slate-700 mb-1">Filter Kelompok Kelas:</label>
               <select
                 value={selectedQClassFilter}
-                onChange={e => setSelectedQClassFilter(e.target.value)}
+                onChange={e => {
+                  setSelectedQClassFilter(e.target.value);
+                  setSelectedQIds([]);
+                }}
                 className="w-full px-3 py-1.5 border border-slate-300 rounded-lg bg-white outline-none"
               >
-                <option value="all">Semua Kelas ({classes.length})</option>
-                {classes.map(c => (
-                  <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                <option value="all">Semua Kelas</option>
+                {QUESTION_CLASS_GROUPS.map(cg => (
+                  <option key={cg.id} value={cg.id}>{cg.name}</option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Bulk Selection Notification & Action Banner for Operator */}
+          {selectedQIds.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-rose-50 border border-rose-300 rounded-xl text-xs shadow-xs animate-in fade-in duration-150">
+              <div className="flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center font-bold text-[11px]">
+                  {selectedQIds.length}
+                </span>
+                <span className="font-bold text-rose-900">
+                  {selectedQIds.length} butir soal dipilih
+                </span>
+                <span className="text-rose-600 text-[11px] hidden sm:inline">
+                  (Hapus massal butir soal yang tidak diperlukan sekaligus)
+                </span>
+              </div>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteQ}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-semibold transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Hapus {selectedQIds.length} Soal Terpilih
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedQIds([])}
+                  className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-300 font-medium transition-colors cursor-pointer"
+                >
+                  Batal Pilih
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Questions Grid */}
           {(() => {
             const filteredQuestions = questionBank.questions.filter(q => {
               const matchSubject = selectedQSubjectFilter === 'all' || q.subjectId === selectedQSubjectFilter || (!q.subjectId && selectedQSubjectFilter === 'sbj-mat');
-              const matchClass = selectedQClassFilter === 'all' || q.classId === selectedQClassFilter || (!q.classId);
+              const matchClass = isQuestionMatchingClass(q.classId, q.grade, selectedQClassFilter);
               return matchSubject && matchClass;
             });
 
+            const allSelected = filteredQuestions.length > 0 && filteredQuestions.every(q => selectedQIds.includes(q.id));
+
             return (
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-500 px-1">
-                  <span>Menampilkan <strong>{filteredQuestions.length}</strong> dari <strong>{questionBank.questions.length}</strong> butir soal</span>
+                <div className="flex items-center justify-between text-xs text-slate-500 px-1 pb-1 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelectAllQ(filteredQuestions)}
+                      className="p-1 text-slate-500 hover:text-blue-600 rounded transition-colors cursor-pointer flex items-center gap-1"
+                      title="Pilih / Batalkan Semua Soal yang Ditampilkan"
+                    >
+                      {allSelected ? (
+                        <CheckSquare className="w-4 h-4 text-blue-600" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                      <span className="text-[11px] font-semibold text-slate-600">Pilih Semua</span>
+                    </button>
+                    <span>
+                      Menampilkan <strong>{filteredQuestions.length}</strong> dari <strong>{questionBank.questions.length}</strong> butir soal
+                    </span>
+                  </div>
                   <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                     Semua soal otomatis aktif di ujian peserta
                   </span>
@@ -1228,51 +1324,70 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     </button>
                   </div>
                 ) : (
-                  filteredQuestions.map((q, idx) => (
-                    <div key={q.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-white hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900 text-sm">Butir Soal #{idx + 1}</span>
-                          <span className="text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                            {q.type.replace('_', ' ')}
-                          </span>
-                          {q.subjectId && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
-                              {subjects.find(s => s.id === q.subjectId)?.name || q.subjectId}
-                            </span>
-                          )}
-                          <span className="text-xs text-slate-500 font-mono">
-                            Bobot: {q.points} Poin · {q.difficulty || 'sedang'}
-                          </span>
-                        </div>
+                  filteredQuestions.map((q, idx) => {
+                    const isChecked = selectedQIds.includes(q.id);
 
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => handleDuplicateQuestion(q)}
-                      className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
-                      title="Duplikat Soal"
-                    >
-                      <Copy className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingQuestion(q);
-                        setShowQuestionEditorModal(true);
-                      }}
-                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                      title="Edit Butir Soal"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteQuestion(q.id)}
-                      className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      title="Hapus Soal"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+                    return (
+                      <div 
+                        key={q.id} 
+                        className={`p-4 border rounded-xl space-y-3 transition-colors ${
+                          isChecked 
+                            ? 'border-amber-400 bg-amber-50/20' 
+                            : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleSelectQ(q.id)}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                            />
+                            <span className="font-bold text-slate-900 text-sm">Butir Soal #{idx + 1}</span>
+                            <span className="text-[10px] font-bold font-mono uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                              {q.type.replace('_', ' ')}
+                            </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                              {getQuestionClassLabel(q.classId, q.grade)}
+                            </span>
+                            {q.subjectId && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-700">
+                                {subjects.find(s => s.id === q.subjectId)?.name || q.subjectId}
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-500 font-mono">
+                              Bobot: {q.points} Poin · {q.difficulty || 'sedang'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleDuplicateQuestion(q)}
+                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                              title="Duplikat Soal"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditingQuestion(q);
+                                setShowQuestionEditorModal(true);
+                              }}
+                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              title="Edit Butir Soal"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteQuestion(q.id)}
+                              className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus Soal"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
 
                 {/* Prompt with KaTeX */}
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed">
@@ -1336,8 +1451,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 )}
                     </div>
-                  ))
-                )}
+                  );
+                }))}
               </div>
             );
           })()}

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { Question, QuestionType, Subject, ClassRoom, MatchingPair } from '../../types/cbt';
 import { KatexRenderer } from './KatexRenderer';
+import { QUESTION_CLASS_GROUPS } from '../../utils/classGroups';
 
 interface QuestionEditorModalProps {
   isOpen: boolean;
@@ -36,8 +37,18 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(initialSubjectId || subjects[0]?.id || '');
-  const [selectedClassId, setSelectedClassId] = useState<string>(initialClassId || classes[0]?.id || '');
+  const normalizeClassId = (cId?: string) => {
+    if (cId === 'cls-8a' || cId === 'cls-8b' || cId === 'cls-8') return 'cls-8';
+    if (cId === 'cls-9') return 'cls-9';
+    return cId || 'cls-1';
+  };
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(
+    initialSubjectId || initialQuestion?.subjectId || subjects[0]?.id || ''
+  );
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    normalizeClassId(initialClassId || initialQuestion?.classId)
+  );
 
   // Question fields
   const [qType, setQType] = useState<QuestionType>(initialQuestion?.type || 'pg');
@@ -120,6 +131,8 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       return;
     }
 
+    const gradeVal = selectedClassId === 'cls-8' ? 'VIII' : (selectedClassId === 'cls-9' ? 'IX' : 'VII');
+
     const savedQ: Question = {
       id: initialQuestion?.id || `q-${Date.now()}`,
       bankId: initialQuestion?.bankId || 'bank-default',
@@ -129,6 +142,9 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       imageUrl: imageUrl.trim() || undefined,
       points: Number(points),
       difficulty,
+      subjectId: selectedSubjectId,
+      classId: selectedClassId,
+      grade: gradeVal,
       options: ['pg', 'pg_kompleks', 'benar_salah'].includes(qType) ? options : [],
       matchingPairs: qType === 'mencocokkan' ? matchingPairs : undefined,
       correctAnswers: ['pg', 'pg_kompleks', 'benar_salah'].includes(qType) ? correctAnswers : undefined,
@@ -169,7 +185,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
               <select
                 value={selectedSubjectId}
                 onChange={e => setSelectedSubjectId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none font-medium"
               >
                 {subjects.map(s => (
                   <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
@@ -178,16 +194,21 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             </div>
 
             <div>
-              <label className="block font-semibold text-slate-700 mb-1">Tingkat / Kelas</label>
+              <label className="block font-semibold text-slate-700 mb-1">Tingkat / Kelas Sasaran</label>
               <select
                 value={selectedClassId}
                 onChange={e => setSelectedClassId(e.target.value)}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none"
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white outline-none font-medium text-blue-700"
               >
-                {classes.map(c => (
-                  <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                {QUESTION_CLASS_GROUPS.map(cg => (
+                  <option key={cg.id} value={cg.id}>
+                    {cg.name}
+                  </option>
                 ))}
               </select>
+              <p className="text-[11px] text-slate-500 mt-1">
+                * Kelas VIII-A & VIII-B digabung: cukup input 1 kali untuk kedua rombel.
+              </p>
             </div>
           </div>
 

@@ -24,6 +24,7 @@ import {
   SchoolSetting 
 } from '../../types/cbt';
 import { KatexRenderer } from '../common/KatexRenderer';
+import { isQuestionMatchingClass } from '../../utils/classGroups';
 
 interface SiswaExamViewProps {
   student: Student;
@@ -60,9 +61,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Filter questions for the selected exam's subject, fallback to all questions
+  // Filter questions for the selected exam's subject and student's class (with combined Kelas VIII support)
+  const matchedQuestions = questionBank.questions.filter(q => {
+    const matchSubject = !exam.subjectId || q.subjectId === exam.subjectId || (!q.subjectId && exam.subjectId === 'sbj-mat');
+    const matchClass = isQuestionMatchingClass(q.classId, q.grade, student.classId);
+    return matchSubject && matchClass;
+  });
+
   const subjectQuestions = questionBank.questions.filter(q => q.subjectId === exam.subjectId);
-  const questions = subjectQuestions.length > 0 ? subjectQuestions : questionBank.questions;
+  const questions = matchedQuestions.length > 0 
+    ? matchedQuestions 
+    : (subjectQuestions.length > 0 ? subjectQuestions : questionBank.questions);
   const currentQ = questions[currentQuestionIndex] || questions[0];
 
   // Auto-save feedback ticker
