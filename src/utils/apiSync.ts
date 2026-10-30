@@ -399,14 +399,34 @@ export async function syncServerUpdates(updates: CbtStorePayload): Promise<boole
 export async function syncSingleSession(session: StudentExamSession): Promise<boolean> {
   // Update in-memory session immediately
   const existingIdx = cachedStore.sessions.findIndex(s => s.id === session.id);
+  const prevSession = existingIdx >= 0 ? cachedStore.sessions[existingIdx] : null;
+
   if (existingIdx >= 0) {
     cachedStore.sessions[existingIdx] = session;
   } else {
     cachedStore.sessions.push(session);
   }
 
-  // If exam is submitted or forced, sync to JSONBin immediately without debounce
-  if (session.status === 'submitted' || session.status === 'force_submitted') {
+  // Detect critical milestones that require immediate zero-delay server & JSONBin push:
+  // 1. Student STARTS exam (status changed to in_progress)
+  // 2. Student FINISHES exam (status is submitted or force_submitted)
+  // 3. Student violation lock event
+  const isStartEvent = session.status === 'in_progress' && (!prevSession || prevSession.status === 'not_started');
+  const isFinishEvent = session.status === 'submitted' || session.status === 'force_submitted';
+  const isLockEvent = session.isLocked !== (prevSession?.isLocked ?? false);
+
+  // Send single session to local server proxy with high priority
+  fetch('/api/cbt/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session }),
+  }).catch(err => console.warn('[CBT Server] Session update error:', err));
+
+  if (isStartEvent || isFinishEvent || isLockEvent) {
+    if (debounceSaveTimer) {
+      clearTimeout(debounceSaveTimer);
+      debounceSaveTimer = null;
+    }
     return await syncServerUpdates({ sessions: cachedStore.sessions });
   }
 
@@ -423,14 +443,7 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
     } finally {
       isSavingToJsonBin = false;
     }
-  }, 600);
-
-  // Send single session to local server proxy in parallel
-  fetch('/api/cbt/session', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session }),
-  }).catch(() => {});
+  }, 500);
 
   return true;
 }

@@ -21,6 +21,7 @@ import {
   Laptop,
   CheckCircle2,
   AlertCircle,
+  Download,
   X
 } from 'lucide-react';
 import { 
@@ -36,6 +37,7 @@ import { KatexRenderer } from '../common/KatexRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
 import { syncSingleSession } from '../../utils/apiSync';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
+import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 
 interface SiswaExamViewProps {
   student: Student;
@@ -131,12 +133,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
     await enterFullscreen();
     setHasStarted(true);
-    updateSessionWithSync({
+    const startSession: StudentExamSession = {
       ...session,
       status: 'in_progress',
       startedAt: session.startedAt || new Date().toLocaleTimeString('id-ID'),
-      isOnline: true
-    });
+      isOnline: true,
+      lastHeartbeat: Date.now(),
+      timeRemainingSeconds: session.timeRemainingSeconds || exam.durationMinutes * 60
+    };
+    updateSessionWithSync(startSession);
   };
 
   // Timer countdown
@@ -156,6 +161,23 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     return () => clearInterval(timer);
   }, [hasStarted, session.status, session.isLocked]);
+
+  // Real-Time Periodic Heartbeat to Operator Dashboard (every 15 seconds)
+  useEffect(() => {
+    if (!hasStarted || session.status !== 'in_progress' || session.isLocked) return;
+
+    const heartbeatTimer = setInterval(() => {
+      const activeSession: StudentExamSession = {
+        ...session,
+        timeRemainingSeconds: timeRemaining,
+        isOnline: true,
+        lastHeartbeat: Date.now()
+      };
+      updateSessionWithSync(activeSession);
+    }, 15000);
+
+    return () => clearInterval(heartbeatTimer);
+  }, [hasStarted, session.status, session.isLocked, timeRemaining]);
 
   // Anti-Cheat Event Listeners (Tab switch, Blur, ContextMenu, Shortcut blocking)
   useEffect(() => {
@@ -374,15 +396,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     });
 
     const final = scorePgTotal + session.scoreEssay;
-    updateSessionWithSync({
+    const finalSession: StudentExamSession = {
       ...session,
       status: 'submitted',
       submittedAt: new Date().toLocaleTimeString('id-ID'),
       timeRemainingSeconds: 0,
       scorePg: scorePgTotal,
       finalScore: final,
-      isPassed: final >= exam.kkm
-    });
+      isPassed: final >= exam.kkm,
+      isOnline: false,
+      lastHeartbeat: Date.now()
+    };
+    updateSessionWithSync(finalSession);
     setShowSubmitConfirm(false);
   };
 
@@ -639,6 +664,16 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               )}
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={() => downloadExamCardsAsHtml([student], schoolSetting, `Kartu_Ujian_${student.nis}_${student.name.replace(/\s+/g, '_')}`, student.name)}
+            className="w-full py-2.5 px-4 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold rounded-xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-2xs active:scale-[0.99]"
+            title="Download kartu peserta ujian resmi siswa dalam format file siap cetak / PDF"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>Unduh Kartu Peserta Ujian Saya (PDF / Cetak)</span>
+          </button>
 
           <button
             type="button"
