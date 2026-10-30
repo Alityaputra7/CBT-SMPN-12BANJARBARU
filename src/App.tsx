@@ -341,18 +341,26 @@ export default function App() {
     setQuestionBank(newBank);
     saveToStorage(STORAGE_KEYS.QUESTIONS, newBank);
 
-    // Sync exams with new question count
+    // Sync all exams with new question count based on subject or questionBankId
     setExams(prev => {
-      const updated = prev.map((ex, idx) => idx === 0 ? {
-        ...ex,
-        totalQuestions: newBank.questions.length
-      } : ex);
+      const updated = prev.map(ex => {
+        const matchingQuestionsCount = newBank.questions.filter(q => 
+          (ex.subjectId && q.subjectId === ex.subjectId) ||
+          (ex.questionBankId && q.bankId === ex.questionBankId) ||
+          (!ex.subjectId && !q.subjectId)
+        ).length;
+
+        return {
+          ...ex,
+          totalQuestions: matchingQuestionsCount > 0 ? matchingQuestionsCount : (newBank.questions.length > 0 ? matchingQuestionsCount : 0)
+        };
+      });
       saveToStorage(STORAGE_KEYS.EXAMS, updated);
       syncServerUpdates({ questionBank: newBank, exams: updated });
       return updated;
     });
 
-    triggerSyncNotification(`Bank soal diperbarui (${newBank.questions.length} butir soal aktif)`);
+    triggerSyncNotification(`Bank soal diperbarui (${newBank.questions.length} butir soal aktif). Data otomatis tersinkronisasi ke Cloud & ponsel!`);
   };
 
   // RESET EXAM RESULTS: Single student

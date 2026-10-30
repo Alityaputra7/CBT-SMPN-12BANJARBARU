@@ -1,0 +1,3028 @@
+import { Question, ExamSchedule } from '../types/cbt';
+
+// =========================================================================
+// 1. BAHASA INGGRIS (BIG) - 25 SOAL (20 PG + 5 URAIAN)
+// =========================================================================
+export const BIG_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'big-1',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'You meet a new student from Japan. What is the most polite way to greet him?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '“Goodbye, see you.”' },
+      { id: 'B', text: '“Hello, welcome to our school!”' },
+      { id: 'C', text: '“How old are you?”' },
+      { id: 'D', text: '“Do you like math?”' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-2',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'A: “Hi, I’m Rani. Nice to meet you.” B: “__________”',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '“Good luck.”' },
+      { id: 'B', text: '“Nice to meet you too.”' },
+      { id: 'C', text: '“See you tomorrow.”' },
+      { id: 'D', text: '“I am fine.”' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-3',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'The teacher says: “Work in groups of four.” What should students do?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Sit alone' },
+      { id: 'B', text: 'Make a group of four' },
+      { id: 'C', text: 'Leave the class' },
+      { id: 'D', text: 'Sleep' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-4',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'If the school bell rings at 7:00 a.m., what does it mean?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Time to play football' },
+      { id: 'B', text: 'Time to eat lunch' },
+      { id: 'C', text: 'Time to go home' },
+      { id: 'D', text: 'Time to start class' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'big-5',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'pg',
+    prompt: 'Read the text: “My school garden is full of flowers and butterflies.” What is the main idea?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'The garden is empty' },
+      { id: 'B', text: 'The garden is beautiful' },
+      { id: 'C', text: 'The garden is closed' },
+      { id: 'D', text: 'The garden is small' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-6',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'pg',
+    prompt: 'Which question helps you understand descriptive text better?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '“What does it look like?”' },
+      { id: 'B', text: '“How old are you?”' },
+      { id: 'C', text: '“What time is it?”' },
+      { id: 'D', text: '“Where do you live?”' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'big-7',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'pg',
+    prompt: 'A: “Do you like English?” B: “Yes, I do. It’s fun.” What does B express?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Dislike' },
+      { id: 'B', text: 'Preference' },
+      { id: 'C', text: 'Command' },
+      { id: 'D', text: 'Introduction' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-8',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'pg',
+    prompt: 'Your friend says: “I don’t like math because it’s difficult.” What is the best response?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '“Don’t study math.”' },
+      { id: 'B', text: '“Maybe we can study together.”' },
+      { id: 'C', text: '“Forget about math.”' },
+      { id: 'D', text: '“Math is boring.”' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-9',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'pg',
+    prompt: 'Which routine shows discipline?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Waking up late' },
+      { id: 'B', text: 'Skipping class' },
+      { id: 'C', text: 'Playing games all night' },
+      { id: 'D', text: 'Doing homework regularly' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'big-10',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'pg',
+    prompt: 'A student says: “I usually help my mother cook dinner.” What value does this show?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Dislike' },
+      { id: 'B', text: 'Responsibility' },
+      { id: 'C', text: 'Command' },
+      { id: 'D', text: 'Laziness' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-11',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'pg',
+    prompt: 'Teacher: “Please submit your homework before 8 a.m.” What is the implied meaning?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Students can submit anytime' },
+      { id: 'B', text: 'Students should ignore it' },
+      { id: 'C', text: 'Students don’t need to submit' },
+      { id: 'D', text: 'Students must submit on time' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'big-12',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'pg',
+    prompt: 'Which instruction is suitable in the laboratory?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '“Play with chemicals.”' },
+      { id: 'B', text: '“Eat your lunch here.”' },
+      { id: 'C', text: '“Wear your safety glasses.”' },
+      { id: 'D', text: '“Run around the room.”' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'big-13',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'pg',
+    prompt: 'If someone says, “My father is a teacher,” what information is given?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Family hobby' },
+      { id: 'B', text: 'Family dislike' },
+      { id: 'C', text: 'Family routine' },
+      { id: 'D', text: 'Family occupation' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'big-14',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'pg',
+    prompt: 'Which question is suitable to ask about family members?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '“Who is your brother?”' },
+      { id: 'B', text: '“What is your favorite food?”' },
+      { id: 'C', text: '“Where is the library?”' },
+      { id: 'D', text: '“How old are you?”' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'big-15',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'pg',
+    prompt: 'You want to introduce your family in front of the class. What should you say first?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '“My father is a teacher.”' },
+      { id: 'B', text: '“Hello, let me tell you about my family.”' },
+      { id: 'C', text: '“I don’t like math.”' },
+      { id: 'D', text: '“Goodbye.”' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-16',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'pg',
+    prompt: 'A student writes: “My daily routine starts with greeting my parents.” What does this show?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Dislike' },
+      { id: 'B', text: 'Command' },
+      { id: 'C', text: 'Respect' },
+      { id: 'D', text: 'Introduction' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'big-17',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'pg',
+    prompt: 'Which sentence combines greeting and school life?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '“Good morning, class. Let’s start the lesson.”' },
+      { id: 'B', text: '“I don’t like vegetables.”' },
+      { id: 'C', text: '“My brother is tall.”' },
+      { id: 'D', text: '“See you tomorrow.”' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'big-18',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'pg',
+    prompt: 'If a descriptive text says: “My classroom is clean and bright,” what can we infer?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Students keep it tidy' },
+      { id: 'B', text: 'Students dislike it' },
+      { id: 'C', text: 'The classroom is old' },
+      { id: 'D', text: 'The classroom is closed' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'big-19',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'pg',
+    prompt: 'A: “Do you like playing football after school?” B: “Yes, but only on weekends.” What does B’s answer show?',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Total dislike' },
+      { id: 'B', text: 'Conditional preference' },
+      { id: 'C', text: 'Command' },
+      { id: 'D', text: 'Introduction' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-20',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'pg',
+    prompt: 'Teacher: “Line up before entering the classroom.” What is the purpose of this instruction?',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'To make students play' },
+      { id: 'B', text: 'To keep order' },
+      { id: 'C', text: 'To waste time' },
+      { id: 'D', text: 'To confuse students' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'big-21',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'uraian',
+    prompt: 'Write a short dialogue between two students who meet for the first time. Use greetings and introductions.',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk sapaan (greeting) yang tepat; skor 2 untuk perkenalan diri (nama, asal/kelas); skor 2 untuk alur dialog yang runtut antara dua penutur; skor 2 untuk tata bahasa, ejaan, dan pilihan kata.'
+  },
+  {
+    id: 'big-22',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 22,
+    type: 'uraian',
+    prompt: 'Introduce your family members in English.',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk kalimat pembuka/perkenalan; skor 3 untuk menyebutkan anggota keluarga beserta hubungan atau pekerjaannya; skor 3 untuk ketepatan tata bahasa, kosakata, dan ejaan.'
+  },
+  {
+    id: 'big-23',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 23,
+    type: 'uraian',
+    prompt: 'Describe your classroom in 3–4 sentences. Mention its size, facilities, and atmosphere.',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk deskripsi ukuran; skor 2 untuk deskripsi fasilitas; skor 2 untuk deskripsi suasana; skor 2 untuk tata bahasa dan jumlah kalimat sesuai perintah (3–4 kalimat).'
+  },
+  {
+    id: 'big-24',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 24,
+    type: 'uraian',
+    prompt: 'Explain your daily routine from morning until evening in 5 sentences.',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk isi kegiatan yang runtut dari pagi sampai malam; skor 2 untuk jumlah kalimat sesuai perintah (5 kalimat); skor 3 untuk tata bahasa (simple present), kosakata, dan ejaan.'
+  },
+  {
+    id: 'big-25',
+    bankId: 'qbank-big',
+    subjectId: 'sbj-big',
+    classId: 'all',
+    grade: 'Semua',
+    number: 25,
+    type: 'uraian',
+    prompt: 'Write about your likes and dislikes in school subjects. Give reasons for your choices.',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk menyebutkan mata pelajaran yang disukai; skor 2 untuk menyebutkan mata pelajaran yang tidak disukai; skor 2 untuk alasan yang jelas; skor 2 untuk tata bahasa dan ejaan.'
+  }
+];
+
+// =========================================================================
+// 2. ILMU PENGETAHUAN ALAM (IPA) - 25 SOAL (SEMUA PG, BOBOT 4)
+// =========================================================================
+export const IPA_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'ipa-1',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'Di sebuah kolam sekolah terdapat ikan, tumbuhan air, siput, katak, bakteri, air, lumpur, cahaya matahari, dan udara. Setelah beberapa hari hujan deras, air kolam menjadi keruh dan cahaya matahari yang masuk ke air berkurang. Kondisi ini paling mungkin menyebabkan ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'fotosintesis tumbuhan air meningkat karena air lebih keruh' },
+      { id: 'B', text: 'jumlah tumbuhan air dapat menurun karena energi cahaya yang diterima berkurang' },
+      { id: 'C', text: 'ikan tidak membutuhkan oksigen karena air menjadi lebih keruh' },
+      { id: 'D', text: 'semua komponen biotik berubah menjadi komponen abiotic' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-2',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'Tiga gelas berisi air dengan volume sama diletakkan pada tempat berbeda. Gelas P menerima sinar matahari langsung, gelas Q berada di dalam kelas, dan gelas R diletakkan di dekat kipas. Setelah 20 menit, suhu air P paling tinggi, sedangkan suhu R paling rendah. Kesimpulan yang paling tepat adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'suhu benda tidak dipengaruhi lingkungan' },
+      { id: 'B', text: 'perpindahan energi panas dapat menyebabkan perubahan suhu benda' },
+      { id: 'C', text: 'kipas menghasilkan kalor yang menghilangkan massa air' },
+      { id: 'D', text: 'sinar matahari mengubah air menjadi zat baru' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-3',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'Seorang siswa mengamati bahwa Bulan tampak berubah bentuk dari sabit, setengah, hingga hampir bulat dalam beberapa hari. Ia menyimpulkan bahwa Bulan sebenarnya berubah bentuk. Pernyataan yang paling tepat untuk memperbaiki kesimpulan tersebut adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Bulan berubah bentuk karena tertiup angin Matahari' },
+      { id: 'B', text: 'fase Bulan terjadi karena bagian Bulan yang terkena cahaya Matahari dan terlihat dari Bumi berubah' },
+      { id: 'C', text: 'Bulan menghasilkan cahaya sendiri dengan intensitas berbeda' },
+      { id: 'D', text: 'bentuk Bulan berubah karena atmosfer Bumi' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-4',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'Rani ingin mengetahui apakah jenis permukaan memengaruhi jarak tempuh mobil mainan. Ia menggunakan mobil yang sama, mendorongnya dengan gaya yang dibuat sama, lalu mengujinya pada lantai keramik, karpet, dan papan kayu. Variabel yang sengaja diubah dalam percobaan tersebut adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'jenis permukaan' },
+      { id: 'B', text: 'jenis mobil mainan' },
+      { id: 'C', text: 'gaya dorongan' },
+      { id: 'D', text: 'jarak tempuh' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-5',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'pg',
+    prompt: 'Dalam kegiatan pengamatan, siswa menemukan organisme X yang memiliki banyak sel, tidak memiliki klorofil, memperoleh makanan dari organisme lain, dan dinding selnya tersusun dari kitin. Organisme X paling tepat dikelompokkan ke dalam ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Plantae' },
+      { id: 'B', text: 'Animalia' },
+      { id: 'C', text: 'Fungi' },
+      { id: 'D', text: 'Monera' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-6',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'pg',
+    prompt: 'Sebuah sepeda bergerak lurus. Dalam 10 detik pertama, sepeda menempuh 50 m. Dalam 10 detik berikutnya, sepeda menempuh 30 m. Pernyataan yang benar adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'kelajuan rata-rata sepeda adalah 8 m/s' },
+      { id: 'B', text: 'kelajuan rata-rata sepeda adalah 4 m/s' },
+      { id: 'C', text: 'kelajuan rata-rata sepeda adalah 5 m/s' },
+      { id: 'D', text: 'kelajuan rata-rata sepeda adalah 3 m/s' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-7',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'pg',
+    prompt: 'Dua benda memiliki massa sama, yaitu 200 g. Benda A memiliki volume 50 cm³, sedangkan benda B memiliki volume 100 cm³. Berdasarkan data tersebut, pernyataan yang benar adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'massa jenis A lebih kecil daripada B' },
+      { id: 'B', text: 'massa jenis A sama dengan B' },
+      { id: 'C', text: 'massa jenis A lebih besar daripada B' },
+      { id: 'D', text: 'massa jenis tidak dapat dibandingkan karena massanya sama' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-8',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'pg',
+    prompt: 'Di sebuah hutan, jumlah ular menurun drastis karena perburuan. Beberapa bulan kemudian jumlah tikus meningkat dan tanaman padi di sekitar hutan mengalami lebih banyak kerusakan. Peristiwa tersebut menunjukkan bahwa ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'setiap organisme hidup tanpa bergantung pada organisme lain' },
+      { id: 'B', text: 'perubahan satu populasi dapat memengaruhi keseimbangan ekosistem' },
+      { id: 'C', text: 'tikus merupakan faktor abiotik' },
+      { id: 'D', text: 'ular tidak memiliki peran dalam ekosistem' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-9',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'pg',
+    prompt: 'Rel kereta api dipasang dengan celah kecil pada sambungan antarrelnya. Pada siang hari yang sangat panas, panjang rel bertambah. Jika tidak tersedia celah, risiko yang paling mungkin terjadi adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'rel menyusut dan menjadi lebih pendek' },
+      { id: 'B', text: 'rel dapat melengkung atau mengalami perubahan bentuk karena pemuaian' },
+      { id: 'C', text: 'massa jenis rel menjadi nol' },
+      { id: 'D', text: 'suhu rel selalu tetap' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-10',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'pg',
+    prompt: 'Seorang siswa mengukur panjang meja menggunakan penggaris. Ujung meja tidak tepat berada pada angka nol, tetapi berada pada angka 2 cm. Ujung lainnya berada pada angka 82 cm. Hasil pengukuran panjang meja adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '80 cm' },
+      { id: 'B', text: '82 cm' },
+      { id: 'C', text: '84 cm' },
+      { id: 'D', text: '40 cm' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-11',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'pg',
+    prompt: 'Bumi mengalami siang dan malam secara bergantian. Seorang siswa mengatakan bahwa siang dan malam terjadi karena Matahari mengelilingi Bumi setiap 24 jam. Berdasarkan konsep gerak Bumi, koreksi yang paling tepat adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'siang dan malam terutama terjadi karena rotasi Bumi pada porosnya' },
+      { id: 'B', text: 'siang dan malam terjadi karena Bulan mengelilingi Bumi' },
+      { id: 'C', text: 'siang dan malam terjadi karena revolusi Bumi dalam 24 jam' },
+      { id: 'D', text: 'siang dan malam terjadi karena Matahari berhenti memancarkan Cahaya' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-12',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'pg',
+    prompt: 'Ketika es batu dibiarkan di meja, es berubah menjadi air. Setelah itu air dipanaskan hingga menjadi uap. Rangkaian perubahan tersebut termasuk ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'perubahan kimia karena terbentuk zat baru' },
+      { id: 'B', text: 'perubahan fisika karena tidak menghasilkan zat baru' },
+      { id: 'C', text: 'reaksi pembakaran karena menerima kalor' },
+      { id: 'D', text: 'perubahan kimia karena massa air bertambah' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-13',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'pg',
+    prompt: 'Sebuah bola yang diam ditendang hingga bergerak. Setelah beberapa saat bola berhenti karena bergesekan dengan rumput. Berdasarkan peristiwa tersebut, gaya dapat menyebabkan ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'benda selalu bertambah massanya' },
+      { id: 'B', text: 'perubahan gerak benda' },
+      { id: 'C', text: 'benda berubah menjadi zat lain' },
+      { id: 'D', text: 'benda tidak dapat mengalami percepatan' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-14',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'pg',
+    prompt: 'Siswa mengelompokkan hewan berikut: ikan, katak, ayam, dan kucing. Salah satu dasar klasifikasi yang paling logis untuk membedakan kelompok tersebut adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'warna tubuh saja' },
+      { id: 'B', text: 'tempat hewan ditemukan saja' },
+      { id: 'C', text: 'persamaan dan perbedaan ciri yang dapat diamati' },
+      { id: 'D', text: 'ukuran tubuh berdasarkan perkiraan' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-15',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'pg',
+    prompt: 'Di daerah pesisir, hutan mangrove ditebang untuk pembangunan. Setelah beberapa tahun, abrasi pantai meningkat dan banyak biota kehilangan tempat hidup. Upaya yang paling sesuai dengan prinsip konservasi adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'menebang seluruh mangrove yang tersisa' },
+      { id: 'B', text: 'mengganti mangrove dengan beton di seluruh pantai' },
+      { id: 'C', text: 'melakukan rehabilitasi mangrove dan mengatur pemanfaatan wilayah pesisir' },
+      { id: 'D', text: 'membiarkan kerusakan berlangsung tanpa pengelolaan' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-16',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'pg',
+    prompt: 'Sebuah termometer menunjukkan 25°C pada pagi hari dan 35°C pada siang hari. Perubahan suhu yang dialami termometer adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '5°C' },
+      { id: 'B', text: '10°C' },
+      { id: 'C', text: '25°C' },
+      { id: 'D', text: '60°C' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-17',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'pg',
+    prompt: 'Dalam percobaan pertumbuhan kacang hijau, kelompok A menyiram tanaman 20 mL air setiap hari, sedangkan kelompok B menyiram 40 mL. Jenis biji, media tanam, ukuran pot, dan lama penyinaran dibuat sama. Data tinggi tanaman dicatat setiap dua hari. Tujuan membuat beberapa kondisi tetap sama adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'memperbanyak variabel bebas' },
+      { id: 'B', text: 'memastikan perubahan tinggi tanaman lebih dapat dikaitkan dengan jumlah air' },
+      { id: 'C', text: 'menghilangkan kebutuhan untuk mengukur' },
+      { id: 'D', text: 'membuat hasil pasti sama' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-18',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'pg',
+    prompt: 'Urutan planet dari yang paling dekat ke Matahari adalah Merkurius, Venus, Bumi, dan Mars. Jika seorang siswa menyatakan bahwa Bumi adalah planet terdekat dari Matahari karena merupakan tempat kita tinggal, penilaian yang tepat adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'benar, karena tempat tinggal menentukan jarak planet' },
+      { id: 'B', text: 'benar, karena Bumi memiliki atmosfer' },
+      { id: 'C', text: 'salah, karena Merkurius merupakan planet yang paling dekat dengan Matahari' },
+      { id: 'D', text: 'salah, karena Mars lebih dekat daripada Merkurius' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-19',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'pg',
+    prompt: 'Sebuah botol berisi air ditutup rapat lalu dimasukkan ke dalam freezer. Setelah beberapa jam, air berubah menjadi es. Massa seluruh sistem botol dan air dianggap tetap. Hal ini sesuai dengan gagasan bahwa ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'perubahan wujud dapat terjadi tanpa menghilangkan materi' },
+      { id: 'B', text: 'pembekuan selalu menghasilkan zat baru' },
+      { id: 'C', text: 'massa air berubah menjadi energi seluruhnya' },
+      { id: 'D', text: 'partikel air menghilang saat membeku' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-20',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'pg',
+    prompt: 'Dua siswa menarik sebuah kotak ke arah yang berlawanan. Siswa A menarik dengan gaya 50 N ke kanan, sedangkan siswa B menarik 30 N ke kiri. Jika gaya gesek diabaikan, resultan gaya pada kotak adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '80 N ke kanan' },
+      { id: 'B', text: '20 N ke kanan' },
+      { id: 'C', text: '20 N ke kiri' },
+      { id: 'D', text: '80 N ke kiri' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-21',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'pg',
+    prompt: 'Dalam pengamatan, siswa menemukan dua organisme. Organisme P memiliki akar, batang, dan daun serta mampu membuat makanan sendiri. Organisme Q tidak memiliki akar, batang, dan daun sejati serta hidup di tempat lembap. Kesimpulan paling tepat adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'P memiliki ciri umum tumbuhan, sedangkan Q perlu dikaji berdasarkan ciri khususnya untuk menentukan kelompok' },
+      { id: 'B', text: 'P dan Q pasti termasuk hewan' },
+      { id: 'C', text: 'P pasti termasuk fungi' },
+      { id: 'D', text: 'Q pasti merupakan benda mati' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-22',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 22,
+    type: 'pg',
+    prompt: 'Sebuah sekolah ingin meningkatkan keanekaragaman hayati di halaman. Mereka memilih menanam beberapa jenis tumbuhan lokal, menyediakan sumber air, dan mengurangi penggunaan pestisida. Alasan ilmiah yang paling kuat adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'semua serangga harus dimusnahkan' },
+      { id: 'B', text: 'semakin beragam habitat dan sumber makanan, semakin banyak organisme yang berpeluang hidup' },
+      { id: 'C', text: 'pestisida selalu meningkatkan jumlah spesies' },
+      { id: 'D', text: 'tumbuhan lokal tidak berinteraksi dengan organisme lain' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ipa-23',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 23,
+    type: 'pg',
+    prompt: 'Sendok logam dan sendok plastik dimasukkan ke dalam teh panas dalam waktu yang sama. Pegangan sendok logam terasa lebih cepat panas. Kesimpulan yang paling tepat adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'logam merupakan penghantar panas yang lebih baik daripada plastik' },
+      { id: 'B', text: 'plastik selalu memiliki suhu lebih tinggi daripada logam' },
+      { id: 'C', text: 'panas hanya dapat berpindah melalui udara' },
+      { id: 'D', text: 'logam menghasilkan kalor sendiri' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ipa-24',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 24,
+    type: 'pg',
+    prompt: 'Hasil percobaan tinggi tanaman dari tiga pengulangan adalah 12 cm, 13 cm, dan 20 cm. Dua hasil pertama sangat dekat, sedangkan hasil ketiga jauh berbeda. Tindakan ilmiah yang paling tepat adalah ...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'langsung membuang data 20 cm karena berbeda' },
+      { id: 'B', text: 'mengubah data agar sama dengan data lain' },
+      { id: 'C', text: 'memeriksa kemungkinan kesalahan pengukuran atau kondisi percobaan sebelum menarik kesimpulan' },
+      { id: 'D', text: 'memilih data yang paling disukai' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ipa-25',
+    bankId: 'qbank-ipa',
+    subjectId: 'sbj-ipa',
+    classId: 'all',
+    grade: 'Semua',
+    number: 25,
+    type: 'pg',
+    prompt: 'Sebuah satelit buatan digunakan untuk memantau awan dan perkembangan badai. Data dari satelit membantu manusia menentukan peringatan dini cuaca. Dari contoh tersebut, manfaat mempelajari Bumi dan tata surya adalah ...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'hanya untuk mengetahui nama-nama planet' },
+      { id: 'B', text: 'membantu manusia memahami fenomena alam dan membuat keputusan yang lebih tepat' },
+      { id: 'C', text: 'membuat cuaca dapat dikendalikan sepenuhnya' },
+      { id: 'D', text: 'menghilangkan semua bencana alam' }
+    ],
+    correctAnswers: ['B']
+  }
+];
+
+// =========================================================================
+// 3. ILMU PENGETAHUAN SOSIAL (IPS) - 38 SOAL
+// =========================================================================
+export const IPS_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'ips-1',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'Perhatikan pernyataan berikut!\n(1) Berkembangnya semangat Gold, Gospel, dan Glory.\n(2) Keinginan mencari daerah penghasil rempah-rempah.\n(3) Penemuan mesin uap sebagai sarana transportasi utama.\n(4) Adanya keyakinan bahwa bumi berbentuk bulat.\n(5) Kemajuan teknologi pelayaran, seperti kompas dan peta.\n(6) Keinginan membentuk kerja sama ekonomi ASEAN.\n\nPernyataan yang menjadi latar belakang penjelajahan samudra oleh bangsa Eropa ditunjukkan oleh ....',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), (4), dan (5)' },
+      { id: 'B', text: '(1), (3), (5), dan (6)' },
+      { id: 'C', text: '(2), (3), (4), dan (6)' },
+      { id: 'D', text: '(1), (2), (3), dan (6)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ips-2',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'Perhatikan pernyataan berikut!\n(1) Memperoleh keuntungan dari perdagangan rempah-rempah.\n(2) Menyebarkan agama Nasrani ke daerah yang dikunjungi.\n(3) Meningkatkan kejayaan dan kekuasaan negara asal.\n(4) Membantu rakyat Nusantara mencapai kemerdekaan.\n(5) Menguasai jalur perdagangan internasional.\n(6) Menjalin persahabatan tanpa kepentingan ekonomi dan politik.\n\nTujuan bangsa Barat datang ke Indonesia yang sesuai dengan semangat 3G ditunjukkan oleh nomor ....',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (3), (4), dan (6)' },
+      { id: 'B', text: '(1), (2), (3), dan (5)' },
+      { id: 'C', text: '(2), (4), (5), dan (6)' },
+      { id: 'D', text: '(1), (2), (4), dan (6)' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ips-3',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'Sistem Tanam Paksa (Cultuurstelsel) yang diterapkan pemerintah kolonial Belanda sejak tahun 1830 menimbulkan berbagai pengaruh bagi masyarakat Indonesia. Pernyataan yang menunjukkan pengaruh Sistem Tanam Paksa bagi rakyat Indonesia adalah ....\n(1) Banyak petani kehilangan kesempatan menanam tanaman pangan.\n(2) Terjadi kelaparan di beberapa daerah akibat berkurangnya lahan pertanian pangan.\n(3) Pendapatan petani meningkat secara merata di seluruh wilayah Indonesia.\n(4) Rakyat harus menyerahkan sebagian hasil panennya kepada pemerintah kolonial.\n(5) Beban kerja rakyat bertambah karena harus mengerjakan lahan tanaman wajib.',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), (3), dan (4)' },
+      { id: 'B', text: '(2), (3), (4), dan (5)' },
+      { id: 'C', text: '(1), (2), (4), dan (5)' },
+      { id: 'D', text: '(1), (3), (4), dan (5)' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ips-4',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'Meskipun lebih banyak merugikan rakyat Indonesia, Sistem Tanam Paksa juga meninggalkan beberapa dampak positif. Pernyataan yang termasuk dampak positif Sistem Tanam Paksa bagi bangsa Indonesia adalah ....\n(1) Masyarakat mulai mengenal berbagai jenis tanaman ekspor.\n(2) Rakyat memperoleh pengalaman dalam teknik budidaya tanaman perdagangan.\n(3) Seluruh keuntungan hasil pertanian dinikmati oleh petani Indonesia.\n(4) Berkembangnya sarana transportasi untuk mendukung pengangkutan hasil perkebunan.\n(5) Bertambahnya pengetahuan masyarakat mengenai kegiatan ekonomi perdagangan internasional.',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), (3), dan (4)' },
+      { id: 'B', text: '(2), (3), (4), dan (5)' },
+      { id: 'C', text: '(1), (3), (4), dan (5)' },
+      { id: 'D', text: '(1), (2), (4), dan (5)' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'ips-5',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'benar_salah',
+    prompt: 'Perang Aceh (1873-1904) terjadi karena Belanda ingin menguasai wilayah Aceh yang memiliki letak strategis dalam perdagangan internasional.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'ips-6',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'benar_salah',
+    prompt: 'Perang Aceh berlangsung dalam waktu yang singkat sehingga Belanda dapat dengan mudah menguasai Aceh.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'ips-7',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'benar_salah',
+    prompt: 'Snouck Hurgronje membantu Belanda dalam Perang Aceh dengan mempelajari kehidupan dan kebiasaan masyarakat Aceh.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'ips-8',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'benar_salah',
+    prompt: 'Perlawanan rakyat Aceh hanya dipimpin oleh sultan tanpa adanya peran ulama dan tokoh masyarakat.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'ips-9',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'pg',
+    prompt: 'Perang Diponegoro (1825–1830) dipimpin oleh Pangeran Diponegoro melawan pemerintah kolonial Belanda. Salah satu penyebab khusus terjadinya Perang Diponegoro adalah ....',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Belanda memonopoli perdagangan rempah-rempah di Maluku' },
+      { id: 'B', text: 'Belanda memasang tiang pancang yang melewati makam leluhur Diponegoro tanpa izin' },
+      { id: 'C', text: 'Belanda membubarkan Kesultanan Yogyakarta' },
+      { id: 'D', text: 'Belanda melarang rakyat menanam tanaman pangan' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ips-10',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'pg',
+    prompt: 'Taktik yang digunakan Pangeran Diponegoro untuk menghadapi pasukan Belanda dalam Perang Jawa adalah ....',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Politik adu domba' },
+      { id: 'B', text: 'Perang terbuka di kota-kota besar' },
+      { id: 'C', text: 'Perang gerilya' },
+      { id: 'D', text: 'Blokade pelabuhan' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ips-11',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'pg',
+    prompt: 'Pernyataan yang tepat mengenai Perang Diponegoro adalah ....',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Perang berlangsung selama satu tahun dan dimenangkan Belanda dengan mudah.' },
+      { id: 'B', text: 'Perang Diponegoro terjadi karena persaingan perdagangan antara Belanda dan Inggris.' },
+      { id: 'C', text: 'Perang Diponegoro berlangsung dari tahun 1825 hingga 1830.' },
+      { id: 'D', text: 'Perang Diponegoro dipimpin oleh Sultan Hasanuddin.' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ips-12',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'pg',
+    prompt: 'Akhir dari Perang Diponegoro ditandai dengan ....',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Penyerahan diri seluruh pasukan Jawa kepada Belanda' },
+      { id: 'B', text: 'Dipindahkannya ibu kota Yogyakarta ke Batavia' },
+      { id: 'C', text: 'Kemenangan Pangeran Diponegoro atas Belanda' },
+      { id: 'D', text: 'Ditangkapnya Pangeran Diponegoro saat menghadiri perundingan di Magelang' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'ips-13',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan pernyataan masa Pendudukan Jepang di Indonesia dengan istilah yang tepat:',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-ips-1', leftText: 'Istilah untuk tenaga kerja paksa pada masa Jepang', rightText: 'Romusha' },
+      { id: 'mp-ips-2', leftText: 'Tujuan utama Jepang mengerahkan tenaga kerja paksa', rightText: 'Membangun sarana dan fasilitas perang' },
+      { id: 'mp-ips-3', leftText: 'Sebutan yang digunakan Jepang untuk menarik simpati rakyat Indonesia', rightText: 'Saudara Tua' },
+      { id: 'mp-ips-4', leftText: 'Pemanfaatan hasil bumi Indonesia secara besar-besaran untuk kepentingan Jepang disebut', rightText: 'Eksploitasi kekayaan alam' },
+      { id: 'mp-ips-5', leftText: 'Salah satu dampak eksploitasi sumber daya alam oleh Jepang', rightText: 'Terjadinya kekurangan bahan pangan' },
+      { id: 'mp-ips-6', leftText: 'Salah satu proyek yang dikerjakan oleh tenaga kerja paksa', rightText: 'Pembangunan rel kereta api' }
+    ]
+  },
+  {
+    id: 'ips-14',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'benar_salah',
+    prompt: 'Politik Etis muncul karena adanya kritik dari sebagian tokoh Belanda yang menganggap negaranya memiliki utang kehormatan kepada rakyat Indonesia.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'ips-15',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'benar_salah',
+    prompt: 'Program edukasi dalam Politik Etis bertujuan memberikan kesempatan pendidikan kepada penduduk pribumi, meskipun pada praktiknya masih terbatas.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'ips-16',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'benar_salah',
+    prompt: 'Politik Etis muncul karena pemerintah Belanda ingin memberikan kemerdekaan kepada Indonesia secepatnya.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'ips-17',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'benar_salah',
+    prompt: 'Program Politik Etis yang dikenal sebagai Trias van Deventer terdiri atas edukasi, irigasi, dan transmigrasi.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'ips-18',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'benar_salah',
+    prompt: 'Pelaksanaan Politik Etis sepenuhnya berhasil meningkatkan kesejahteraan seluruh rakyat Indonesia tanpa menimbulkan keuntungan bagi Belanda.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'ips-19',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'benar_salah',
+    prompt: 'Program irigasi dalam Politik Etis dilakukan untuk memperluas jaringan pengairan sehingga dapat membantu meningkatkan hasil pertanian penduduk.',
+    points: 1,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'ips-20',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'pg',
+    prompt: 'Bank memiliki berbagai fungsi dalam kegiatan ekonomi masyarakat. Fungsi bank ditunjukkan oleh pernyataan berikut ....\n(1) Menghimpun dana dari masyarakat dalam bentuk simpanan.\n(2) Menyalurkan dana kepada masyarakat dalam bentuk kredit.\n(3) Mengelola seluruh kekayaan alam suatu negara.\n(4) Memberikan layanan transaksi pembayaran.\n(5) Menetapkan undang-undang perbankan.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '(1), (3), dan (5)' },
+      { id: 'B', text: '(1), (2), dan (4)' },
+      { id: 'C', text: '(2), (3), dan (4)' },
+      { id: 'D', text: '(3), (4), dan (5)' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ips-21',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'pg',
+    prompt: 'Berikut yang termasuk manfaat menabung di bank adalah ....\n(1) Uang tersimpan lebih aman.\n(2) Memudahkan transaksi keuangan.\n(3) Mendapatkan layanan penyimpanan dana.\n(4) Terhindar dari semua risiko kehilangan uang.\n(5) Membantu mengatur keuangan secara lebih terencana.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '(1), (2), (3), dan (4)' },
+      { id: 'B', text: '(2), (3), (4), dan (5)' },
+      { id: 'C', text: '(1), (2), (3), dan (5)' },
+      { id: 'D', text: '(1), (3), (4), dan (5)' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ips-22',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 22,
+    type: 'pg',
+    prompt: 'Perhatikan manfaat keberadaan bank berikut!\n(1) Membantu masyarakat menyimpan dana dengan aman.\n(2) Mempermudah transaksi pembayaran dan pengiriman uang.\n(3) Menyediakan pinjaman untuk kegiatan usaha dan konsumsi.\n(4) Menentukan kebijakan luar negeri suatu negara.\n(5) Mendorong pertumbuhan kegiatan ekonomi masyarakat.\n\nManfaat bank bagi masyarakat dan perekonomian ditunjukkan oleh ....',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '(1), (2), (3), dan (5)' },
+      { id: 'B', text: '(1), (2), (4), dan (5)' },
+      { id: 'C', text: '(2), (3), (4), dan (5)' },
+      { id: 'D', text: '(1), (3), (4), dan (5)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ips-23',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 23,
+    type: 'pg',
+    prompt: 'Berikut ini yang merupakan contoh kegiatan yang menunjukkan peran bank dalam perekonomian adalah ....\n(1) Seorang pedagang memperoleh kredit usaha dari bank untuk menambah modal.\n(2) Bank memberikan layanan transfer uang antarwilayah.\n(3) Bank menetapkan harga barang kebutuhan pokok di pasar.\n(4) Masyarakat menyimpan uang dalam bentuk tabungan di bank.\n(5) Bank mengeluarkan peraturan pendidikan nasional.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '(1), (3), dan (4)' },
+      { id: 'B', text: '(2), (3), dan (5)' },
+      { id: 'C', text: '(3), (4), dan (5)' },
+      { id: 'D', text: '(1), (2), dan (4)' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'ips-24',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 24,
+    type: 'pg',
+    prompt: 'Perhatikan pernyataan berikut!\n(1) Rina menerima santunan biaya pengobatan setelah mengalami kecelakaan.\n(2) Andi memperoleh pinjaman uang dengan menjaminkan telepon genggamnya.\n(3) Pak Budi menyimpan uangnya dalam tabungan di bank.\n(4) Seorang pekerja menerima dana setelah memasuki masa pensiun.\n\nKeterangan: a = contoh pemanfaatan Lembaga Keuangan Bukan Bank (LKBB); b = bukan contoh pemanfaatan LKBB. Pasangan yang tepat ditunjukkan oleh ....',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '1a, 2a, 3b' },
+      { id: 'B', text: '1b, 2a, 4a' },
+      { id: 'C', text: '1a, 3a, 4b' },
+      { id: 'D', text: '2b, 3a, 4a' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ips-25',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 25,
+    type: 'pg',
+    prompt: 'Perhatikan pernyataan berikut!\n(1) Seorang pedagang memperoleh pembiayaan kendaraan usaha melalui leasing.\n(2) Seorang siswa membuka rekening tabungan di bank.\n(3) Keluarga Beni mengikuti program asuransi kesehatan.\n(4) Seorang karyawan memperoleh manfaat dana pensiun setelah berhenti bekerja.\n\nKeterangan: a = contoh layanan yang diberikan LKBB; b = bukan contoh layanan yang diberikan LKBB. Pasangan yang tepat ditunjukkan oleh ....',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '1b, 2a, 3a' },
+      { id: 'B', text: '1a, 2b, 3a' },
+      { id: 'C', text: '1a, 3b, 4a' },
+      { id: 'D', text: '2a, 3a, 4b' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ips-26',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 26,
+    type: 'pg',
+    prompt: 'Perhatikan pernyataan berikut!\n(1) Pegadaian memberikan pinjaman dengan jaminan barang berharga.\n(2) Asuransi memberikan perlindungan terhadap risiko kerugian.\n(3) Bank Indonesia mencetak dan mengedarkan uang rupiah.\n(4) Dana pensiun mengelola dana untuk kesejahteraan peserta setelah pensiun.\n\nKeterangan: a = termasuk Lembaga Keuangan Bukan Bank (LKBB); b = bukan LKBB. Pasangan yang tepat ditunjukkan oleh ....',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '1a, 2a, 3b' },
+      { id: 'B', text: '1b, 2a, 4a' },
+      { id: 'C', text: '1a, 3a, 4b' },
+      { id: 'D', text: '2b, 3a, 4a' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'ips-27',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 27,
+    type: 'uraian',
+    prompt: 'Andi membutuhkan uang untuk memperbaiki sepeda motornya. Ia menggadaikan telepon genggam miliknya dan memperoleh pinjaman dana. Pertanyaan:\na. Lembaga keuangan bukan bank apa yang digunakan Andi?\nb. Mengapa lembaga tersebut dapat membantu Andi memperoleh dana dengan cepat?',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk jawaban a (Pegadaian); skor 3 untuk jawaban b (pinjaman diberikan dengan jaminan barang berharga, prosedur mudah dan cepat, persyaratan sederhana).'
+  },
+  {
+    id: 'ips-28',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 28,
+    type: 'uraian',
+    prompt: 'Di sebuah sekolah, terjadi perselisihan antara dua kelompok siswa akibat saling mengejek melalui media sosial. Awalnya hanya berupa komentar, tetapi kemudian berkembang menjadi pertengkaran yang menyebabkan suasana belajar menjadi tidak nyaman. Pertanyaan:\nApa yang menyebabkan terjadinya konflik pada kasus tersebut? Sebutkan dua dampak negatif yang dapat timbul akibat konflik tersebut!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk penyebab konflik (saling mengejek di media sosial, kurangnya sikap saling menghargai/toleransi, perbedaan yang tidak dikelola dengan baik); skor 1 untuk setiap dampak negatif yang tepat (maksimal 2), misalnya suasana belajar terganggu, permusuhan, prestasi menurun.'
+  },
+  {
+    id: 'ips-29',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 29,
+    type: 'uraian',
+    prompt: 'Di sebuah desa, warga berdebat mengenai rencana pembangunan lapangan olahraga. Sebagian warga setuju karena dapat menjadi sarana kegiatan masyarakat, sedangkan sebagian lainnya menolak karena khawatir lahan pertanian akan berkurang. Pertanyaan:\nMengapa perbedaan pendapat dapat menimbulkan konflik sosial? Bagaimana cara menyelesaikan konflik tersebut agar tidak merugikan masyarakat?',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk penjelasan bahwa perbedaan kepentingan/pandangan yang tidak dikelola dapat memicu konflik; skor 3 untuk cara penyelesaian yang tepat (musyawarah, mediasi, kompromi, mencari solusi yang menguntungkan kedua pihak).'
+  },
+  {
+    id: 'ips-30',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 30,
+    type: 'uraian',
+    prompt: 'Di media sosial sering muncul informasi yang belum tentu benar. Suatu hari, beredar kabar bahwa salah satu kelompok masyarakat mendapat perlakuan istimewa dari pemerintah. Setelah ditelusuri, informasi tersebut ternyata tidak benar. Namun, informasi itu sudah memicu pertengkaran di antara warga. Pertanyaan:\nFaktor apa yang menyebabkan konflik pada kasus tersebut? Sebutkan dua cara yang dapat dilakukan masyarakat untuk mencegah konflik serupa!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 1 untuk faktor penyebab (informasi bohong/hoaks, kurangnya literasi, prasangka); skor 2 untuk cara pencegahan pertama beserta penjelasannya; skor 2 untuk cara pencegahan kedua beserta penjelasannya (misalnya mengecek kebenaran informasi, tidak menyebarkan berita yang belum jelas, dialog antarkelompok).'
+  },
+  {
+    id: 'ips-31',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 31,
+    type: 'uraian',
+    prompt: 'Di sebuah daerah terjadi konflik antara warga dan perusahaan yang akan membuka lahan perkebunan. Sebagian warga mendukung karena membuka lapangan pekerjaan, sementara sebagian lainnya khawatir lingkungan akan rusak dan sumber air berkurang. Pertanyaan:\nSebutkan dampak positif dan dampak negatif yang mungkin muncul dari konflik tersebut! Mengapa konflik tidak selalu berdampak buruk bagi masyarakat?',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 1 untuk dampak positif yang tepat; skor 1 untuk dampak negatif yang tepat; skor 3 untuk alasan konflik tidak selalu berdampak buruk (dapat memunculkan kesadaran, perubahan, solusi yang lebih baik, atau mempererat solidaritas jika dikelola dengan baik).'
+  },
+  {
+    id: 'ips-32',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 32,
+    type: 'pg',
+    prompt: 'Masa Demokrasi Parlementer berlangsung pada tahun 1950–1959. Pemerintah berupaya memperbaiki perekonomian melalui berbagai program. Perhatikan beberapa program ekonomi berikut:\n(1) Program Benteng.\n(2) Rencana Lima Tahun.\n(3) Nasionalisasi De Javasche Bank.\n(4) Gunting Syafruddin.\n(5) Rencana Pembangunan Lima Tahun Pertama (REPELITA I).\n\nManakah program yang benar-benar dilaksanakan pada masa Demokrasi Parlementer (1950–1959)?',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), dan (5)' },
+      { id: 'B', text: '(1), (3), dan (4)' },
+      { id: 'C', text: '(2), (3), dan (5)' },
+      { id: 'D', text: '(2), (4), dan (5)' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'ips-33',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 33,
+    type: 'pg',
+    prompt: 'Indonesia memasuki Orde Baru sejak tahun 1966 di bawah kepemimpinan Soeharto. Berikut ini merupakan program yang diterapkan pada masa Orde Baru:\n(1) Pelita (Pembangunan Lima Tahun).\n(2) Repelita.\n(3) Stabilitas politik dan keamanan nasional.\n(4) Program 100 Hari Kabinet.\n(5) Swasembada pangan.\n\nProgram manakah yang merupakan bagian dari kebijakan pembangunan Orde Baru?',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), (3), dan (4)' },
+      { id: 'B', text: '(2), (3), (4), dan (5)' },
+      { id: 'C', text: '(1), (2), (3), dan (5)' },
+      { id: 'D', text: '(1), (3), (4), dan (5)' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'ips-34',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 34,
+    type: 'uraian',
+    prompt: 'Indonesia menjual kopi dan kelapa sawit ke berbagai negara di Asia dan Eropa. Berdasarkan ilustrasi tersebut, apakah kegiatan yang dilakukan Indonesia termasuk ekspor atau impor? Jelaskan alasanmu!',
+    points: 5,
+    difficulty: 'mudah',
+    options: [],
+    essayRubric: 'Skor 2 untuk jawaban ekspor; skor 3 untuk alasan (kegiatan menjual barang ke luar negeri/negara lain).'
+  },
+  {
+    id: 'ips-35',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 35,
+    type: 'uraian',
+    prompt: 'Seorang pengusaha kerajinan rotan di Kalimantan Selatan berhasil menjual produknya ke beberapa negara. Akibatnya, jumlah pesanan meningkat dan ia mempekerjakan lebih banyak karyawan. Jelaskan dua tujuan perdagangan internasional yang dapat dilihat dari kasus tersebut!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk tujuan pertama (misalnya memperluas pasar); skor 2 untuk tujuan kedua (misalnya memperoleh keuntungan/meningkatkan pendapatan); skor 1 untuk mengaitkan penjelasan dengan kasus.'
+  },
+  {
+    id: 'ips-36',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 36,
+    type: 'uraian',
+    prompt: 'Seorang pedagang elektronik di Indonesia membeli telepon genggam dari Korea Selatan untuk dijual kembali di dalam negeri. Jelaskan kegiatan ekonomi yang dimaksud!',
+    points: 5,
+    difficulty: 'mudah',
+    options: [],
+    essayRubric: 'Skor 2 untuk menyebutkan kegiatan impor; skor 3 untuk penjelasan (membeli barang dari luar negeri, dalam hal ini dari Korea Selatan, untuk memenuhi kebutuhan atau dijual di dalam negeri).'
+  },
+  {
+    id: 'ips-37',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 37,
+    type: 'uraian',
+    prompt: 'Indonesia mengimpor gandum dari luar negeri karena kondisi alam Indonesia kurang cocok untuk menghasilkan gandum dalam jumlah besar. Gandum tersebut kemudian diolah menjadi berbagai produk makanan yang dikonsumsi masyarakat. Menurut pendapatmu, mengapa Indonesia tetap melakukan impor gandum meskipun memiliki banyak sumber daya alam? Jelaskan dua alasan!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk alasan pertama (misalnya kondisi alam kurang cocok untuk menanam gandum); skor 2 untuk alasan kedua (misalnya memenuhi kebutuhan dalam negeri yang tidak tercukupi produksi sendiri); skor 1 untuk penjelasan yang runtut dan sesuai kasus.'
+  },
+  {
+    id: 'ips-38',
+    bankId: 'qbank-ips',
+    subjectId: 'sbj-ips',
+    classId: 'all',
+    grade: 'Semua',
+    number: 38,
+    type: 'uraian',
+    prompt: 'Sebuah perusahaan makanan di Indonesia mengekspor produknya ke negara lain. Namun, produk tersebut ditolak karena tidak memenuhi standar kualitas dan keamanan pangan yang ditetapkan oleh negara tujuan. Hambatan perdagangan internasional apa yang dihadapi perusahaan tersebut? Apa yang harus dilakukan perusahaan agar produknya dapat diterima di negara tujuan?',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk hambatan (perbedaan peraturan/standar antarnegara); skor 3 untuk solusi yang tepat (menyesuaikan produk dengan standar kualitas dan keamanan pangan negara tujuan, uji mutu, sertifikasi, mempelajari regulasi negara tujuan).'
+  }
+];
+
+// =========================================================================
+// 4. MATEMATIKA (MTK) - 26 SOAL
+// =========================================================================
+export const MTK_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'mtk-1',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'Pilihlah bilangan yang merupakan hasil dari operasi berikut: $$8 \\times 4 + 25 \\div 5 - 2$$',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '35' },
+      { id: 'B', text: '41' },
+      { id: 'C', text: '52' },
+      { id: 'D', text: '63' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'mtk-2',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'Jika $$5x - 3 = 2x + 6$$, maka nilai $$x$$ adalah...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '2' },
+      { id: 'B', text: '3' },
+      { id: 'C', text: '4' },
+      { id: 'D', text: '5' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'mtk-3',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'Seorang siswa memiliki uang Rp75.000. Ia membelanjakan Rp32.500 dan kemudian menerima uang tambahan sebesar Rp20.000. Berapa sisa uangnya sekarang?',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Rp42.500' },
+      { id: 'B', text: 'Rp53.500' },
+      { id: 'C', text: 'Rp62.500' },
+      { id: 'D', text: 'Rp35.000' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'mtk-4',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'Rasio siswa laki-laki dan perempuan di suatu kelas adalah 3 : 2. Jika jumlah seluruh siswa adalah 40 orang, maka banyaknya siswa perempuan adalah...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '24' },
+      { id: 'B', text: '20' },
+      { id: 'C', text: '18' },
+      { id: 'D', text: '16' }
+    ],
+    correctAnswers: ['D']
+  },
+  {
+    id: 'mtk-5',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'pg',
+    prompt: 'Sebuah titik B(5, −3) dicerminkan terhadap sumbu-Y. Koordinat bayangan titik B adalah...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(−5, −3)' },
+      { id: 'B', text: '(5, 3)' },
+      { id: 'C', text: '(−5, 3)' },
+      { id: 'D', text: '(3, 5)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'mtk-6',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'pg',
+    prompt: 'Titik C(2, 4) diputar sejauh 90° berlawanan arah jarum jam terhadap titik pusat (0, 0). Koordinat hasil rotasi adalah...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(4, 2)' },
+      { id: 'B', text: '(−2, −4)' },
+      { id: 'C', text: '(−4, 2)' },
+      { id: 'D', text: '(−2, 4)' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'mtk-7',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'pg',
+    prompt: 'Sebuah bangun dipindahkan ke kanan sejauh 5 satuan dan ke atas sejauh 2 satuan. Transformasi yang terjadi adalah...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Refleksi' },
+      { id: 'B', text: 'Translasi' },
+      { id: 'C', text: 'Rotasi' },
+      { id: 'D', text: 'Dilatasi' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'mtk-8',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan bentuk aljabar berikut dengan hasil penyederhanaannya:',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-mtk-1', leftText: '3(x + 5)', rightText: '3x + 15' },
+      { id: 'mp-mtk-2', leftText: '4x + 2x + 7 - 2', rightText: '6x + 5' },
+      { id: 'mp-mtk-3', leftText: '2(x + 3)', rightText: '2x + 6' }
+    ]
+  },
+  {
+    id: 'mtk-9',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan pertanyaan tentang lingkaran berikut dengan jawaban yang tepat (gunakan $\\pi = \\frac{22}{7}$):',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-mtk-4', leftText: 'Titik pusat ke tepi lingkaran disebut...', rightText: 'Jari-jari (r)' },
+      { id: 'mp-mtk-5', leftText: 'Luas lingkaran dengan diameter 14 cm adalah...', rightText: '154 cm²' },
+      { id: 'mp-mtk-6', leftText: 'Jarak antara dua titik pada lingkaran yang melalui pusat disebut...', rightText: 'Diameter (d)' }
+    ]
+  },
+  {
+    id: 'mtk-10',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan soal matematika berikut dengan jawaban yang tepat:',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-mtk-7', leftText: 'Hasil dari 7/8 dalam bentuk desimal adalah...', rightText: '0,875' },
+      { id: 'mp-mtk-8', leftText: 'Sebuah titik B(5, -3) dicerminkan terhadap sumbu-X. Koordinat bayangan titik B adalah...', rightText: '(5, 3)' },
+      { id: 'mp-mtk-9', leftText: 'Titik D(2, -1) didilatasi dengan pusat (0, 0) dan faktor skala 3. Hasil dilatasi adalah...', rightText: '(6, -3)' }
+    ]
+  },
+  {
+    id: 'mtk-11',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'pg',
+    prompt: 'Dua bangun datar disebut kongruen jika memiliki bentuk dan ukuran yang sama persis. Pilih semua pernyataan yang benar tentang bangun yang kongruen:\n(1) Panjang sisi-sisinya sama.\n(2) Sudut-sudut yang bersesuaian sama besar.\n(3) Bangun dapat berbeda bentuk asal luasnya sama.\n(4) Bangun dapat ditumpuk tepat satu sama lain.\n(5) Salah satu bangun harus diputar agar menjadi kongruen.',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), dan (4)' },
+      { id: 'B', text: '(1), (3), dan (5)' },
+      { id: 'C', text: '(2), (3), dan (4)' },
+      { id: 'D', text: '(3), (4), dan (5)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'mtk-12',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'pg',
+    prompt: 'Dua segitiga dikatakan sebangun jika memiliki bentuk yang sama, meskipun ukurannya berbeda. Pilih semua pernyataan yang benar tentang segitiga sebangun:\n(1) Sisi-sisi yang bersesuaian memiliki perbandingan yang sama.\n(2) Sudut-sudut yang bersesuaian sama besar.\n(3) Kedua segitiga harus memiliki ukuran yang sama.\n(4) Rasio sisi harus konstan.\n(5) Segitiga sebangun pasti juga kongruen.',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), dan (4)' },
+      { id: 'B', text: '(1), (3), dan (5)' },
+      { id: 'C', text: '(2), (3), dan (4)' },
+      { id: 'D', text: '(3), (4), dan (5)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'mtk-13',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'pg',
+    prompt: 'Dalam peta berskala 1 : 1000, panjang sebuah jalan adalah 5 cm. Pilih semua pernyataan yang benar:\n(1) Panjang jalan sebenarnya adalah 5 meter.\n(2) Panjang jalan sebenarnya adalah 50 meter.\n(3) Panjang jalan sebenarnya adalah 500 meter.\n(4) Peta dan jalan sebenarnya merupakan bangun sebangun.\n(5) Skala menunjukkan bahwa semua ukuran diperkecil 1000 kali.',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (2), dan (4)' },
+      { id: 'B', text: '(2), (4), dan (5)' },
+      { id: 'C', text: '(3), (4), dan (5)' },
+      { id: 'D', text: '(1), (3), dan (5)' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'mtk-14',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'pg',
+    prompt: 'Perhatikan empat persegi panjang berikut: persegi panjang A berukuran 4 cm × 6 cm; (1) persegi panjang B berukuran 6 cm × 9 cm; (2) persegi panjang C berukuran 8 cm × 12 cm; (3) persegi panjang D berukuran 2 cm × 4 cm. Bangun manakah yang sebangun dengan persegi panjang A?',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1) dan (2)' },
+      { id: 'B', text: '(1) dan (3)' },
+      { id: 'C', text: 'Tidak ada yang sebangun' },
+      { id: 'D', text: 'Semua sebangun' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'mtk-15',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'benar_salah',
+    prompt: 'Pola bilangan: 1, 3, 5, 7, 9, ... Pernyataan: Bilangan ke-10 dari pola tersebut adalah 19.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'mtk-16',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'benar_salah',
+    prompt: 'Rotasi 180° terhadap titik asal (0, 0) mengubah titik (x, y) menjadi (x, −y).',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'mtk-17',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'benar_salah',
+    prompt: 'Jika dua segitiga sebangun, maka semua sudut yang bersesuaian sama besar, dan panjang sisi-sisi bersesuaian memiliki perbandingan yang sama.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'mtk-18',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'benar_salah',
+    prompt: 'Di sebuah kotak terdapat 5 bola merah, 3 bola biru, dan 2 bola kuning. Semua bola memiliki ukuran dan bentuk yang sama. Rina mengambil satu bola secara acak tanpa melihat. Peluang Rina mengambil bola berwarna merah adalah lebih dari 50%.',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'mtk-19',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'benar_salah',
+    prompt: 'Data nilai ulangan matematika siswa kelas 9A: 80, 85, 90, 85, 70, 75, 85, 90, 95, 85. Modus dari data tersebut adalah 85.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'mtk-20',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'benar_salah',
+    prompt: 'Data nilai ulangan matematika siswa kelas 9A: 80, 85, 90, 85, 70, 75, 85, 90, 95, 85. Median dari data tersebut adalah 75.',
+    points: 2,
+    difficulty: 'sedang',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'mtk-21',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'benar_salah',
+    prompt: 'Seorang guru mencatat tinggi badan 5 siswanya (dalam cm): 150, 155, 160, 165, 170. Rata-rata tinggi badan siswa tersebut adalah 165 cm.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'mtk-22',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 22,
+    type: 'uraian',
+    prompt: 'Jika $x = 2$ dan $y = 3$, tentukan nilai dari ekspresi $5x^2 - 3y + 4$!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk substitusi yang benar $5(2)^2 - 3(3) + 4$; skor 2 untuk perhitungan $20 - 9 + 4$; skor 1 untuk hasil akhir 15.'
+  },
+  {
+    id: 'mtk-23',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 23,
+    type: 'uraian',
+    prompt: 'Tentukan keliling dan luas lingkaran, jika diketahui jari-jari $r = 14$ cm dan $\\pi = \\frac{22}{7}$!',
+    points: 7,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Keliling: skor 1 untuk rumus $K = 2\\pi r$, skor 2 untuk hasil 88 cm. Luas: skor 1 untuk rumus $L = \\pi r^2$, skor 1 untuk substitusi, skor 2 untuk hasil 616 cm².'
+  },
+  {
+    id: 'mtk-24',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 24,
+    type: 'uraian',
+    prompt: 'Tentukan volume tabung jika diketahui $r = 7$ cm dan $t = 15$ cm! (gunakan $\\pi = \\frac{22}{7}$)',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk rumus $V = \\pi r^2 t$; skor 2 untuk substitusi yang benar; skor 2 untuk hasil 2.310 cm³.'
+  },
+  {
+    id: 'mtk-25',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 25,
+    type: 'uraian',
+    prompt: 'Sebuah dadu bersisi 6 dilempar satu kali. Tentukan peluang muncul angka genap!',
+    points: 4,
+    difficulty: 'mudah',
+    options: [],
+    essayRubric: 'Skor 1 untuk banyak seluruh kejadian = 6; skor 1 untuk kejadian genap = {2, 4, 6} atau 3 kejadian; skor 2 untuk hasil peluang 3/6 = 1/2.'
+  },
+  {
+    id: 'mtk-26',
+    bankId: 'qbank-mat',
+    subjectId: 'sbj-mat',
+    classId: 'all',
+    grade: 'Semua',
+    number: 26,
+    type: 'uraian',
+    prompt: 'Harga 1 buku adalah Rp15.000 dan harga 1 pensil adalah Rp3.000. Jika Andi membeli 2 buku dan $x$ pensil, tuliskan bentuk aljabar dari total belanja Andi!',
+    points: 5,
+    difficulty: 'mudah',
+    options: [],
+    essayRubric: 'Skor 2 untuk harga 2 buku = 30.000; skor 2 untuk harga $x$ pensil = 3.000x; skor 1 untuk bentuk aljabar akhir 30.000 + 3.000x.'
+  }
+];
+
+// =========================================================================
+// 5. PENDIDIKAN AGAMA ISLAM (PAI) - 21 SOAL
+// =========================================================================
+export const PAI_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'pai-1',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'Di sebuah grup chat kelas, terjadi perdebatan sengit mengenai tata cara pelaksanaan kegiatan amal. Ada dua kubu yang saling merasa paling benar dan menggunakan dalil masing-masing. Sebagai ketua kelas yang memahami Q.S. an-Nisā’/4: 59, Andi mencoba menengahi permasalahan tersebut agar tidak terjadi perpecahan. Berdasarkan Q.S. an-Nisā’/4: 59, langkah paling tepat yang harus disarankan Andi kepada teman-temannya untuk menyelesaikan perselisihan tersebut adalah...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Melakukan voting suara terbanyak untuk menentukan pemenang.' },
+      { id: 'B', text: 'Mengembalikan permasalahan tersebut kepada aturan Al-Qur’an dan Hadis (Rasul).' },
+      { id: 'C', text: 'Meminta pendapat orang tua masing-masing.' },
+      { id: 'D', text: 'Menghentikan kegiatan amal karena menimbulkan masalah.' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pai-2',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'Rina sedang mengerjakan ujian sekolah di ruangan yang pengawasnya sedang izin ke toilet sebentar. Teman di sebelahnya mengajak Rina untuk bertukar jawaban. Rina menolak dengan halus karena ia meyakini bahwa meskipun pengawas tidak ada, Allah Swt. tetap melihat sekecil apapun gerak-geriknya, bahkan lirikan matanya. Sikap Rina tersebut merupakan bentuk pengamalan dari keyakinan terhadap al-Asmā’ al-Husnā...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Al-’Alīm' },
+      { id: 'B', text: 'Al-Khabīr' },
+      { id: 'C', text: 'Al-Baṣīr' },
+      { id: 'D', text: 'Al-Samī’' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pai-3',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'Pak Budi adalah seorang pejabat yang sangat sibuk. Meski demikian, ia selalu menyempatkan waktu untuk salat tepat waktu di masjid. Ia merasa dengan salat, hatinya menjadi tenang dan ia terhindar dari keinginan untuk melakukan korupsi atau perbuatan curang lainnya di kantor. Pengalaman Pak Budi sesuai dengan fungsi salat yang tercantum dalam Al-Qur\'an, yaitu...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Sebagai syarat untuk menjadi pejabat yang sukses.' },
+      { id: 'B', text: 'Sebagai olahraga fisik agar tubuh tetap sehat.' },
+      { id: 'C', text: 'Mencegah dari perbuatan keji dan munkar.' },
+      { id: 'D', text: 'Meningkatkan status sosial di mata masyarakat.' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pai-4',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'Timnas sepak bola Indonesia berhasil mencetak gol kemenangan di menit terakhir pertandingan. Seketika itu juga, para pemain dan pelatih langsung bersimpuh meletakkan dahi ke tanah di pinggir lapangan sebagai tanda terima kasih kepada Allah Swt. Jenis sujud yang dilakukan oleh para pemain Timnas tersebut adalah...',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Sujud Sahwi' },
+      { id: 'B', text: 'Sujud Tilawah' },
+      { id: 'C', text: 'Sujud Syukur' },
+      { id: 'D', text: 'Sujud Rukun' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pai-5',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'pg',
+    prompt: 'Pada masa kekhalifahan Bani Umayyah di Damaskus, perkembangan arsitektur Islam sangat pesat. Salah satu peninggalan bersejarah yang dibangun pada masa Khalifah Abdul Malik bin Marwan di Yerusalem (Palestina) masih berdiri kokoh hingga sekarang dan menjadi salah satu ikon arsitektur Islam. Bangunan monumental yang dimaksud dalam narasi sejarah tersebut adalah...',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Masjid Nabawi' },
+      { id: 'B', text: 'Dome of The Rock (Kubah Batu)' },
+      { id: 'C', text: 'Istana Al-Hamra' },
+      { id: 'D', text: 'Masjid Agung Damaskus' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pai-6',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'pg',
+    prompt: 'Dalam membaca Al-Qur\'an, hukum bacaan Alif Lām (Al) dibagi menjadi dua, yaitu Syamsiyyah dan Qamariyyah. Perhatikan contoh berikut:\n(1) Ar-Rahman (الرَّحْمَٰنِ)\n(2) Al-Hamdu (الْحَمْدُ)\n(3) An-Nas (النَّاسِ)\n(4) Al-Kitab (الْكِتَابِ)\n\nBerdasarkan contoh di atas, manakah yang termasuk hukum bacaan Alif Lām Syamsiyyah yang ciri utamanya huruf lam melebur (tidak dibaca) dan terdapat tasydid?',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Nomor (1) dan (3)' },
+      { id: 'B', text: 'Nomor (2) dan (4)' },
+      { id: 'C', text: 'Nomor (1) dan (2)' },
+      { id: 'D', text: 'Nomor (3) dan (4)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pai-7',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'pg',
+    prompt: 'Iman kepada Asmaul Husna berdampak pada perilaku sehari-hari. Seseorang yang meyakini Al-Khabīr (Maha Teliti/Waspada) akan tercermin dalam tindakannya. Perilaku yang mencerminkan keteladanan terhadap sifat Al-Khabīr adalah:\n(1) Mengerjakan soal ujian dengan teliti dan tidak tergesa-gesa.\n(2) Waspada dan cermat dalam menerima informasi (berita) agar tidak termakan hoaks.\n(3) Mendengarkan pembicaraan orang lain dengan seksama.\n(4) Berbagi ilmu pengetahuan kepada orang lain.',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1) dan (2)' },
+      { id: 'B', text: '(2) dan (3)' },
+      { id: 'C', text: '(3) dan (4)' },
+      { id: 'D', text: '(1) dan (4)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pai-8',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'pg',
+    prompt: 'Zikir adalah aktivitas mengingat Allah yang bisa dilakukan dalam berbagai keadaan. Manfaat zikir sangat besar bagi kesehatan mental dan spiritual seorang muslim. Hikmah dan manfaat dari melaksanakan zikir secara istikamah adalah:\n(1) Memperoleh ketenangan jiwa dan hati.\n(2) Menjauhkan diri dari kelalaian.\n(3) Mendapatkan pujian dari tetangga.\n(4) Menumbuhkan akhlak mulia dan mendekatkan diri kepada Allah.',
+    points: 4,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: '(1), (2), dan (4)' },
+      { id: 'B', text: '(1), (2), dan (3)' },
+      { id: 'C', text: '(2), (3), dan (4)' },
+      { id: 'D', text: '(1), (3), dan (4)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pai-9',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'pg',
+    prompt: 'Fulan sedang melaksanakan salat Zuhur. Di rakaat kedua, ia lupa tidak duduk tasyahud awal dan langsung berdiri ke rakaat ketiga. Ia teringat saat sudah berdiri tegak. Terkait kondisi Fulan, pernyataan yang benar adalah:\n(1) Fulan harus membatalkan salatnya dan mengulang dari awal.\n(2) Fulan melanjutkan salatnya tanpa perlu duduk kembali.\n(3) Fulan disunahkan melakukan Sujud Sahwi sebelum salam.\n(4) Fulan wajib mengganti salatnya dengan puasa.',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1) dan (2)' },
+      { id: 'B', text: '(2) dan (3)' },
+      { id: 'C', text: '(3) dan (4)' },
+      { id: 'D', text: '(1) dan (4)' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pai-10',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'pg',
+    prompt: 'Bani Umayyah di Damaskus berkuasa selama kurang lebih 90 tahun. Selama masa itu, terdapat beberapa khalifah yang sangat menonjol prestasinya dalam memajukan peradaban Islam. Tokoh-tokoh khalifah Bani Umayyah yang terkenal dengan prestasi gemilang mereka antara lain:\n(1) Mu’āwiyah bin Abū Sufyān (pendiri dan penata administrasi).\n(2) Harun Ar-Rasyid (masa keemasan ilmu pengetahuan).\n(3) ‘Abd al-Mālik bin Marwān (pencetak mata uang dinar).\n(4) ‘Umar bin ‘Abd al-‘Azīz (pemimpin yang sangat adil dan sederhana).',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: '(1), (3), dan (4)' },
+      { id: 'B', text: '(1), (2), dan (3)' },
+      { id: 'C', text: '(2), (3), dan (4)' },
+      { id: 'D', text: '(1), (2), dan (4)' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pai-11',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan pernyataan berikut dengan istilah yang tepat yang berkaitan dengan sumber hukum Islam dan sejarah peradaban Islam:',
+    points: 10,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-pai-1', leftText: 'Segala perkataan, perbuatan, dan ketetapan Nabi Muhammad saw.', rightText: 'Hadis / Sunah' },
+      { id: 'mp-pai-2', leftText: 'Sifat Allah Maha Mendengar segala suara di alam semesta.', rightText: 'Al-Samī’' },
+      { id: 'mp-pai-3', leftText: 'Sujud yang dilakukan ketika mendengar ayat-ayat Sajdah.', rightText: 'Sujud Tilawah' },
+      { id: 'mp-pai-4', leftText: 'Khalifah Bani Umayyah yang memerintahkan kodifikasi (pembukuan) hadis.', rightText: '‘Umar bin ‘Abd al-‘Azīz' },
+      { id: 'mp-pai-5', leftText: 'Istilah departemen atau lembaga pemerintahan yang dibentuk pada masa Bani Umayyah.', rightText: 'Diwan' }
+    ]
+  },
+  {
+    id: 'pai-12',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'benar_salah',
+    prompt: 'Fungsi hadis terhadap Al-Qur\'an salah satunya adalah Bayan at-Tafsir, yaitu merinci dan menjelaskan ayat-ayat Al-Qur\'an yang masih bersifat umum (global).',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'pai-13',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'benar_salah',
+    prompt: 'Al-Basir adalah salah satu Asmaul Husna yang berarti Allah Maha Mengetahui hal-hal yang gaib dan masa depan secara detail.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'pai-14',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'benar_salah',
+    prompt: 'Sujud Sahwi dilaksanakan dengan melakukan dua kali sujud setelah salam karena lupa jumlah rakaat.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'pai-15',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'benar_salah',
+    prompt: 'Damaskus adalah pusat pemerintahan Bani Umayyah setelah dipindahkan dari Madinah oleh Mu’āwiyah bin Abū Sufyān.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['BENAR']
+  },
+  {
+    id: 'pai-16',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'benar_salah',
+    prompt: 'Membaca Subhanallah merupakan contoh zikir lisan yang disebut dengan bacaan Tahmid.',
+    points: 2,
+    difficulty: 'mudah',
+    options: [
+      { id: 'BENAR', text: 'Benar' },
+      { id: 'SALAH', text: 'Salah' }
+    ],
+    correctAnswers: ['SALAH']
+  },
+  {
+    id: 'pai-17',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'uraian',
+    prompt: 'Ahmad dan Budi berselisih pendapat tentang tata cara wudu yang benar. Ahmad bersikeras caranya yang paling benar, begitu juga Budi. Berdasarkan Q.S. an-Nisā’/4: 59, jelaskan langkah konkret apa yang seharusnya mereka lakukan untuk menyelesaikan perselisihan tersebut agar sesuai dengan ajaran Islam!',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk menyebutkan bahwa perselisihan dikembalikan kepada Allah (Al-Qur’an) dan Rasul (Hadis/Sunah); skor 3 untuk langkah konkret seperti bertanya/bermusyawarah dengan guru atau ulama yang kompeten dan menerima keputusan dengan lapang dada; skor 2 untuk menjelaskan tujuan/manfaatnya (menjaga persatuan dan bukti keimanan kepada Allah dan hari akhir).'
+  },
+  {
+    id: 'pai-18',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'uraian',
+    prompt: 'Seorang siswa memiliki cita-cita menjadi ilmuwan yang menemukan obat untuk penyakit langka. Ia meneladan sifat Allah Al-’Alīm (Maha Mengetahui) dan sikap Visioner. Jelaskan bagaimana siswa tersebut harus bersikap dalam kesehariannya di sekolah untuk mewujudkan cita-citanya tersebut sesuai dengan Asmaul Husna yang dipelajari!',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk sikap meneladan Al-’Alīm (rajin belajar, rasa ingin tahu, rajin membaca dan bertanya, rendah hati dalam menuntut ilmu); skor 3 untuk sikap visioner (menetapkan target, merencanakan dan disiplin menjalankannya); skor 2 untuk mengaitkan ilmu dengan manfaat bagi sesama dan kesadaran bahwa ilmu berasal dari Allah.'
+  },
+  {
+    id: 'pai-19',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'uraian',
+    prompt: 'Salat dikatakan dapat mencegah perbuatan keji dan munkar. Namun, ada orang yang rajin salat tetapi masih suka berbohong dan menyakiti teman. Analisislah mengapa hal tersebut bisa terjadi berdasarkan pemahamanmu tentang makna salat yang khusyuk dan hubungannya dengan perilaku sehari-hari!',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk menjelaskan makna salat khusyuk (menghayati bacaan dan gerakan, merasa diawasi Allah); skor 3 untuk analisis penyebab (salat hanya rutinitas/formalitas dan tidak dihayati sehingga tidak membekas pada akhlak); skor 2 untuk hubungan salat dengan perilaku sehari-hari dan upaya memperbaikinya.'
+  },
+  {
+    id: 'pai-20',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'uraian',
+    prompt: 'Jelaskan tata cara pelaksanaan Sujud Syukur yang benar mulai dari syarat hingga bacaan doanya, dan berikan satu contoh situasi di kehidupan pelajar yang disunahkan untuk melakukan sujud tersebut!',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk syarat pelaksanaan sesuai materi; skor 2 untuk tata cara (takbir, sujud, bangkit/salam sesuai materi); skor 2 untuk bacaan doa sujud syukur sesuai materi; skor 2 untuk contoh situasi pelajar yang tepat (misalnya lulus ujian, mendapat prestasi, atau terhindar dari musibah).'
+  },
+  {
+    id: 'pai-21',
+    bankId: 'qbank-pai',
+    subjectId: 'sbj-pai',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'uraian',
+    prompt: 'Khalifah ‘Umar bin ‘Abd al-‘Azīz dikenal sebagai pemimpin yang sangat adil dan sederhana pada masa Bani Umayyah. Jelaskan dua kebijakan atau sikap beliau yang membuat rakyatnya hidup makmur dan tenteram, serta apa pelajaran (ibrah) yang bisa diambil oleh pemimpin masa kini dari sosok beliau!',
+    points: 8,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk kebijakan/sikap pertama yang tepat; skor 2 untuk kebijakan/sikap kedua yang tepat (misalnya hidup sederhana, adil, menghapus kezaliman dan pajak yang memberatkan, memperhatikan kesejahteraan rakyat, kodifikasi hadis); skor 2 untuk dampaknya terhadap kemakmuran rakyat; skor 2 untuk ibrah bagi pemimpin masa kini.'
+  }
+];
+
+// =========================================================================
+// 6. PENDIDIKAN JASMANI, OLAHRAGA, DAN KESEHATAN (PJOK) - 25 SOAL
+// =========================================================================
+export const PJOK_OFFICIAL_QUESTIONS: Question[] = [
+  {
+    id: 'pjok-1',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 1,
+    type: 'pg',
+    prompt: 'Dalam pertandingan bola tangan antarkelas, Raka menerima operan di dekat garis daerah gawang lawan. Tanpa memantulkan bola, ia langsung berlari lima langkah lalu melakukan tembakan. Wasit meniup peluit dan menyerahkan bola kepada tim lawan. Keputusan wasit tersebut tepat karena Raka melakukan pelanggaran...',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'menggiring bola ganda' },
+      { id: 'B', text: 'melebihi tiga langkah tanpa memantulkan bola' },
+      { id: 'C', text: 'memasuki daerah gawang' },
+      { id: 'D', text: 'memegang bola lebih dari tiga detik' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pjok-2',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 2,
+    type: 'pg',
+    prompt: 'Tim A kesulitan menembus pertahanan rapat tim B yang bermain berdekatan di depan daerah gawang. Beberapa pemain tim A terus memaksakan tembakan jarak jauh dan selalu diblok. Strategi paling tepat yang sebaiknya diterapkan tim A adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'menembak lebih sering dengan tenaga lebih besar' },
+      { id: 'B', text: 'mengoper cepat dan berpindah posisi untuk menciptakan teman yang bebas' },
+      { id: 'C', text: 'menahan bola selama mungkin agar waktu habis' },
+      { id: 'D', text: 'semua pemain berkumpul di satu sisi lapangan' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pjok-3',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 3,
+    type: 'pg',
+    prompt: 'Dalam situasi serangan balik, Dewi harus mengoper bola ke temannya yang berlari di dekat garis tengah lapangan, sedangkan jarak antar keduanya sekitar 15 meter. Teknik mengoper yang paling tepat agar bola melaju cepat dan akurat adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'operan dada (chest pass)' },
+      { id: 'B', text: 'operan pantul (bounce pass)' },
+      { id: 'C', text: 'operan bahu (shoulder pass)' },
+      { id: 'D', text: 'operan bawah' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pjok-4',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 4,
+    type: 'pg',
+    prompt: 'Dalam sebuah rally bola voli, tim merah menerima servis lawan. Pemain 1 melakukan passing bawah, pemain 2 menyentuh bola dengan umpan, pemain 3 melakukan smash tetapi bola tertahan blok lawan dan memantul kembali ke arah pemain 3, lalu ia menyentuhnya lagi sebelum bola melewati net. Kesalahan yang terjadi pada tim merah adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'bola keluar lapangan' },
+      { id: 'B', text: 'sentuhan bola lebih dari tiga kali (four hits)' },
+      { id: 'C', text: 'pemain menyentuh net' },
+      { id: 'D', text: 'pemain melakukan rotasi yang salah' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pjok-5',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 5,
+    type: 'pg',
+    prompt: 'Saat latihan passing bawah, bola yang diterima Sinta selalu melambung jauh ke belakang dan tidak terarah ke tempat teman. Pelatih mengamati bahwa Sinta mengayunkan kedua lengannya tinggi hingga melewati bahu saat bola menyentuh lengan. Perbaikan teknik yang paling tepat adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'meluruskan lengan, menekuk lutut, dan menyentuh bola dengan gerakan lengan yang minimal' },
+      { id: 'B', text: 'menambah ayunan lengan agar bola lebih kuat' },
+      { id: 'C', text: 'berdiri tegak dengan kaki rapat' },
+      { id: 'D', text: 'menyentuh bola dengan ujung jari' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pjok-6',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 6,
+    type: 'pg',
+    prompt: 'Sebuah tim bola voli ingin membangun serangan efektif dengan tiga sentuhan. Susunan sentuhan yang paling tepat adalah...',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'smash - umpan - passing bawah' },
+      { id: 'B', text: 'umpan - smash - passing bawah' },
+      { id: 'C', text: 'passing bawah - umpan (set up) - smash' },
+      { id: 'D', text: 'servis - smash - umpan' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pjok-7',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 7,
+    type: 'pg',
+    prompt: 'Urutan tahapan gerakan lompat jauh yang benar adalah...',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'tumpuan - awalan - melayang - mendarat' },
+      { id: 'B', text: 'awalan - melayang - tumpuan - mendarat' },
+      { id: 'C', text: 'awalan - tumpuan - melayang - mendarat' },
+      { id: 'D', text: 'awalan - tumpuan - mendarat - melayang' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pjok-8',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 8,
+    type: 'pg',
+    prompt: 'Pada lomba lompat jauh antarkelas, hasil tiga peserta adalah: Ani 4,10 m (sah); Budi 4,35 m (kakinya melewati garis papan tumpu saat menolak); Citra 4,20 m (sah). Berdasarkan aturan lompat jauh, pemenang lomba tersebut adalah...',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'Ani, karena awalan paling stabil' },
+      { id: 'B', text: 'Budi, karena lompatan paling jauh' },
+      { id: 'C', text: 'Citra, karena lompatan terjauh yang sah' },
+      { id: 'D', text: 'Ani dan Citra, karena hasilnya hampir sama' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pjok-9',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 9,
+    type: 'pg',
+    prompt: 'Fajar selalu mendapatkan hasil lompat jauh yang pendek meskipun tolakannya kuat. Setelah diamati, ia berlari pelan saat awalan lalu tiba-tiba melompat dengan ragu. Penyebab utama hasil lompatan Fajar yang pendek adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'kecepatan awalan yang kurang sehingga tidak ada momentum' },
+      { id: 'B', text: 'mendarat dengan dua kaki' },
+      { id: 'C', text: 'bak pasir terlalu dekat' },
+      { id: 'D', text: 'sepatu terlalu ringan' }
+    ],
+    correctAnswers: ['A']
+  },
+  {
+    id: 'pjok-10',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 10,
+    type: 'pg',
+    prompt: 'Saat melakukan guling depan, Bima menumpukan ubun-ubun kepalanya di matras sehingga lehernya terasa sakit. Agar gerakan aman, kesalahan Bima dapat diperbaiki dengan cara...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'mengangkat kepala setinggi mungkin' },
+      { id: 'B', text: 'memasukkan dagu ke dada sehingga punggung membulat dan tengkuk menyentuh matras' },
+      { id: 'C', text: 'berguling secepat mungkin tanpa menekuk lutut' },
+      { id: 'D', text: 'menumpukan kedua tangan jauh di belakang kepala' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pjok-11',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 11,
+    type: 'pg',
+    prompt: 'Sebelum latihan senam lantai, guru selalu meminta siswa melakukan pemanasan selama 10 menit, termasuk peregangan otot punggung, bahu, dan tungkai. Alasan utama pemanasan tersebut adalah...',
+    points: 3,
+    difficulty: 'mudah',
+    options: [
+      { id: 'A', text: 'agar siswa cepat lelah' },
+      { id: 'B', text: 'meningkatkan suhu otot dan kelenturan sendi sehingga risiko cedera berkurang' },
+      { id: 'C', text: 'agar gerakan senam lebih lama' },
+      { id: 'D', text: 'menggantikan latihan inti' }
+    ],
+    correctAnswers: ['B']
+  },
+  {
+    id: 'pjok-12',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 12,
+    type: 'pg',
+    prompt: 'Seorang atlet lompat jauh perlu menghasilkan tolakan kuat dalam waktu singkat. Komponen kebugaran jasmani yang paling dominan dibutuhkan pada gerakan tersebut adalah...',
+    points: 3,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'kelentukan' },
+      { id: 'B', text: 'daya tahan jantung paru' },
+      { id: 'C', text: 'kekuatan dan daya ledak (power) otot tungkai' },
+      { id: 'D', text: 'keseimbangan statis' }
+    ],
+    correctAnswers: ['C']
+  },
+  {
+    id: 'pjok-13',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 13,
+    type: 'pg_kompleks',
+    prompt: 'Perhatikan pernyataan berikut tentang permainan bola tangan! Pilihlah semua pernyataan yang BENAR!',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'Bola boleh dipegang paling lama tiga detik' },
+      { id: 'B', text: 'Pemain boleh berlari sambil memegang bola tanpa batas langkah' },
+      { id: 'C', text: 'Pemain boleh melangkah maksimal tiga langkah tanpa menggiring bola' },
+      { id: 'D', text: 'Hanya penjaga gawang yang boleh berada di dalam daerah gawang' },
+      { id: 'E', text: 'Menendang bola dengan kaki diperbolehkan untuk semua pemain lapangan' }
+    ],
+    correctAnswers: ['A', 'C', 'D']
+  },
+  {
+    id: 'pjok-14',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 14,
+    type: 'pg_kompleks',
+    prompt: 'Tim bola voli sekolah sering kehilangan poin karena servis gagal melewati net. Tindakan perbaikan yang TEPAT dilakukan adalah... (Pilih semua yang benar)',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'melatih ayunan lengan dan titik perkenaan bola yang tepat' },
+      { id: 'B', text: 'melemparkan bola lebih rendah saat servis' },
+      { id: 'C', text: 'menyesuaikan lemparan bola ke atas agar konsisten' },
+      { id: 'D', text: 'mengabaikan tinggi net saat berlatih' },
+      { id: 'E', text: 'memperkuat kontrol arah dan tenaga pukulan' }
+    ],
+    correctAnswers: ['A', 'C', 'E']
+  },
+  {
+    id: 'pjok-15',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 15,
+    type: 'pg_kompleks',
+    prompt: 'Faktor-faktor yang memengaruhi jauhnya lompatan pada lompat jauh adalah... (Pilih semua yang benar)',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'kecepatan awalan' },
+      { id: 'B', text: 'kekuatan tolakan satu kaki' },
+      { id: 'C', text: 'sudut tolakan saat melayang' },
+      { id: 'D', text: 'warna pakaian atlet' },
+      { id: 'E', text: 'teknik pendaratan' }
+    ],
+    correctAnswers: ['A', 'B', 'C', 'E']
+  },
+  {
+    id: 'pjok-16',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 16,
+    type: 'pg_kompleks',
+    prompt: 'Agar latihan senam lantai aman, hal yang HARUS diperhatikan siswa adalah... (Pilih semua yang benar)',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'menggunakan matras yang rata dan tidak licin' },
+      { id: 'B', text: 'berlatih tanpa pemanasan agar hemat waktu' },
+      { id: 'C', text: 'memastikan area sekitar matras bebas benda berbahaya' },
+      { id: 'D', text: 'melakukan gerakan sesuai kemampuan dan bertahap' },
+      { id: 'E', text: 'berlatih sendirian tanpa pengawasan walau gerakan sulit' }
+    ],
+    correctAnswers: ['A', 'C', 'D']
+  },
+  {
+    id: 'pjok-17',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 17,
+    type: 'pg_kompleks',
+    prompt: 'Tim voli kelas 7A kalah dari 7B pada set pertama karena sering gagal menerima servis. Pelatih mengamati pemain bermain terlalu berdekatan sehingga bola jatuh di area kosong. Strategi yang tepat untuk memperbaiki permainan adalah... (Pilih semua yang benar)',
+    points: 4,
+    difficulty: 'sedang',
+    options: [
+      { id: 'A', text: 'mengatur formasi penerimaan agar area lapangan terlindungi' },
+      { id: 'B', text: 'komunikasi antarpemain sebelum bola datang' },
+      { id: 'C', text: 'semua pemain berdiri di dekat net' },
+      { id: 'D', text: 'berlatih passing bawah dengan target arah tertentu' },
+      { id: 'E', text: 'tidak perlu bergerak karena bola pasti diterima teman' }
+    ],
+    correctAnswers: ['A', 'B', 'D']
+  },
+  {
+    id: 'pjok-18',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 18,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan teknik dasar bola tangan berikut dengan penjelasannya!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-pjok-1', leftText: 'Menangkap bola', rightText: 'Menerima bola dengan kedua tangan dan menjaga agar tidak lepas' },
+      { id: 'mp-pjok-2', leftText: 'Menggiring bola', rightText: 'Memantulkan bola ke lantai sambil bergerak' },
+      { id: 'mp-pjok-3', leftText: 'Operan bahu', rightText: 'Mengoper bola jarak jauh dengan ayunan lengan di atas bahu' },
+      { id: 'mp-pjok-4', leftText: 'Menembak', rightText: 'Melempar bola ke arah gawang untuk mencetak gol' }
+    ]
+  },
+  {
+    id: 'pjok-19',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 19,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan istilah dalam permainan bola voli berikut dengan pengertiannya!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-pjok-5', leftText: 'Servis', rightText: 'Pukulan awal untuk memulai permainan' },
+      { id: 'mp-pjok-6', leftText: 'Smash', rightText: 'Pukulan keras ke bawah ke area lawan' },
+      { id: 'mp-pjok-7', leftText: 'Blok', rightText: 'Menghadang bola serangan lawan di dekat net' },
+      { id: 'mp-pjok-8', leftText: 'Umpan (set up)', rightText: 'Mengarahkan bola kepada penyerang untuk di-smash' }
+    ]
+  },
+  {
+    id: 'pjok-20',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 20,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan tahapan lompat jauh berikut dengan ciri gerakannya!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-pjok-9', leftText: 'Awalan', rightText: 'Berlari secepat mungkin menuju papan tumpu' },
+      { id: 'mp-pjok-10', leftText: 'Tumpuan', rightText: 'Menolak dengan satu kaki yang kuat tepat di papan tumpu' },
+      { id: 'mp-pjok-11', leftText: 'Melayang', rightText: 'Menjaga keseimbangan dan posisi tubuh di udara' },
+      { id: 'mp-pjok-12', leftText: 'Mendarat', rightText: 'Menekuk lutut dan menjatuhkan tubuh ke depan di bak pasir' }
+    ]
+  },
+  {
+    id: 'pjok-21',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 21,
+    type: 'mencocokkan',
+    prompt: 'Pasangkan gerakan senam lantai berikut dengan ciri pelaksanaannya!',
+    points: 5,
+    difficulty: 'sedang',
+    options: [],
+    matchingPairs: [
+      { id: 'mp-pjok-13', leftText: 'Guling depan', rightText: 'Berguling ke depan dengan punggung membulat dan dagu rapat dada' },
+      { id: 'mp-pjok-14', leftText: 'Guling belakang', rightText: 'Berguling ke belakang dengan tolakan kedua tangan di samping telinga' },
+      { id: 'mp-pjok-15', leftText: 'Sikap lilin', rightText: 'Berbaring lalu mengangkat badan dengan tungkai lurus ke atas, disangga tangan di pinggang' },
+      { id: 'mp-pjok-16', leftText: 'Kayang', rightText: 'Posisi melengkung ke belakang dengan tumpuan kedua tangan dan kaki' }
+    ]
+  },
+  {
+    id: 'pjok-22',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 22,
+    type: 'uraian',
+    prompt: 'Dalam pertandingan bola tangan, tim SMP Harapan kebobolan sembilan gol pada babak pertama. Pelatih menemukan bahwa para pemain bertahan berdiri berjauhan, lambat kembali ke area pertahanan setelah kehilangan bola, dan jarang berkomunikasi. Analisislah tiga penyebab kegagalan pertahanan tim tersebut dan berikan dua strategi perbaikan yang dapat diterapkan di babak kedua!',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk analisis penyebab yang tepat (jarak antarpemain, lambat kembali bertahan, kurang komunikasi); skor 3 untuk dua strategi perbaikan yang relevan (merapatkan formasi, transisi cepat ke bertahan, komunikasi/aba-aba, pembagian tanggung jawab menjaga lawan). Total 6.'
+  },
+  {
+    id: 'pjok-23',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 23,
+    type: 'uraian',
+    prompt: 'Seorang siswa mengamati video latihan servis bola voli temannya. Dari video tampak bahwa lemparan bola ke atas tidak stabil dan sering jatuh jauh dari tubuh. Servis sering menyentuh net atau jatuh di luar lapangan. Jelaskan hubungan antara lemparan bola dan hasil servis, kemudian susunlah dua langkah latihan untuk memperbaiki servis tersebut!',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 3 untuk penjelasan bahwa lemparan yang tidak konsisten membuat titik perkenaan berubah sehingga arah dan tenaga pukulan tidak terkendali; skor 3 untuk dua langkah latihan (latihan melempar bola ke titik yang sama, latihan ayunan lengan, servis ke target, servis dari jarak dekat lalu dijauhkan). Total 6.'
+  },
+  {
+    id: 'pjok-24',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 24,
+    type: 'uraian',
+    prompt: 'Data hasil latihan lompat jauh Raka dalam tiga percobaan: percobaan 1 = 3,80 m (awalan pelan, tumpuan tepat di papan), percobaan 2 = 4,15 m (awalan cepat, tumpuan tepat di papan), percobaan 3 = tidak sah (awalan cepat, kaki melewati papan tumpu). Berdasarkan data tersebut, simpulkan faktor yang memengaruhi hasil lompatan Raka dan susunlah program latihan sederhana (dua bentuk latihan) untuk meningkatkan hasilnya!',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk kesimpulan bahwa kecepatan awalan meningkatkan jarak; skor 2 untuk kesimpulan bahwa ketepatan tumpuan menentukan keabsahan lompatan; skor 2 untuk dua bentuk latihan yang relevan (latihan lari cepat/awalan, latihan ketepatan langkah menuju papan, latihan power tungkai seperti lompat katak/skipping). Total 6.'
+  },
+  {
+    id: 'pjok-25',
+    bankId: 'qbank-pjok',
+    subjectId: 'sbj-pjok',
+    classId: 'all',
+    grade: 'Semua',
+    number: 25,
+    type: 'uraian',
+    prompt: 'Sekolah akan mengadakan pentas senam lantai. Dina ingin langsung mencoba gerakan guling belakang tanpa pemanasan karena merasa sudah bisa dan waktu hampir habis. Berikan pendapatmu tentang tindakan Dina, jelaskan dua risiko cedera yang mungkin terjadi, dan rancanglah urutan pemanasan singkat tiga gerakan yang sebaiknya ia lakukan!',
+    points: 6,
+    difficulty: 'sedang',
+    options: [],
+    essayRubric: 'Skor 2 untuk pendapat yang menyatakan tindakan Dina kurang tepat disertai alasan; skor 2 untuk dua risiko cedera yang logis (cedera leher, otot tertarik, keseleo pergelangan tangan, kram); skor 2 untuk tiga gerakan pemanasan yang relevan (peregangan leher/bahu, putar pergelangan tangan, peregangan punggung dan tungkai, jogging di tempat). Total 6.'
+  }
+];
+
+// Combine all 160 official curriculum questions
+export const CURRICULUM_OFFICIAL_QUESTIONS: Question[] = [
+  ...MTK_OFFICIAL_QUESTIONS,
+  ...IPA_OFFICIAL_QUESTIONS,
+  ...IPS_OFFICIAL_QUESTIONS,
+  ...BIG_OFFICIAL_QUESTIONS,
+  ...PAI_OFFICIAL_QUESTIONS,
+  ...PJOK_OFFICIAL_QUESTIONS
+];
+
+const getTodayDateStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
+  {
+    id: 'ex-mat-2026',
+    title: 'UAS Semester Ganjil - Matematika',
+    subjectId: 'sbj-mat',
+    subjectName: 'Matematika',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-mat',
+    totalQuestions: 26,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-ipa-2026',
+    title: 'UAS Semester Ganjil - Ilmu Pengetahuan Alam (IPA)',
+    subjectId: 'sbj-ipa',
+    subjectName: 'Ilmu Pengetahuan Alam (IPA)',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-ipa',
+    totalQuestions: 25,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-ips-2026',
+    title: 'UAS Semester Ganjil - Ilmu Pengetahuan Sosial (IPS)',
+    subjectId: 'sbj-ips',
+    subjectName: 'Ilmu Pengetahuan Sosial (IPS)',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-ips',
+    totalQuestions: 38,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-big-2026',
+    title: 'UAS Semester Ganjil - Bahasa Inggris',
+    subjectId: 'sbj-big',
+    subjectName: 'Bahasa Inggris',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-big',
+    totalQuestions: 25,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-pai-2026',
+    title: 'UAS Semester Ganjil - Pendidikan Agama Islam',
+    subjectId: 'sbj-pai',
+    subjectName: 'Pendidikan Agama Islam',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-pai',
+    totalQuestions: 21,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-pjok-2026',
+    title: 'UAS Semester Ganjil - Pendidikan Jasmani (PJOK)',
+    subjectId: 'sbj-pjok',
+    subjectName: 'Pendidikan Jasmani (PJOK)',
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-pjok',
+    totalQuestions: 25,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  }
+];

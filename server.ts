@@ -3,6 +3,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 
 // Import initial seed data for server-side store initialization
 import { 
@@ -93,27 +94,15 @@ const JSONBIN_CONFIG = {
 
 async function pushStoreToJsonBin() {
   try {
-    const activeSessions = (inMemoryStore.sessions || []).filter(s => 
-      s.status !== 'not_started' || 
-      Object.keys(s.answers || {}).length > 0 || 
-      s.isLocked || 
-      s.finalScore > 0 ||
-      s.violationsCount > 0
-    );
+    const rawJson = JSON.stringify(inMemoryStore);
+    const deflated = zlib.deflateSync(rawJson);
+    const b64 = deflated.toString('base64');
 
     const payload = {
       version: storeVersion,
       lastUpdated,
-      schoolSetting: inMemoryStore.schoolSetting,
-      operator: inMemoryStore.operator,
-      students: inMemoryStore.students,
-      teachers: inMemoryStore.teachers,
-      classes: inMemoryStore.classes,
-      subjects: inMemoryStore.subjects,
-      exams: inMemoryStore.exams,
-      activeSessions: activeSessions,
-      questionBank: inMemoryStore.questionBank,
-      auditLogs: (inMemoryStore.auditLogs || []).slice(0, 50),
+      compressed: true,
+      data: b64
     };
 
     await fetch(`${JSONBIN_CONFIG.BASE_URL}/${JSONBIN_CONFIG.BIN_ID}`, {
@@ -124,6 +113,7 @@ async function pushStoreToJsonBin() {
       },
       body: JSON.stringify(payload),
     });
+    console.log(`[CBT Server] Synced store to JSONBin.io (Compressed size: ${(b64.length / 1024).toFixed(1)} KB)`);
   } catch (err) {
     console.error('[CBT Server] Error pushing to JSONBin:', err);
   }
@@ -140,20 +130,31 @@ async function loadStoreFromJsonBin() {
     if (res.ok) {
       const json = await res.json();
       const rec = json.record;
-      if (rec && rec.students) {
-        if (rec.schoolSetting) inMemoryStore.schoolSetting = rec.schoolSetting;
-        if (rec.operator) inMemoryStore.operator = rec.operator;
-        if (Array.isArray(rec.students)) inMemoryStore.students = rec.students;
-        if (Array.isArray(rec.teachers)) inMemoryStore.teachers = rec.teachers;
-        if (Array.isArray(rec.classes)) inMemoryStore.classes = rec.classes;
-        if (Array.isArray(rec.subjects)) inMemoryStore.subjects = rec.subjects;
-        if (Array.isArray(rec.exams)) inMemoryStore.exams = rec.exams;
-        if (rec.questionBank) inMemoryStore.questionBank = rec.questionBank;
-        if (Array.isArray(rec.auditLogs)) inMemoryStore.auditLogs = rec.auditLogs;
-        if (rec.version) storeVersion = rec.version;
-        if (rec.lastUpdated) lastUpdated = rec.lastUpdated;
-        saveStoreToDisk();
-        console.log(`[CBT Server] Successfully hydrated from JSONBin.io (Version ${storeVersion})`);
+      if (rec) {
+        let storeData: any = null;
+        if (rec.compressed && typeof rec.data === 'string') {
+          const inflated = zlib.inflateSync(Buffer.from(rec.data, 'base64')).toString('utf-8');
+          storeData = JSON.parse(inflated);
+        } else if (rec.students) {
+          storeData = rec;
+        }
+
+        if (storeData) {
+          if (storeData.schoolSetting) inMemoryStore.schoolSetting = storeData.schoolSetting;
+          if (storeData.operator) inMemoryStore.operator = storeData.operator;
+          if (Array.isArray(storeData.students)) inMemoryStore.students = storeData.students;
+          if (Array.isArray(storeData.teachers)) inMemoryStore.teachers = storeData.teachers;
+          if (Array.isArray(storeData.classes)) inMemoryStore.classes = storeData.classes;
+          if (Array.isArray(storeData.subjects)) inMemoryStore.subjects = storeData.subjects;
+          if (Array.isArray(storeData.exams)) inMemoryStore.exams = storeData.exams;
+          if (storeData.questionBank) inMemoryStore.questionBank = storeData.questionBank;
+          if (Array.isArray(storeData.sessions)) inMemoryStore.sessions = storeData.sessions;
+          if (Array.isArray(storeData.auditLogs)) inMemoryStore.auditLogs = storeData.auditLogs;
+          if (rec.version) storeVersion = rec.version;
+          if (rec.lastUpdated) lastUpdated = rec.lastUpdated;
+          saveStoreToDisk();
+          console.log(`[CBT Server] Successfully hydrated from JSONBin.io (Version ${storeVersion}, Questions: ${inMemoryStore.questionBank?.questions?.length || 0})`);
+        }
       }
     }
   } catch (err) {

@@ -136,6 +136,7 @@ export interface ExamSchedule {
   randomizeQuestions: boolean;
   randomizeOptions: boolean;
   questionBankId: string;
+  totalQuestions?: number;
   status: ExamStatus;
   tokenRequired: boolean;
 }

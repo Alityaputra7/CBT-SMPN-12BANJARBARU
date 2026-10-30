@@ -46,6 +46,17 @@ export const isQuestionMatchingClass = (
 ): boolean => {
   if (!studentClassId) return false;
 
+  // Universal questions (applicable to all classes / grades)
+  if (
+    !questionClassId ||
+    questionClassId === 'all' ||
+    questionClassId === 'semua' ||
+    questionGrade === 'Semua' ||
+    questionGrade === 'all'
+  ) {
+    return true;
+  }
+
   // Student in Kelas VIII (VIII-A or VIII-B)
   if (
     studentClassId === 'cls-8' || 

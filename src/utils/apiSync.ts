@@ -87,6 +87,65 @@ let debounceSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let isSavingToJsonBin = false;
 
 /**
+ * Browser & Node compatible string compression via standard CompressionStream ('deflate')
+ */
+export async function compressString(str: string): Promise<string> {
+  const cs = new CompressionStream('deflate');
+  const writer = cs.writable.getWriter();
+  writer.write(new TextEncoder().encode(str));
+  writer.close();
+  const reader = cs.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+  const full = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const c of chunks) {
+    full.set(c, offset);
+    offset += c.length;
+  }
+  let binary = '';
+  for (let i = 0; i < full.byteLength; i++) {
+    binary += String.fromCharCode(full[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Browser & Node compatible string decompression via standard DecompressionStream ('deflate')
+ */
+export async function decompressString(b64: string): Promise<string> {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  const ds = new DecompressionStream('deflate');
+  const writer = ds.writable.getWriter();
+  writer.write(bytes);
+  writer.close();
+  const reader = ds.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+  const full = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const c of chunks) {
+    full.set(c, offset);
+    offset += c.length;
+  }
+  return new TextDecoder().decode(full);
+}
+
+/**
  * Helper to build an optimized payload for JSONBin (staying under the 100 KB free-tier limit).
  * Only active or modified student sessions are sent across the wire;
  * default empty sessions are regenerated deterministically from the student list.
@@ -96,7 +155,7 @@ function buildJsonBinPayload() {
     s.status !== 'not_started' || 
     Object.keys(s.answers || {}).length > 0 || 
     s.isLocked || 
-    s.finalScore > 0 ||
+    s.finalScore > 0 || 
     s.violationsCount > 0
   );
 
@@ -160,10 +219,25 @@ export async function fetchServerData(): Promise<CbtServerDataResponse | null> {
     }
 
     const json = await res.json();
-    const record = json.record;
+    let record = json.record;
 
     if (!record) {
       return fetchLocalServerData();
+    }
+
+    // Auto-decompress if payload is compressed
+    if (record.compressed && typeof record.data === 'string') {
+      try {
+        const decompressed = await decompressString(record.data);
+        const parsed = JSON.parse(decompressed);
+        record = {
+          ...parsed,
+          version: record.version || parsed.version,
+          lastUpdated: record.lastUpdated || parsed.lastUpdated,
+        };
+      } catch (decErr) {
+        console.error('[JSONBin] Decompression error, falling back:', decErr);
+      }
     }
 
     // Update version
@@ -262,8 +336,33 @@ export async function syncServerUpdates(updates: CbtStorePayload): Promise<boole
     if (updates.questionBank) cachedStore.questionBank = updates.questionBank;
     if (Array.isArray(updates.auditLogs)) cachedStore.auditLogs = updates.auditLogs;
 
-    // Send PUT request to JSONBin.io immediately
-    const payload = buildJsonBinPayload();
+    // Build compressed payload to guarantee staying under JSONBin's 100 KB free-tier limit (~40 KB)
+    const uncompressedData = {
+      schoolSetting: cachedStore.schoolSetting,
+      operator: cachedStore.operator,
+      students: cachedStore.students,
+      teachers: cachedStore.teachers,
+      classes: cachedStore.classes,
+      subjects: cachedStore.subjects,
+      exams: cachedStore.exams,
+      sessions: cachedStore.sessions,
+      questionBank: cachedStore.questionBank,
+      auditLogs: (cachedStore.auditLogs || []).slice(0, 50),
+    };
+
+    let payload: any;
+    try {
+      const b64 = await compressString(JSON.stringify(uncompressedData));
+      payload = {
+        version: currentVersion + 1,
+        lastUpdated: Date.now(),
+        compressed: true,
+        data: b64,
+      };
+    } catch {
+      payload = buildJsonBinPayload();
+    }
+
     const url = `${JSONBIN_CONFIG.BASE_URL}/${JSONBIN_CONFIG.BIN_ID}`;
 
     const res = await fetch(url, {
