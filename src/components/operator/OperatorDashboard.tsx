@@ -60,6 +60,7 @@ import {
   isQuestionMatchingClass, 
   getQuestionClassLabel 
 } from '../../utils/classGroups';
+import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 
 interface OperatorDashboardProps {
   students: Student[];
@@ -283,12 +284,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
           ...s,
           isLocked: false,
           lockReason: undefined,
-          status: 'in_progress'
+          status: 'in_progress',
+          violationsCount: 0,
+          isOnline: true,
+          lastHeartbeat: Date.now()
         };
       }
       return s;
     }));
-    onAddAuditLog('BUKA_KUNCI_SISWA', `Membuka kunci anti-curang untuk siswa: ${studentName}`);
+    onAddAuditLog('BUKA_KUNCI_SISWA', `Operator membuka blokiran ujian untuk siswa: ${studentName}. Siswa dapat melanjutkan ujian kembali.`);
+    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka! Siswa kini dapat langsung melanjutkan pengerjaan soal di HP atau laptopnya.`);
   };
 
   const handleAddExtraTime = (sessionId: string, studentName: string) => {
@@ -1805,7 +1810,22 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   Tampilkan seluruh kartu peserta ujian resmi untuk siswa kelas 7, 8A, 8B, dan 9 sekaligus dalam satu kali klik cetak.
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => {
+                    const classLabel = selectedCardClassFilter === 'all' 
+                      ? 'Semua_Rombel' 
+                      : selectedCardClassFilter === 'cls-8' 
+                        ? 'Kelas_VIII' 
+                        : `Kelas_${classes.find(c => c.id === selectedCardClassFilter)?.name || selectedCardClassFilter}`;
+                    downloadExamCardsAsHtml(cardsToDisplay, schoolSetting, `Kartu_Ujian_CBT_SMPN12_${classLabel}`, classLabel);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="Unduh seluruh kartu peserta ujian yang terpilih sebagai file dokumen siap cetak / PDF"
+                >
+                  <Download className="w-4 h-4 text-emerald-700" />
+                  <span>Download Kartu Ujian ({cardsToDisplay.length})</span>
+                </button>
                 <button
                   onClick={() => window.print()}
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer shadow-sm"
@@ -1946,6 +1966,20 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           NIP. {schoolSetting.principalNip || '196907022000031010'}
                         </p>
                       </div>
+                    </div>
+
+                    {/* Action Bar for Single Card (Screen only) */}
+                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between print:hidden">
+                      <span className="text-[10px] text-slate-400">SMPN 12 Banjarbaru</span>
+                      <button
+                        type="button"
+                        onClick={() => downloadExamCardsAsHtml([std], schoolSetting, `Kartu_Ujian_${std.nis}_${std.name.replace(/\s+/g, '_')}`, std.name)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                        title="Download kartu peserta ujian siswa ini"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Download Kartu</span>
+                      </button>
                     </div>
                   </div>
                 ))}

@@ -204,6 +204,25 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     }
   };
 
+  const handleUnlockSession = (sessionId: string, studentName: string) => {
+    onUpdateSessions(sessions.map(s => {
+      if (s.id === sessionId) {
+        return {
+          ...s,
+          isLocked: false,
+          lockReason: undefined,
+          status: 'in_progress',
+          violationsCount: 0,
+          isOnline: true,
+          lastHeartbeat: Date.now()
+        };
+      }
+      return s;
+    }));
+    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka! Siswa kini dapat melanjutkan ujian kembali.`);
+  };
+
+
   // Bulk Delete Actions for Guru
   const handleToggleSelectQuestion = (qId: string) => {
     setSelectedQuestionIds(prev => 
@@ -902,16 +921,27 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                       ) : '-'}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
-                        <button
-                          onClick={() => handleOpenResetSingle(s)}
-                          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
-                          title="Izinkan siswa mengikuti ujian remedial / ulang"
-                        >
-                          <RotateCcw className="w-3 h-3 text-rose-600" />
-                          <span>Reset Nilai</span>
-                        </button>
-                      )}
+                      <div className="flex items-center justify-end gap-1.5">
+                        {s.isLocked && (
+                          <button
+                            onClick={() => handleUnlockSession(s.id, s.studentName)}
+                            className="px-2 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors shadow-2xs"
+                            title="Buka blokiran ujian siswa agar bisa melanjutkan ujian"
+                          >
+                            Buka Kunci
+                          </button>
+                        )}
+                        {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
+                          <button
+                            onClick={() => handleOpenResetSingle(s)}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                            title="Izinkan siswa mengikuti ujian remedial / ulang"
+                          >
+                            <RotateCcw className="w-3 h-3 text-rose-600" />
+                            <span>Reset Nilai</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

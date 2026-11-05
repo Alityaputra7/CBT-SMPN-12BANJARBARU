@@ -35,7 +35,7 @@ import {
 } from '../../types/cbt';
 import { KatexRenderer } from '../common/KatexRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
-import { syncSingleSession } from '../../utils/apiSync';
+import { syncSingleSession, fetchServerData } from '../../utils/apiSync';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 
@@ -96,6 +96,31 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   });
 
   const currentQ = questions[currentQuestionIndex] || questions[0];
+
+  // If student session was previously locked, poll server every 2.5 seconds to detect when operator unlocks it
+  useEffect(() => {
+    if (!session.isLocked) return;
+
+    const unlockChecker = setInterval(async () => {
+      try {
+        const fullData = await fetchServerData();
+        if (fullData?.data?.sessions) {
+          const remoteSession = fullData.data.sessions.find(s => s.id === session.id);
+          if (remoteSession && !remoteSession.isLocked) {
+            onUpdateSession(remoteSession);
+            setHasStarted(true);
+            if (remoteSession.timeRemainingSeconds > 0) {
+              setTimeRemaining(remoteSession.timeRemainingSeconds);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Unlock poll check failed:', err);
+      }
+    }, 2500);
+
+    return () => clearInterval(unlockChecker);
+  }, [session.isLocked, session.id, onUpdateSession]);
 
   // Helper to update session state and sync directly to server for mobile/laptop consistency
   const updateSessionWithSync = (updated: StudentExamSession) => {
@@ -695,16 +720,49 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <ShieldAlert className="w-10 h-10" />
         </div>
         <h2 className="text-xl font-bold text-slate-900">Ujian Terkunci Otomatis</h2>
-        <p className="text-xs text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-200">
-          {session.lockReason || `Anda telah melakukan ${session.violationsCount} kali pelanggaran anti-curang.`}
+        <div className="text-xs text-rose-700 bg-rose-50 p-3.5 rounded-xl border border-rose-200 text-left space-y-1">
+          <div className="font-bold flex items-center gap-1.5 text-rose-800">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span>Alasan Pemblokiran Sesi:</span>
+          </div>
+          <p className="leading-relaxed">
+            {session.lockReason || `Anda telah melakukan ${session.violationsCount} kali pelanggaran tata tertib anti-curang.`}
+          </p>
+        </div>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Lembar jawaban Anda telah dibekukan sementara untuk menjaga kejujuran ujian. <strong>Segera laporkan kepada guru pengawas atau operator di ruang ujian</strong> untuk membuka kembali akses ujian Anda.
         </p>
-        <p className="text-xs text-slate-500">
-          Lembar jawaban Anda telah dibekukan sementara. Segera laporkan kepada guru pengawas atau operator di ruang ujian untuk membuka kembali sesi ujian Anda.
-        </p>
-        <div className="pt-2">
+
+        {/* Real-time waiting indicator */}
+        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2 text-xs text-amber-900">
+          <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
+          <span>Menunggu operator membuka kunci... Sistem otomatis memuat ulang saat dibuka.</span>
+        </div>
+
+        <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
+          <button
+            onClick={async () => {
+              const fullData = await fetchServerData();
+              if (fullData?.data?.sessions) {
+                const refreshed = fullData.data.sessions.find(s => s.id === session.id);
+                if (refreshed) {
+                  onUpdateSession(refreshed);
+                  if (!refreshed.isLocked) {
+                    alert('Kunci telah dibuka oleh operator! Anda dapat melanjutkan ujian.');
+                  } else {
+                    alert('Sesi Anda masih terkunci. Silakan konfirmasi ke operator atau guru pengawas.');
+                  }
+                }
+              }
+            }}
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Cek Status Pembukaan Kunci</span>
+          </button>
           <button
             onClick={onExitExam}
-            className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border border-slate-200"
           >
             Kembali ke Beranda
           </button>
@@ -764,7 +822,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="space-y-4 select-none"
+      className="space-y-4 select-none notranslate cbt-secure-text"
+      translate="no"
       onContextMenu={e => e.preventDefault()}
       onCopy={e => e.preventDefault()}
       onCut={e => e.preventDefault()}
@@ -893,14 +952,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             </label>
           </div>
 
-          {/* Question Prompt with KaTeX */}
-          <div className="text-slate-800 text-sm leading-relaxed p-4 bg-slate-50 rounded-xl border border-slate-200">
+          {/* Question Prompt with KaTeX (Protected from smart keyboard/browser translation) */}
+          <div 
+            className="text-slate-800 text-sm leading-relaxed p-4 bg-slate-50 rounded-xl border border-slate-200 notranslate cbt-secure-text"
+            translate="no"
+          >
             <KatexRenderer content={currentQ.prompt} />
             {currentQ.imageUrl && (
               <img 
                 src={currentQ.imageUrl} 
                 alt="Gambar Soal" 
-                className="max-h-60 object-contain rounded-lg border border-slate-200 mt-3" 
+                className="max-h-60 object-contain rounded-lg border border-slate-200 mt-3 pointer-events-none" 
               />
             )}
           </div>
@@ -1063,7 +1125,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                   value={typeof studentAns === 'string' ? studentAns : ''}
                   onChange={e => handleTextAnswerChange(currentQ.id, e.target.value)}
                   placeholder="Ketik jawaban di sini..."
-                  className="w-full px-4 py-3 text-sm border border-slate-300 rounded-xl outline-none focus:border-blue-500 font-mono"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  translate="no"
+                  className="w-full px-4 py-3 text-sm border border-slate-300 rounded-xl outline-none focus:border-blue-500 font-mono notranslate"
                 />
               </div>
             )}
@@ -1079,7 +1146,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                   value={typeof studentAns === 'string' ? studentAns : ''}
                   onChange={e => handleTextAnswerChange(currentQ.id, e.target.value)}
                   placeholder="Ketikkan penjabaran uraian jawaban Anda secara rinci..."
-                  className="w-full p-4 text-xs border border-slate-300 rounded-xl outline-none focus:border-blue-500 leading-relaxed font-sans"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck="false"
+                  translate="no"
+                  className="w-full p-4 text-xs border border-slate-300 rounded-xl outline-none focus:border-blue-500 leading-relaxed font-sans notranslate"
                 />
               </div>
             )}
