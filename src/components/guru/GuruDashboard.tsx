@@ -59,6 +59,7 @@ interface GuruDashboardProps {
   schoolSetting?: SchoolSetting;
   onResetSingleResult?: (sessionId: string, reason?: string) => void;
   onResetAllResults?: (targetClassId?: string, reason?: string) => void;
+  onResetLoginSession?: (sessionId: string, studentName: string) => void;
   lastSyncTime?: string;
 }
 
@@ -75,6 +76,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
   schoolSetting,
   onResetSingleResult,
   onResetAllResults,
+  onResetLoginSession,
   lastSyncTime = ''
 }) => {
   // 1. Guru Subject Authorization: strictly limit to assigned subjects
@@ -219,7 +221,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       }
       return s;
     }));
-    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka! Siswa kini dapat melanjutkan ujian kembali.`);
+    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka! Siswa kini dapat melanjutkan ujian kembali tanpa kehilangan jawaban.`);
   };
 
 
@@ -882,69 +884,111 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                   <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
                   <th className="py-2.5 px-3 font-semibold">Kelas</th>
                   <th className="py-2.5 px-3 font-semibold">Status Pengerjaan</th>
+                  <th className="py-2.5 px-3 font-semibold">Progres Soal</th>
                   <th className="py-2.5 px-3 font-semibold">Pelanggaran</th>
-                  <th className="py-2.5 px-3 font-semibold">Nilai Sementara</th>
+                  <th className="py-2.5 px-3 font-semibold">Nilai</th>
                   <th className="py-2.5 px-3 font-semibold text-right">Aksi Guru</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {sessions.map(s => (
-                  <tr key={s.id} className="hover:bg-slate-50/60">
-                    <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
-                    <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
-                    <td className="py-2 px-3 text-slate-600">{s.className}</td>
-                    <td className="py-2 px-3">
-                      {s.status === 'submitted' || s.status === 'force_submitted' ? (
-                        <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
-                          <CheckCircle className="w-3.5 h-3.5" /> Selesai Dikumpulkan
-                        </span>
-                      ) : s.status === 'in_progress' ? (
-                        <span className="text-blue-700 font-medium inline-flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5" /> Sedang Mengerjakan
-                        </span>
-                      ) : (
-                        <span className="text-slate-400">Belum Masuk</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3">
-                      {s.violationsCount > 0 ? (
-                        <span className="text-rose-600 font-bold">{s.violationsCount}x insiden</span>
-                      ) : (
-                        <span className="text-slate-400">0</span>
-                      )}
-                    </td>
-                    <td className="py-2 px-3 font-mono font-bold text-slate-800">
-                      {s.status === 'submitted' || s.status === 'force_submitted' ? (
-                        <span className={s.finalScore >= 75 ? 'text-emerald-700' : 'text-rose-600'}>
-                          {s.finalScore} / 100
-                        </span>
-                      ) : '-'}
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {s.isLocked && (
-                          <button
-                            onClick={() => handleUnlockSession(s.id, s.studentName)}
-                            className="px-2 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors shadow-2xs"
-                            title="Buka blokiran ujian siswa agar bisa melanjutkan ujian"
-                          >
-                            Buka Kunci
-                          </button>
+                {sessions.map(s => {
+                  const maxViolations = schoolSetting?.maxViolations || 3;
+                  const studentExam = exams.find(e => e.id === s.examId);
+                  const subjectTotalQ = studentExam
+                    ? questionBank.questions.filter(q =>
+                        q.subjectId === studentExam.subjectId &&
+                        isQuestionMatchingClass(q.classId, q.grade, s.classId)
+                      ).length
+                    : 0;
+                  const totalQ = subjectTotalQ > 0 ? subjectTotalQ : (studentExam?.totalQuestions || 40);
+                  const answeredCount = Object.keys(s.answers || {}).length;
+                  const hasScore = s.status === 'submitted' || s.status === 'force_submitted' || (s.status === 'in_progress' && answeredCount > 0);
+
+                  return (
+                    <tr key={s.id} className={`hover:bg-slate-50/60 ${s.isLocked ? 'bg-rose-50/40' : ''}`}>
+                      <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
+                      <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
+                      <td className="py-2 px-3 text-slate-600">{s.className}</td>
+                      <td className="py-2 px-3">
+                        {s.isLocked ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold">
+                            Terkunci
+                          </span>
+                        ) : s.status === 'submitted' || s.status === 'force_submitted' ? (
+                          <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
+                            <CheckCircle className="w-3.5 h-3.5" /> Selesai
+                          </span>
+                        ) : s.status === 'in_progress' ? (
+                          <span className="text-blue-700 font-medium inline-flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5" /> Mengerjakan
+                          </span>
+                        ) : s.isOnline ? (
+                          <span className="text-sky-700 font-medium inline-flex items-center gap-1">
+                            Sudah Login
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">Belum Login</span>
                         )}
-                        {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
-                          <button
-                            onClick={() => handleOpenResetSingle(s)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
-                            title="Izinkan siswa mengikuti ujian remedial / ulang"
-                          >
-                            <RotateCcw className="w-3 h-3 text-rose-600" />
-                            <span>Reset Nilai</span>
-                          </button>
+                      </td>
+                      <td className="py-2 px-3 font-mono text-slate-700">
+                        {answeredCount}/{totalQ} soal
+                        {s.status === 'in_progress' && typeof s.currentQuestionIndex === 'number' && (
+                          <span className="block text-[10px] text-slate-400">No. {s.currentQuestionIndex + 1}</span>
                         )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="py-2 px-3">
+                        <span className={`font-mono font-bold ${
+                          s.violationsCount >= maxViolations
+                            ? 'text-rose-700'
+                            : s.violationsCount > 0
+                              ? 'text-amber-700'
+                              : 'text-slate-400'
+                        }`}>
+                          {s.violationsCount}/{maxViolations}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 font-mono font-bold text-slate-800">
+                        {hasScore ? (
+                          <span className={s.finalScore >= 75 ? 'text-emerald-700' : 'text-amber-700'}>
+                            {s.finalScore}
+                          </span>
+                        ) : '-'}
+                      </td>
+                      <td className="py-2 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {s.isLocked && (
+                            <button
+                              onClick={() => handleUnlockSession(s.id, s.studentName)}
+                              className="px-2 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors shadow-2xs cursor-pointer"
+                              title="Buka blokiran ujian siswa agar bisa melanjutkan ujian"
+                            >
+                              Buka Kunci / Izinkan Lanjut
+                            </button>
+                          )}
+                          {(s.isOnline || s.deviceSessionId) && onResetLoginSession && (
+                            <button
+                              onClick={() => onResetLoginSession(s.id, s.studentName)}
+                              className="px-2 py-1 text-[11px] font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors cursor-pointer"
+                              title="Reset login perangkat agar siswa bisa masuk ulang dari perangkat baru"
+                            >
+                              Reset Login / Sesi
+                            </button>
+                          )}
+                          {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
+                            <button
+                              onClick={() => handleOpenResetSingle(s)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                              title="Izinkan siswa mengikuti ujian remedial / ulang"
+                            >
+                              <RotateCcw className="w-3 h-3 text-rose-600" />
+                              <span>Reset Nilai</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

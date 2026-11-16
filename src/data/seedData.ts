@@ -255,129 +255,34 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   }
 ];
 
-// Pre-seeded Student Exam Sessions to showcase the live monitor for 30 students
+// Initialize clean Student Exam Sessions for all official students (no false-positive active/locked states)
 export const createInitialStudentSessions = (students: Student[]): StudentExamSession[] => {
-  return students.map((std, idx) => {
-    // Let's create realistic varied statuses
-    if (idx < 5) {
-      // 5 finished students
-      return {
-        id: `sess-${std.id}`,
-        studentId: std.id,
-        studentName: std.name,
-        nis: std.nis,
-        classId: std.classId,
-        className: std.className,
-        examId: 'ex-mat-2026',
-        examTitle: 'Ujian Akhir Semester Ganjil - Matematika VII',
-        status: 'submitted',
-        startedAt: '07:35:10',
-        submittedAt: '08:45:20',
-        timeRemainingSeconds: 0,
-        violationsCount: idx === 1 ? 1 : 0,
-        isLocked: false,
-        extraTimeMinutes: 0,
-        deviceInfo: 'Chrome / Windows 11',
-        isOnline: false,
-        lastHeartbeat: Date.now() - 3600000,
-        answers: {
-          'q-1': { answer: 'A', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 4000000 },
-          'q-2': { answer: ['A', 'B', 'D'], isDoubtful: false, scoreObtained: 20, updatedAt: Date.now() - 3900000 },
-          'q-3': { answer: 'BENAR', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 3800000 },
-          'q-4': { answer: '150', isDoubtful: false, scoreObtained: 20, updatedAt: Date.now() - 3700000 },
-          'q-5': { answer: 'A', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 3650000 },
-          'q-6': { answer: 'a) 3x+2y=17000, 2x+5y=26000\nb) Eliminasi didapat x=3000 (buku), y=4000 (pulpen)\nc) 4(3000)+3(4000) = 12000+12000 = Rp24.000', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 3600000 }
-        },
-        scorePg: 85,
-        scoreEssay: 15,
-        finalScore: 100,
-        isPassed: true
-      };
-    } else if (idx === 5) {
-      // 1 locked student due to 3 violations
-      return {
-        id: `sess-${std.id}`,
-        studentId: std.id,
-        studentName: std.name,
-        nis: std.nis,
-        classId: std.classId,
-        className: std.className,
-        examId: 'ex-mat-2026',
-        examTitle: 'Ujian Akhir Semester Ganjil - Matematika VII',
-        status: 'locked',
-        startedAt: '07:38:00',
-        timeRemainingSeconds: 2400,
-        violationsCount: 3,
-        isLocked: true,
-        lockReason: 'Mencapai batas 3x pelanggaran (beralih jendela browser)',
-        extraTimeMinutes: 0,
-        deviceInfo: 'Edge / Windows 10',
-        isOnline: true,
-        lastHeartbeat: Date.now() - 20000,
-        answers: {
-          'q-1': { answer: 'A', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 100000 },
-          'q-2': { answer: ['A'], isDoubtful: true, scoreObtained: 0, updatedAt: Date.now() - 50000 }
-        },
-        scorePg: 15,
-        scoreEssay: 0,
-        finalScore: 15,
-        isPassed: false
-      };
-    } else if (idx < 20) {
-      // In progress online students
-      return {
-        id: `sess-${std.id}`,
-        studentId: std.id,
-        studentName: std.name,
-        nis: std.nis,
-        classId: std.classId,
-        className: std.className,
-        examId: 'ex-mat-2026',
-        examTitle: 'Ujian Akhir Semester Ganjil - Matematika VII',
-        status: 'in_progress',
-        startedAt: '07:40:00',
-        timeRemainingSeconds: 3120 - (idx * 50),
-        violationsCount: idx === 8 ? 2 : (idx === 12 ? 1 : 0),
-        isLocked: false,
-        extraTimeMinutes: 0,
-        deviceInfo: idx % 2 === 0 ? 'Chrome / ChromeOS' : 'Firefox / Android Tablet',
-        isOnline: true,
-        lastHeartbeat: Date.now() - (idx * 3000),
-        answers: {
-          'q-1': { answer: 'A', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 200000 },
-          'q-2': { answer: ['A', 'B'], isDoubtful: idx % 3 === 0, scoreObtained: 0, updatedAt: Date.now() - 150000 },
-          'q-3': { answer: 'BENAR', isDoubtful: false, scoreObtained: 15, updatedAt: Date.now() - 80000 }
-        },
-        scorePg: 30,
-        scoreEssay: 0,
-        finalScore: 30,
-        isPassed: false
-      };
-    } else {
-      // Not yet started
-      return {
-        id: `sess-${std.id}`,
-        studentId: std.id,
-        studentName: std.name,
-        nis: std.nis,
-        classId: std.classId,
-        className: std.className,
-        examId: 'ex-mat-2026',
-        examTitle: 'Ujian Akhir Semester Ganjil - Matematika VII',
-        status: 'not_started',
-        timeRemainingSeconds: 5400,
-        violationsCount: 0,
-        isLocked: false,
-        extraTimeMinutes: 0,
-        deviceInfo: '-',
-        isOnline: false,
-        lastHeartbeat: 0,
-        answers: {},
-        scorePg: 0,
-        scoreEssay: 0,
-        finalScore: 0,
-        isPassed: false
-      };
-    }
-  });
+  const primaryExam = INITIAL_EXAMS[0];
+  const defaultDurationSeconds = (primaryExam?.durationMinutes || 90) * 60;
+
+  return students.map((std) => ({
+    id: `sess-${std.id}`,
+    studentId: std.id,
+    studentName: std.name,
+    nis: std.nis,
+    classId: std.classId,
+    className: std.className,
+    examId: primaryExam?.id || 'ex-mat-2026',
+    examTitle: primaryExam?.title || 'Ujian Akhir Semester Ganjil',
+    status: 'not_started',
+    timeRemainingSeconds: defaultDurationSeconds,
+    violationsCount: 0,
+    isLocked: false,
+    extraTimeMinutes: 0,
+    deviceInfo: '-',
+    deviceSessionId: undefined,
+    currentQuestionIndex: 0,
+    isOnline: false,
+    lastHeartbeat: 0,
+    answers: {},
+    scorePg: 0,
+    scoreEssay: 0,
+    finalScore: 0,
+    isPassed: false
+  }));
 };

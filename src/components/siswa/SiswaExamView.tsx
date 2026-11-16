@@ -38,6 +38,11 @@ import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils
 import { syncSingleSession, fetchServerData } from '../../utils/apiSync';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
+import { 
+  calculateProvisionalScore, 
+  getStudentSessionDeviceId, 
+  detectClientDeviceInfo 
+} from '../../utils/sessionDevice';
 
 interface SiswaExamViewProps {
   student: Student;
@@ -64,16 +69,36 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   schoolSetting,
   onExitExam
 }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(session.currentQuestionIndex || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [hasStarted, setHasStarted] = useState(session.status === 'in_progress');
+  const [hasStarted, setHasStarted] = useState(session.status === 'in_progress' || session.isLocked);
   const [timeRemaining, setTimeRemaining] = useState(session.timeRemainingSeconds || 5400);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
-  const [violationAlert, setViolationAlert] = useState<{ show: boolean; msg: string; count: number } | null>(null);
+  const [violationAlert, setViolationAlert] = useState<{
+    show: boolean;
+    title: string;
+    msg: string;
+    count: number;
+    max: number;
+  } | null>(null);
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const sessionRef = useRef<StudentExamSession>(session);
+  const lastViolationAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  // Keep hasStarted synchronized when Operator unlocks a locked session or session is in progress
+  useEffect(() => {
+    if (!session.isLocked && session.status === 'in_progress') {
+      setHasStarted(true);
+      setViolationAlert(null);
+    }
+  }, [session.isLocked, session.status]);
 
   // Live Clock to track exam schedule timing in real-time
   const [nowTime, setNowTime] = useState<Date>(() => new Date());
@@ -124,8 +149,23 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   // Helper to update session state and sync directly to server for mobile/laptop consistency
   const updateSessionWithSync = (updated: StudentExamSession) => {
+    sessionRef.current = updated;
     onUpdateSession(updated);
-    syncSingleSession(updated);
+  };
+
+  // Navigate to a question index and sync current progress immediately
+  const goToQuestion = (nextIndex: number) => {
+    const clamped = Math.max(0, Math.min(Math.max(0, questions.length - 1), nextIndex));
+    setCurrentQuestionIndex(clamped);
+    if (hasStarted && sessionRef.current.status === 'in_progress' && !sessionRef.current.isLocked) {
+      updateSessionWithSync({
+        ...sessionRef.current,
+        currentQuestionIndex: clamped,
+        timeRemainingSeconds: timeRemaining,
+        isOnline: true,
+        lastHeartbeat: Date.now()
+      });
+    }
   };
 
   // Auto-save feedback ticker
@@ -160,9 +200,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     setHasStarted(true);
     const startSession: StudentExamSession = {
       ...session,
-      status: 'in_progress',
+      status: session.isLocked ? 'locked' : 'in_progress',
       startedAt: session.startedAt || new Date().toLocaleTimeString('id-ID'),
       isOnline: true,
+      deviceSessionId: session.deviceSessionId || getStudentSessionDeviceId(student.nis),
+      deviceInfo: detectClientDeviceInfo(),
+      currentQuestionIndex,
       lastHeartbeat: Date.now(),
       timeRemainingSeconds: session.timeRemainingSeconds || exam.durationMinutes * 60
     };
@@ -187,44 +230,76 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     return () => clearInterval(timer);
   }, [hasStarted, session.status, session.isLocked]);
 
-  // Real-Time Periodic Heartbeat to Operator Dashboard (every 15 seconds)
+  // Real-Time Periodic Heartbeat to Operator Dashboard (every 10 seconds)
   useEffect(() => {
     if (!hasStarted || session.status !== 'in_progress' || session.isLocked) return;
 
     const heartbeatTimer = setInterval(() => {
       const activeSession: StudentExamSession = {
-        ...session,
+        ...sessionRef.current,
         timeRemainingSeconds: timeRemaining,
+        currentQuestionIndex,
         isOnline: true,
         lastHeartbeat: Date.now()
       };
       updateSessionWithSync(activeSession);
-    }, 15000);
+    }, 10000);
 
     return () => clearInterval(heartbeatTimer);
-  }, [hasStarted, session.status, session.isLocked, timeRemaining]);
+  }, [hasStarted, session.status, session.isLocked, timeRemaining, currentQuestionIndex]);
 
-  // Anti-Cheat Event Listeners (Tab switch, Blur, ContextMenu, Shortcut blocking)
+  // Anti-Cheat Event Listeners (3x tolerance: 1/3 warning, 2/3 final warning, 3/3 auto-lock)
   useEffect(() => {
     if (!hasStarted || session.status !== 'in_progress' || session.isLocked) return;
 
+    const maxViolations = schoolSetting.maxViolations || 3;
+
     const handleViolation = (type: ViolationType, details: string) => {
-      const newCount = session.violationsCount + 1;
-      const isNowLocked = newCount >= schoolSetting.maxViolations;
+      const latestSession = sessionRef.current;
+      if (latestSession.isLocked || latestSession.status !== 'in_progress') return;
+
+      // Cooldown 1500ms so a single tab switch doesn't double-fire blur + visibilitychange
+      const now = Date.now();
+      if (now - lastViolationAtRef.current < 1500) return;
+      lastViolationAtRef.current = now;
+
+      const newCount = (latestSession.violationsCount || 0) + 1;
+      const isNowLocked = newCount >= maxViolations;
 
       onRecordViolation(type, details);
-      onUpdateSession({
-        ...session,
+
+      const updatedSession: StudentExamSession = {
+        ...latestSession,
         violationsCount: newCount,
         isLocked: isNowLocked,
-        lockReason: isNowLocked ? `Mencapai batas ${schoolSetting.maxViolations}x pelanggaran (${details})` : undefined
-      });
+        status: isNowLocked ? 'locked' : 'in_progress',
+        lockReason: isNowLocked
+          ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
+          : undefined,
+        timeRemainingSeconds: timeRemaining,
+        lastHeartbeat: Date.now()
+      };
+      updateSessionWithSync(updatedSession);
 
-      setViolationAlert({
-        show: true,
-        msg: `Peringatan: Terdeteksi tindakan tidak diizinkan (${details}).`,
-        count: newCount
-      });
+      if (isNowLocked) {
+        setViolationAlert(null);
+      } else if (newCount === 1) {
+        setViolationAlert({
+          show: true,
+          title: `Peringatan 1/${maxViolations}: Dilarang meninggalkan halaman ujian!`,
+          msg: `Sistem mendeteksi pelanggaran: ${details}. Tetap berada di halaman ujian dalam mode layar penuh.`,
+          count: newCount,
+          max: maxViolations
+        });
+      } else {
+        setViolationAlert({
+          show: true,
+          title: `Peringatan ${newCount}/${maxViolations}: Satu kali lagi pelanggaran, akun Anda akan dikunci otomatis!`,
+          msg: `Pelanggaran terdeteksi: ${details}. Jika terulang 1x lagi, ujian Anda akan diblokir dan harus dibuka Operator.`,
+          count: newCount,
+          max: maxViolations
+        });
+      }
     };
 
     const onVisibilityChange = () => {
@@ -243,6 +318,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         handleViolation('exit_fullscreen', 'Keluar dari mode layar penuh (fullscreen)');
       } else {
         setIsFullscreen(true);
+      }
+    };
+
+    const onWindowResize = () => {
+      // Detect desktop/tablet split-screen without false-triggering on mobile virtual keyboard height changes
+      if (typeof window !== 'undefined' && window.screen?.availWidth >= 768) {
+        if (window.innerWidth < window.screen.availWidth * 0.65) {
+          handleViolation('blur_loss', 'Layar diperkecil / mode split-screen terdeteksi');
+        }
       }
     };
 
@@ -265,6 +349,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onBlur);
     document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('resize', onWindowResize);
     window.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('keydown', onKeyDown);
 
@@ -272,28 +357,40 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('resize', onWindowResize);
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [hasStarted, session, schoolSetting.maxViolations]);
+  }, [hasStarted, session.status, session.isLocked, schoolSetting.maxViolations, timeRemaining]);
 
-  // Answer handlers
+  // Answer handlers (recalculate live provisional score & sync immediately)
+  const applyAnswersUpdate = (updatedAnswers: StudentExamSession['answers']) => {
+    const { scorePg, finalScore } = calculateProvisionalScore(questions, updatedAnswers, session.scoreEssay);
+    updateSessionWithSync({
+      ...session,
+      answers: updatedAnswers,
+      scorePg,
+      finalScore,
+      isPassed: finalScore >= exam.kkm,
+      currentQuestionIndex,
+      timeRemainingSeconds: timeRemaining,
+      isOnline: true,
+      lastHeartbeat: Date.now()
+    });
+    triggerSaveIndicator();
+  };
+
   const handleSelectOption = (questionId: string, optionId: string) => {
     if (session.isLocked) return;
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
-
-    updateSessionWithSync({
-      ...session,
-      answers: {
-        ...session.answers,
-        [questionId]: {
-          ...currentAnswerObj,
-          answer: optionId,
-          updatedAt: Date.now()
-        }
+    applyAnswersUpdate({
+      ...session.answers,
+      [questionId]: {
+        ...currentAnswerObj,
+        answer: optionId,
+        updatedAt: Date.now()
       }
     });
-    triggerSaveIndicator();
   };
 
   const handleToggleComplexOption = (questionId: string, optionId: string) => {
@@ -306,53 +403,39 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       ? currentList.filter(id => id !== optionId)
       : [...currentList, optionId].sort();
 
-    updateSessionWithSync({
-      ...session,
-      answers: {
-        ...session.answers,
-        [questionId]: {
-          ...currentAnswerObj,
-          answer: updatedList,
-          updatedAt: Date.now()
-        }
+    applyAnswersUpdate({
+      ...session.answers,
+      [questionId]: {
+        ...currentAnswerObj,
+        answer: updatedList,
+        updatedAt: Date.now()
       }
     });
-    triggerSaveIndicator();
   };
 
   const handleTextAnswerChange = (questionId: string, text: string) => {
     if (session.isLocked) return;
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
-
-    updateSessionWithSync({
-      ...session,
-      answers: {
-        ...session.answers,
-        [questionId]: {
-          ...currentAnswerObj,
-          answer: text,
-          updatedAt: Date.now()
-        }
+    applyAnswersUpdate({
+      ...session.answers,
+      [questionId]: {
+        ...currentAnswerObj,
+        answer: text,
+        updatedAt: Date.now()
       }
     });
-    triggerSaveIndicator();
   };
 
   const handleToggleDoubtful = (questionId: string) => {
     const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
-
-    updateSessionWithSync({
-      ...session,
-      answers: {
-        ...session.answers,
-        [questionId]: {
-          ...currentAnswerObj,
-          isDoubtful: !currentAnswerObj.isDoubtful,
-          updatedAt: Date.now()
-        }
+    applyAnswersUpdate({
+      ...session.answers,
+      [questionId]: {
+        ...currentAnswerObj,
+        isDoubtful: !currentAnswerObj.isDoubtful,
+        updatedAt: Date.now()
       }
     });
-    triggerSaveIndicator();
   };
 
   const handleMatchingSelect = (questionId: string, pairId: string, rightVal: string) => {
@@ -369,18 +452,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     currentMap[pairId] = rightVal;
 
-    updateSessionWithSync({
-      ...session,
-      answers: {
-        ...session.answers,
-        [questionId]: {
-          ...currentAnswerObj,
-          answer: JSON.stringify(currentMap),
-          updatedAt: Date.now()
-        }
+    applyAnswersUpdate({
+      ...session.answers,
+      [questionId]: {
+        ...currentAnswerObj,
+        answer: JSON.stringify(currentMap),
+        updatedAt: Date.now()
       }
     });
-    triggerSaveIndicator();
   };
 
   // Submission calculation
@@ -829,22 +908,47 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       onCut={e => e.preventDefault()}
       onPaste={e => e.preventDefault()}
     >
-      {/* Violation Floating Notification */}
-      {violationAlert && (
-        <div className="fixed top-4 right-4 z-50 bg-rose-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-xs animate-bounce border-2 border-white">
-          <AlertTriangle className="w-5 h-5 text-amber-300 shrink-0" />
-          <div>
-            <div className="font-bold">{violationAlert.msg}</div>
-            <div className="text-[11px] text-rose-100">
-              Pelanggaran ke-{violationAlert.count} dari maks {schoolSetting.maxViolations}x
+      {/* Hard Blocking Warning Modal for Violation 1/3 and 2/3 */}
+      {violationAlert && violationAlert.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4">
+          <div className={`bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border-2 text-center space-y-4 ${
+            violationAlert.count >= 2 ? 'border-rose-600' : 'border-amber-500'
+          }`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto ${
+              violationAlert.count >= 2 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'
+            }`}>
+              <ShieldAlert className="w-8 h-8" />
             </div>
+            <div className="space-y-1.5">
+              <span className={`inline-block text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-full ${
+                violationAlert.count >= 2
+                  ? 'bg-rose-100 text-rose-800 border border-rose-300'
+                  : 'bg-amber-100 text-amber-800 border border-amber-300'
+              }`}>
+                PELANGGARAN {violationAlert.count} / {violationAlert.max}
+              </span>
+              <h3 className="text-base font-extrabold text-slate-900 leading-snug">
+                {violationAlert.title}
+              </h3>
+              <p className="text-xs text-slate-600 leading-relaxed pt-1">
+                {violationAlert.msg}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setViolationAlert(null);
+                await enterFullscreen();
+              }}
+              className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold text-white shadow-sm transition-colors cursor-pointer ${
+                violationAlert.count >= 2
+                  ? 'bg-rose-600 hover:bg-rose-700'
+                  : 'bg-amber-600 hover:bg-amber-700'
+              }`}
+            >
+              Saya Mengerti &amp; Lanjutkan Ujian
+            </button>
           </div>
-          <button 
-            onClick={() => setViolationAlert(null)}
-            className="ml-2 text-rose-200 hover:text-white"
-          >
-            ✕
-          </button>
         </div>
       )}
 
@@ -1161,7 +1265,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <div className="flex items-center justify-between pt-4 border-t border-slate-100">
             <button
               disabled={currentQuestionIndex === 0}
-              onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+              onClick={() => goToQuestion(currentQuestionIndex - 1)}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 rounded-lg transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1170,7 +1274,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
             {currentQuestionIndex < questions.length - 1 ? (
               <button
-                onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+                onClick={() => goToQuestion(currentQuestionIndex + 1)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors cursor-pointer"
               >
                 <span>Berikutnya</span>
@@ -1192,7 +1296,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         <div className="lg:col-span-4 space-y-4">
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Nomor & Status Soal
+              Nomor &amp; Status Soal
             </h3>
 
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -1212,7 +1316,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                 return (
                   <button
                     key={q.id}
-                    onClick={() => setCurrentQuestionIndex(idx)}
+                    onClick={() => goToQuestion(idx)}
                     className={`h-10 rounded-lg border text-xs flex items-center justify-center font-mono transition-all cursor-pointer ${colorClasses} ${
                       isCurrent ? 'ring-2 ring-blue-500 ring-offset-1 font-extrabold' : ''
                     }`}
@@ -1253,7 +1357,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       <div className="flex md:hidden items-center justify-between gap-2 sticky bottom-2 z-20 bg-white/95 backdrop-blur-md p-2.5 rounded-xl border border-slate-200 shadow-lg mt-4">
         <button
           disabled={currentQuestionIndex === 0}
-          onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+          onClick={() => goToQuestion(currentQuestionIndex - 1)}
           className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-slate-700 bg-slate-100 disabled:opacity-40 rounded-lg min-w-[85px] cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
@@ -1274,7 +1378,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
         {currentQuestionIndex < questions.length - 1 ? (
           <button
-            onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+            onClick={() => goToQuestion(currentQuestionIndex + 1)}
             className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs min-w-[85px] cursor-pointer"
           >
             <span>Lanjut</span>
@@ -1326,7 +1430,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                   <button
                     key={q.id}
                     onClick={() => {
-                      setCurrentQuestionIndex(idx);
+                      goToQuestion(idx);
                       setShowMobileQuestionList(false);
                     }}
                     className={`h-11 rounded-xl border text-xs flex items-center justify-center font-mono font-bold transition-all cursor-pointer ${colorClasses} ${

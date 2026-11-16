@@ -82,6 +82,7 @@ interface OperatorDashboardProps {
   onUpdateQuestionBank: (bank: QuestionBank) => void;
   onResetSingleResult?: (sessionId: string, reason?: string) => void;
   onResetAllResults?: (targetClassId?: string, reason?: string) => void;
+  onResetLoginSession?: (sessionId: string, studentName: string) => void;
   onRestoreFactoryData?: () => void;
   lastSyncTime?: string;
 }
@@ -106,6 +107,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   onUpdateQuestionBank,
   onResetSingleResult,
   onResetAllResults,
+  onResetLoginSession,
   onRestoreFactoryData,
   lastSyncTime = ''
 }) => {
@@ -180,6 +182,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [tokenInfo, setTokenInfo] = useState(generateDynamicToken());
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+  const [monitorSearch, setMonitorSearch] = useState('');
+  const [monitorClassFilter, setMonitorClassFilter] = useState<string>('all');
+  const [monitorStatusFilter, setMonitorStatusFilter] = useState<string>('all');
   const [selectedStudentForCard, setSelectedStudentForCard] = useState<Student | null>(null);
   const [selectedCardClassFilter, setSelectedCardClassFilter] = useState<string>('all');
   const [cardSearchQuery, setCardSearchQuery] = useState<string>('');
@@ -258,23 +263,23 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
   // Realtime Actions
   const handleResetSession = (sessionId: string, studentName: string) => {
+    if (onResetLoginSession) {
+      onResetLoginSession(sessionId, studentName);
+      return;
+    }
     onUpdateSessions(sessions.map(s => {
       if (s.id === sessionId) {
         return {
           ...s,
-          status: 'not_started',
-          isLocked: false,
-          violationsCount: 0,
-          answers: {},
-          scorePg: 0,
-          scoreEssay: 0,
-          finalScore: 0,
-          isOnline: false
+          isOnline: false,
+          deviceSessionId: undefined,
+          deviceInfo: 'Login Direset Operator',
+          lastHeartbeat: Date.now()
         };
       }
       return s;
     }));
-    onAddAuditLog('RESET_SESI_SISWA', `Mereset sesi ujian untuk siswa: ${studentName}`);
+    onAddAuditLog('RESET_LOGIN_SESI', `Mereset sesi login perangkat untuk siswa: ${studentName}`);
   };
 
   const handleUnlockSession = (sessionId: string, studentName: string) => {
@@ -783,148 +788,261 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       )}
 
       {/* TAB 2: MONITORING REAL-TIME */}
-      {activeTab === 'monitoring' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Pemantauan Ujian Siswa Secara Real-Time
-              </h3>
-              <p className="text-xs text-slate-500">
-                Status koneksi online, jumlah jawaban tersimpan, sisa waktu, dan deteksi pelanggaran anti-curang.
-              </p>
+      {activeTab === 'monitoring' && (() => {
+        const maxViolationsAllowed = schoolSetting.maxViolations || 3;
+        const filteredMonitoringSessions = sessions.filter(s => {
+          const matchClass = monitorClassFilter === 'all' || s.classId === monitorClassFilter;
+          const matchSearch =
+            !monitorSearch.trim() ||
+            s.studentName.toLowerCase().includes(monitorSearch.toLowerCase()) ||
+            s.nis.includes(monitorSearch.trim());
+          const effectiveStatus = s.isLocked || s.status === 'locked'
+            ? 'locked'
+            : s.status === 'submitted' || s.status === 'force_submitted'
+              ? 'submitted'
+              : s.status === 'in_progress'
+                ? 'in_progress'
+                : 'not_started';
+          const matchStatus = monitorStatusFilter === 'all' || effectiveStatus === monitorStatusFilter;
+          return matchClass && matchSearch && matchStatus;
+        });
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Pemantauan Ujian Siswa Secara Real-Time
+                  </h3>
+                  <span className="inline-flex items-center gap-1.5 text-[10px] font-mono font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Auto-Sync 3 Detik {lastSyncTime ? `(${lastSyncTime})` : ''}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pantau status login, progres soal per mapel, pelanggaran (maks {maxViolationsAllowed}x), nilai sementara/akhir, serta buka kunci atau reset sesi perangkat.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleOpenResetBatch}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                  title="Reset hasil ulangan untuk seluruh siswa atau per kelas"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                  Reset Semua Hasil Ulangan
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleOpenResetBatch}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-                title="Reset hasil ulangan untuk seluruh siswa atau per kelas"
+
+            {/* Monitoring Filter Bar */}
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+              <div className="relative flex-1 w-full">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={monitorSearch}
+                  onChange={e => setMonitorSearch(e.target.value)}
+                  placeholder="Cari NIS atau Nama Siswa..."
+                  className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-500 text-xs"
+                />
+              </div>
+              <select
+                value={monitorClassFilter}
+                onChange={e => setMonitorClassFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-xs outline-none"
               >
-                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                Reset Semua Hasil Ulangan
-              </button>
+                <option value="all">Semua Kelas ({sessions.length})</option>
+                {classes.map(c => (
+                  <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                ))}
+              </select>
+              <select
+                value={monitorStatusFilter}
+                onChange={e => setMonitorStatusFilter(e.target.value)}
+                className="w-full sm:w-auto px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-xs outline-none"
+              >
+                <option value="all">Semua Status</option>
+                <option value="in_progress">Mengerjakan ({activeExaminees})</option>
+                <option value="locked">Terkunci ({lockedExaminees})</option>
+                <option value="submitted">Selesai ({completedExaminees})</option>
+                <option value="not_started">Belum Login / Belum Mulai</option>
+              </select>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                    <th className="py-2.5 px-3 font-semibold">NIS</th>
+                    <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
+                    <th className="py-2.5 px-3 font-semibold">Kelas</th>
+                    <th className="py-2.5 px-3 font-semibold">Status</th>
+                    <th className="py-2.5 px-3 font-semibold">Progres Soal</th>
+                    <th className="py-2.5 px-3 font-semibold">Pelanggaran</th>
+                    <th className="py-2.5 px-3 font-semibold">Nilai</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Tindakan Pengawas</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredMonitoringSessions.map(s => {
+                    const answeredCount = Object.values(s.answers || {}).filter(
+                      a => a && a.answer !== '' && (!Array.isArray(a.answer) || a.answer.length > 0)
+                    ).length;
+
+                    const matchingExam = exams.find(e => e.id === s.examId) || exams[0];
+                    const examQuestionsCount = matchingExam
+                      ? questionBank.questions.filter(q => {
+                          const matchSubject =
+                            !matchingExam.subjectId ||
+                            q.subjectId === matchingExam.subjectId ||
+                            (matchingExam.questionBankId && q.bankId === matchingExam.questionBankId);
+                          const matchClass = isQuestionMatchingClass(q.classId, q.grade, s.classId);
+                          return matchSubject && matchClass;
+                        }).length
+                      : questionBank.questions.length;
+
+                    const totalQ = examQuestionsCount > 0 ? examQuestionsCount : (matchingExam?.totalQuestions || 25);
+                    const isSessionLocked = s.isLocked || s.status === 'locked';
+                    const isSessionDone = s.status === 'submitted' || s.status === 'force_submitted';
+
+                    return (
+                      <tr key={s.id} className={`hover:bg-slate-50/60 ${isSessionLocked ? 'bg-rose-50/50' : ''}`}>
+                        <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">{s.nis}</td>
+                        <td className="py-2.5 px-3 font-medium text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-2 h-2 rounded-full shrink-0 ${
+                                isSessionLocked
+                                  ? 'bg-rose-500'
+                                  : s.isOnline
+                                    ? 'bg-emerald-500 animate-pulse'
+                                    : 'bg-slate-300'
+                              }`}
+                            />
+                            <div>
+                              <span className="block leading-tight">{s.studentName}</span>
+                              {s.isOnline && s.deviceInfo && s.deviceInfo !== '-' && (
+                                <span className="text-[10px] text-slate-400 font-normal">{s.deviceInfo}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{s.className}</td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          {isSessionLocked ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded">
+                              <ShieldAlert className="w-3 h-3" /> Terkunci
+                            </span>
+                          ) : isSessionDone ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                              <CheckCircle className="w-3 h-3" /> Selesai
+                            </span>
+                          ) : s.status === 'in_progress' ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                              <Clock className="w-3 h-3" /> Mengerjakan
+                            </span>
+                          ) : s.isOnline ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+                              Sudah Login
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded">Belum Login</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <div className="font-mono text-slate-800 font-semibold">
+                            {answeredCount}/{totalQ} soal
+                          </div>
+                          {s.status === 'in_progress' && (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              Aktif No. #{(s.currentQuestionIndex || 0) + 1} · {Math.floor(s.timeRemainingSeconds / 60)}m
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 whitespace-nowrap">
+                          <span
+                            className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] border ${
+                              s.violationsCount >= maxViolationsAllowed
+                                ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                : s.violationsCount > 0
+                                  ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                  : 'bg-slate-50 text-slate-500 border-slate-200'
+                            }`}
+                          >
+                            {s.violationsCount}/{maxViolationsAllowed}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono whitespace-nowrap">
+                          {s.status === 'not_started' && answeredCount === 0 ? (
+                            <span className="text-slate-400">-</span>
+                          ) : (
+                            <span className={`font-bold ${s.finalScore >= (matchingExam?.kkm || 75) ? 'text-emerald-700' : 'text-blue-700'}`}>
+                              {s.finalScore}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isSessionLocked ? (
+                              <button
+                                onClick={() => handleUnlockSession(s.id, s.studentName)}
+                                className="px-2.5 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors cursor-pointer shadow-2xs"
+                                title="Buka kunci agar siswa bisa langsung melanjutkan ujian tanpa kehilangan jawaban"
+                              >
+                                Buka Kunci / Izinkan Lanjut
+                              </button>
+                            ) : s.status === 'in_progress' ? (
+                              <>
+                                <button
+                                  onClick={() => handleAddExtraTime(s.id, s.studentName)}
+                                  className="px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors cursor-pointer"
+                                  title="Tambah 15 menit"
+                                >
+                                  +15m
+                                </button>
+                                <button
+                                  onClick={() => handleForceSubmit(s.id, s.studentName)}
+                                  className="px-2 py-1 text-[11px] font-medium bg-amber-100 hover:bg-amber-200 text-amber-800 rounded transition-colors cursor-pointer"
+                                  title="Paksa Kumpulkan"
+                                >
+                                  Kumpul
+                                </button>
+                              </>
+                            ) : null}
+
+                            {(s.isOnline || s.deviceSessionId || s.status === 'in_progress') && (
+                              <button
+                                onClick={() => handleResetSession(s.id, s.studentName)}
+                                className="px-2 py-1 text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded transition-colors cursor-pointer"
+                                title="Reset sesi login perangkat agar siswa bisa pindah HP/laptop tanpa menghapus jawaban"
+                              >
+                                Reset Login / Sesi
+                              </button>
+                            )}
+
+                            {(isSessionDone || s.finalScore > 0 || answeredCount > 0) && (
+                              <button
+                                onClick={() => handleOpenResetSingle(s)}
+                                className="px-2 py-1 text-[11px] font-medium bg-rose-100 hover:bg-rose-200 text-rose-800 rounded transition-colors flex items-center gap-1 cursor-pointer"
+                                title="Reset hasil ujian siswa ini agar dapat ujian ulang"
+                              >
+                                <RotateCcw className="w-3 h-3" />
+                                Reset Hasil
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                  <th className="py-2.5 px-3 font-semibold">NIS</th>
-                  <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
-                  <th className="py-2.5 px-3 font-semibold">Kelas</th>
-                  <th className="py-2.5 px-3 font-semibold">Status</th>
-                  <th className="py-2.5 px-3 font-semibold">Progress</th>
-                  <th className="py-2.5 px-3 font-semibold">Sisa Waktu</th>
-                  <th className="py-2.5 px-3 font-semibold">Pelanggaran</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Tindakan Pengawas</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sessions.map(s => {
-                  const answeredCount = Object.keys(s.answers).length;
-                  return (
-                    <tr key={s.id} className={`hover:bg-slate-50/60 ${s.isLocked ? 'bg-rose-50/40' : ''}`}>
-                      <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
-                      <td className="py-2 px-3 font-medium text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${s.isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                          <span>{s.studentName}</span>
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 text-slate-600">{s.className}</td>
-                      <td className="py-2 px-3">
-                        {s.isLocked ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
-                            <ShieldAlert className="w-3 h-3" /> Terkunci
-                          </span>
-                        ) : s.status === 'submitted' || s.status === 'force_submitted' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                            <CheckCircle className="w-3 h-3" /> Selesai
-                          </span>
-                        ) : s.status === 'in_progress' ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                            <Clock className="w-3 h-3" /> Mengerjakan
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">Belum Masuk</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className="font-mono text-slate-700">{answeredCount} / {questionBank.questions.length} Soal</span>
-                      </td>
-                      <td className="py-2 px-3 font-mono text-slate-600">
-                        {s.status === 'in_progress' ? `${Math.floor(s.timeRemainingSeconds / 60)}m` : '-'}
-                      </td>
-                      <td className="py-2 px-3">
-                        {s.violationsCount > 0 ? (
-                          <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-[11px] ${
-                            s.violationsCount >= schoolSetting.maxViolations
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {s.violationsCount}x insiden
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">0</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {s.isLocked ? (
-                            <button
-                              onClick={() => handleUnlockSession(s.id, s.studentName)}
-                              className="px-2 py-1 text-[11px] font-medium bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors"
-                            >
-                              Buka Kunci
-                            </button>
-                          ) : s.status === 'in_progress' ? (
-                            <>
-                              <button
-                                onClick={() => handleAddExtraTime(s.id, s.studentName)}
-                                className="px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
-                                title="Tambah 15 menit"
-                              >
-                                +15m
-                              </button>
-                              <button
-                                onClick={() => handleForceSubmit(s.id, s.studentName)}
-                                className="px-2 py-1 text-[11px] font-medium bg-amber-100 hover:bg-amber-200 text-amber-800 rounded transition-colors"
-                                title="Paksa Kumpulkan"
-                              >
-                                Kumpul
-                              </button>
-                            </>
-                          ) : null}
-
-                          {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
-                            <button
-                              onClick={() => handleOpenResetSingle(s)}
-                              className="px-2 py-1 text-[11px] font-medium bg-rose-100 hover:bg-rose-200 text-rose-800 rounded transition-colors flex items-center gap-1"
-                              title="Reset hasil ujian siswa ini agar dapat ujian ulang"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                              Reset Hasil
-                            </button>
-                          )}
-
-                          <button
-                            onClick={() => handleResetSession(s.id, s.studentName)}
-                            className="px-2 py-1 text-[11px] font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
-                            title="Reset sesi perangkat"
-                          >
-                            Reset Sesi
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 3: DATA SISWA (WITH EXCEL IMPORT & EDIT) */}
       {activeTab === 'students' && (
@@ -1900,89 +2018,103 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <p className="text-xs text-slate-400 mt-1">Coba sesuaikan pilihan rombel atau kata kunci pencarian Anda.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2 print:gap-4 print:p-0">
-                {cardsToDisplay.map(std => (
-                  <div 
-                    key={std.id} 
-                    className="border-2 border-slate-800 rounded-lg p-3.5 bg-white space-y-2.5 relative break-inside-avoid shadow-xs print:shadow-none print:break-inside-avoid print:border-black"
-                  >
-                    {/* Header Kartu */}
-                    <div className="flex items-center gap-2.5 border-b border-slate-300 pb-2">
-                      <div className="w-10 h-10 rounded-full bg-white p-0.5 border border-slate-300 shrink-0 flex items-center justify-center overflow-hidden">
-                        <img
-                          src={schoolSetting.logoUrl || '/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg'}
-                          alt="Logo Sekolah"
-                          className="w-full h-full object-contain rounded-full"
-                        />
-                      </div>
-                      <div className="flex-1 text-center pr-2">
-                        <h4 className="text-[11px] font-black text-slate-900 tracking-tight uppercase">KARTU PESERTA UJIAN CBT</h4>
-                        <p className="text-[10px] text-slate-800 font-bold uppercase">{schoolSetting.name}</p>
-                        <p className="text-[9px] text-slate-500">T.A. {schoolSetting.academicYear} · Semester {schoolSetting.semester}</p>
-                      </div>
-                    </div>
+              <div className="cbt-cards-print-container space-y-6 print:space-y-0">
+                {Array.from({ length: Math.ceil(cardsToDisplay.length / 6) }, (_, pageIdx) => {
+                  const pageCards = cardsToDisplay.slice(pageIdx * 6, pageIdx * 6 + 6);
+                  return (
+                    <div
+                      key={`card-page-${pageIdx}`}
+                      className="cbt-cards-print-page grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 print:grid-cols-2 print:gap-0"
+                    >
+                      {pageCards.map(std => (
+                        <div
+                          key={std.id}
+                          className="cbt-exam-card border-2 border-slate-800 rounded-lg p-3 bg-white flex flex-col justify-between relative break-inside-avoid shadow-xs print:shadow-none print:break-inside-avoid print:border-black"
+                        >
+                          <div>
+                            {/* Header Kartu */}
+                            <div className="flex items-center gap-2 border-b border-slate-300 pb-1.5 mb-2">
+                              <div className="w-9 h-9 rounded-full bg-white p-0.5 border border-slate-300 shrink-0 flex items-center justify-center overflow-hidden">
+                                <img
+                                  src={schoolSetting.logoUrl || '/assets/aistudio/IMG-20261025-WA0001_14b3123f.jpg'}
+                                  alt="Logo Sekolah"
+                                  className="w-full h-full object-contain rounded-full"
+                                />
+                              </div>
+                              <div className="flex-1 text-center pr-1">
+                                <h4 className="text-[11px] font-black text-slate-900 tracking-tight uppercase leading-tight">KARTU PESERTA UJIAN CBT</h4>
+                                <p className="text-[10px] text-slate-800 font-bold uppercase leading-tight">{schoolSetting.name}</p>
+                                <p className="text-[8.5px] text-slate-500 leading-tight">T.A. {schoolSetting.academicYear} · Semester {schoolSetting.semester}</p>
+                              </div>
+                            </div>
 
-                    {/* Data Siswa */}
-                    <div className="text-xs space-y-1 text-slate-800">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-500 text-[11px]">Nomor Induk (NIS):</span>
-                        <span className="font-mono font-bold text-slate-900">{std.nis}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-500 text-[11px]">Nama Lengkap:</span>
-                        <span className="font-bold text-slate-900 text-right truncate max-w-[170px]" title={std.name}>{std.name}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-500 text-[11px]">Kelas / Rombel:</span>
-                        <span className="font-medium text-slate-800">{std.className}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-500 text-[11px]">Ruang / Sesi:</span>
-                        <span className="font-medium text-slate-800">{std.roomNumber || 'Ruang CBT 01'}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-slate-500 text-[11px]">Nomor Bangku:</span>
-                        <span className="font-mono font-bold text-blue-700">{std.seatNumber || '01'}</span>
-                      </div>
-                      <div className="flex justify-between items-baseline pt-1 border-t border-slate-100">
-                        <span className="text-slate-400 text-[10px]">Akun Login CBT:</span>
-                        <span className="font-mono text-[10px] text-slate-600">NIS Siswa ({std.nis})</span>
-                      </div>
-                    </div>
+                            {/* Data Siswa */}
+                            <div className="text-[11px] space-y-0.5 text-slate-800">
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-slate-500 text-[10px]">Nomor Induk (NIS):</span>
+                                <span className="font-mono font-bold text-slate-900">{std.nis}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-slate-500 text-[10px]">Nama Lengkap:</span>
+                                <span className="font-bold text-slate-900 text-right truncate max-w-[165px]" title={std.name}>{std.name}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-slate-500 text-[10px]">Kelas / Rombel:</span>
+                                <span className="font-medium text-slate-800">{std.className}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-slate-500 text-[10px]">Ruang / Sesi:</span>
+                                <span className="font-medium text-slate-800">{std.roomNumber || 'Ruang 01'}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-slate-500 text-[10px]">Nomor Bangku:</span>
+                                <span className="font-mono font-bold text-blue-700">{std.seatNumber || '01'}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline pt-0.5 border-t border-slate-100">
+                                <span className="text-slate-400 text-[9.5px]">Login CBT:</span>
+                                <span className="font-mono text-[9.5px] text-slate-600">{std.nis} (Token Pengawas)</span>
+                              </div>
+                            </div>
+                          </div>
 
-                    {/* Tanda Tangan Plt. Kepala Sekolah */}
-                    <div className="pt-2 border-t border-dashed border-slate-300 flex items-end justify-between text-[10px] text-slate-600">
-                      <div>
-                        <span className="text-[9px] text-slate-400 block">Lokasi Ujian</span>
-                        <span className="font-medium">Banjarbaru</span>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[9px] text-slate-500">{schoolSetting.principalTitle || 'Plt. Kepala Sekolah'},</p>
-                        <div className="h-6"></div>
-                        <p className="font-bold text-slate-900 text-[10px] underline leading-tight">
-                          {schoolSetting.principalName || 'Legiyo, S.Pd'}
-                        </p>
-                        <p className="text-[8px] text-slate-500 font-mono">
-                          NIP. {schoolSetting.principalNip || '196907022000031010'}
-                        </p>
-                      </div>
-                    </div>
+                          <div>
+                            {/* Tanda Tangan Plt. Kepala Sekolah */}
+                            <div className="pt-1.5 mt-1 border-t border-dashed border-slate-300 flex items-end justify-between text-[9.5px] text-slate-600">
+                              <div>
+                                <span className="text-[8.5px] text-slate-400 block">Lokasi Ujian</span>
+                                <span className="font-medium">Banjarbaru</span>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[8.5px] text-slate-500">{schoolSetting.principalTitle || 'Plt. Kepala Sekolah'},</p>
+                                <div className="h-4"></div>
+                                <p className="font-bold text-slate-900 text-[9.5px] underline leading-tight">
+                                  {schoolSetting.principalName || 'Legiyo, S.Pd'}
+                                </p>
+                                <p className="text-[8px] text-slate-500 font-mono">
+                                  NIP. {schoolSetting.principalNip || '196907022000031010'}
+                                </p>
+                              </div>
+                            </div>
 
-                    {/* Action Bar for Single Card (Screen only) */}
-                    <div className="pt-2 border-t border-slate-200 flex items-center justify-between print:hidden">
-                      <span className="text-[10px] text-slate-400">SMPN 12 Banjarbaru</span>
-                      <button
-                        type="button"
-                        onClick={() => downloadExamCardsAsHtml([std], schoolSetting, `Kartu_Ujian_${std.nis}_${std.name.replace(/\s+/g, '_')}`, std.name)}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                        title="Download kartu peserta ujian siswa ini"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        <span>Download Kartu</span>
-                      </button>
+                            {/* Action Bar for Single Card (Screen only) */}
+                            <div className="pt-1.5 mt-1 border-t border-slate-200 flex items-center justify-between print:hidden">
+                              <span className="text-[10px] text-slate-400">SMPN 12 Banjarbaru</span>
+                              <button
+                                type="button"
+                                onClick={() => downloadExamCardsAsHtml([std], schoolSetting, `Kartu_Ujian_${std.nis}_${std.name.replace(/\s+/g, '_')}`, std.name)}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                title="Download kartu peserta ujian siswa ini"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                                <span>Download Kartu</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

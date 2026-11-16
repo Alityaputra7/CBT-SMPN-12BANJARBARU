@@ -1,8 +1,16 @@
 import { Student, SchoolSetting } from '../types/cbt';
 
+function chunkIntoPages<T>(items: T[], pageSize: number): T[][] {
+  const pages: T[][] = [];
+  for (let i = 0; i < items.length; i += pageSize) {
+    pages.push(items.slice(i, i + pageSize));
+  }
+  return pages;
+}
+
 /**
  * Generates an official standalone printable HTML document for student exam cards.
- * Designed for crisp A4 paper output (Save as PDF / Direct Print).
+ * Layout: Exact 6 cards per A4 portrait page (CSS Grid 2 columns x 3 rows) with anti-cut rules.
  */
 export function generateExamCardsHtml(
   students: Student[],
@@ -13,23 +21,21 @@ export function generateExamCardsHtml(
   const principalName = schoolSetting.principalName || 'Legiyo, S.Pd';
   const principalNip = schoolSetting.principalNip || '196907022000031010';
   const principalTitle = schoolSetting.principalTitle || 'Plt. Kepala Sekolah';
-  const coordinatorName = schoolSetting.cbtCoordinatorName || 'Dwi Setyarini, S.Pd';
-  const coordinatorNip = schoolSetting.cbtCoordinatorNip || '198502082009032008';
 
-  const cardsHtml = students.map(std => `
+  const renderSingleCard = (std: Student) => `
     <div class="card-container">
-      <div class="card-header">
-        <div class="logo-box">
-          <img src="${logoUrl}" alt="Logo Sekolah" onerror="this.style.display='none'" />
+      <div>
+        <div class="card-header">
+          <div class="logo-box">
+            <img src="${logoUrl}" alt="Logo Sekolah" onerror="this.style.display='none'" />
+          </div>
+          <div class="header-titles">
+            <h3>KARTU PESERTA UJIAN CBT</h3>
+            <p class="school-name">${schoolSetting.name}</p>
+            <p class="school-sub">Tahun Ajaran ${schoolSetting.academicYear} &bull; Semester ${schoolSetting.semester}</p>
+          </div>
         </div>
-        <div class="header-titles">
-          <h3>KARTU PESERTA UJIAN CBT</h3>
-          <p class="school-name">${schoolSetting.name}</p>
-          <p class="school-sub">Tahun Ajaran ${schoolSetting.academicYear} &bull; Semester ${schoolSetting.semester}</p>
-        </div>
-      </div>
 
-      <div class="card-body">
         <table class="student-info-table">
           <tr>
             <td class="label">Nomor Induk Siswa (NIS)</td>
@@ -39,32 +45,27 @@ export function generateExamCardsHtml(
           <tr>
             <td class="label">Nama Lengkap Peserta</td>
             <td class="sep">:</td>
-            <td class="val font-bold">${std.name}</td>
+            <td class="val font-bold student-name">${std.name}</td>
           </tr>
           <tr>
-            <td class="label">Kelas / Rombongan Belajar</td>
+            <td class="label">Kelas / Rombel</td>
             <td class="sep">:</td>
             <td class="val">${std.className}</td>
           </tr>
           <tr>
-            <td class="label">Ruang Ujian & Sesi</td>
+            <td class="label">Ruang Ujian</td>
             <td class="sep">:</td>
-            <td class="val">${std.roomNumber || 'Ruang CBT 01'}</td>
+            <td class="val">${std.roomNumber || 'Ruang 01'}</td>
           </tr>
           <tr>
-            <td class="label">Nomor Meja / Bangku</td>
+            <td class="label">Nomor Bangku</td>
             <td class="sep">:</td>
             <td class="val font-bold text-blue">${std.seatNumber || '01'}</td>
           </tr>
           <tr>
-            <td class="label">Username Login CBT</td>
+            <td class="label">Username / Login</td>
             <td class="sep">:</td>
-            <td class="val font-mono">${std.nis}</td>
-          </tr>
-          <tr>
-            <td class="label">Password / Kode Akses</td>
-            <td class="sep">:</td>
-            <td class="val font-mono">Kode Unik Dinamis CBT</td>
+            <td class="val font-mono">${std.nis} (Token Pengawas)</td>
           </tr>
         </table>
       </div>
@@ -85,7 +86,17 @@ export function generateExamCardsHtml(
         </div>
       </div>
     </div>
-  `).join('\n');
+  `;
+
+  const pages = chunkIntoPages(students, 6);
+  const pagesHtml = pages
+    .map(
+      (pageStudents) => `
+    <div class="print-page">
+      ${pageStudents.map(renderSingleCard).join('\n')}
+    </div>`
+    )
+    .join('\n');
 
   return `<!DOCTYPE html>
 <html lang="id">
@@ -101,9 +112,9 @@ export function generateExamCardsHtml(
     }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: #f1f5f9;
+      background-color: #e2e8f0;
       color: #0f172a;
-      line-height: 1.3;
+      line-height: 1.25;
     }
     .toolbar {
       position: fixed;
@@ -120,8 +131,13 @@ export function generateExamCardsHtml(
       z-index: 1000;
     }
     .toolbar h1 {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
+    }
+    .toolbar-sub {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 2px;
     }
     .toolbar-actions {
       display: flex;
@@ -154,37 +170,58 @@ export function generateExamCardsHtml(
     }
 
     .page-wrap {
-      max-width: 960px;
-      margin: 70px auto 40px auto;
-      padding: 20px;
+      margin: 76px auto 40px auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
-    .cards-grid {
+
+    /* A4 Sheet Preview & Print Page: Exact 2 columns x 3 rows = 6 cards */
+    .print-page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 10mm;
+      background: #ffffff;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
       display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-rows: repeat(3, 86mm);
+      gap: 5.5mm;
+      align-content: start;
+      page-break-after: always;
+      break-after: page;
+    }
+    .print-page:last-child {
+      page-break-after: auto;
+      break-after: auto;
     }
 
     .card-container {
+      height: 86mm;
       background: #fff;
-      border: 2px solid #0f172a;
-      border-radius: 8px;
-      padding: 14px;
+      border: 1.75px solid #0f172a;
+      border-radius: 6px;
+      padding: 3.5mm 4mm;
       position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
       page-break-inside: avoid;
       break-inside: avoid;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .card-header {
       display: flex;
       align-items: center;
-      gap: 12px;
-      border-bottom: 2px solid #cbd5e1;
-      padding-bottom: 8px;
-      margin-bottom: 10px;
+      gap: 8px;
+      border-bottom: 1.5px solid #cbd5e1;
+      padding-bottom: 5px;
+      margin-bottom: 6px;
     }
     .logo-box {
-      width: 44px;
-      height: 44px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       border: 1px solid #cbd5e1;
       overflow: hidden;
@@ -204,37 +241,36 @@ export function generateExamCardsHtml(
       flex: 1;
     }
     .header-titles h3 {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 900;
       color: #0f172a;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
       text-transform: uppercase;
     }
     .header-titles .school-name {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
       color: #1e3a8a;
       text-transform: uppercase;
     }
     .header-titles .school-sub {
-      font-size: 9px;
+      font-size: 8px;
       color: #64748b;
     }
 
     .student-info-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
-      margin-bottom: 10px;
+      font-size: 10px;
     }
     .student-info-table td {
-      padding: 3px 2px;
+      padding: 2px 1px;
       vertical-align: top;
     }
     .student-info-table .label {
-      width: 42%;
+      width: 40%;
       color: #475569;
-      font-size: 10px;
+      font-size: 9px;
     }
     .student-info-table .sep {
       width: 4%;
@@ -242,8 +278,15 @@ export function generateExamCardsHtml(
       color: #94a3b8;
     }
     .student-info-table .val {
-      width: 54%;
+      width: 56%;
       color: #0f172a;
+    }
+    .student-name {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 46mm;
+      display: inline-block;
     }
     .font-mono {
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -261,7 +304,7 @@ export function generateExamCardsHtml(
 
     .card-footer {
       border-top: 1px dashed #cbd5e1;
-      padding-top: 8px;
+      padding-top: 5px;
       display: flex;
       justify-content: space-between;
       align-items: flex-end;
@@ -269,13 +312,13 @@ export function generateExamCardsHtml(
     .qr-col {
       display: flex;
       flex-direction: column;
-      gap: 3px;
+      gap: 2px;
     }
     .qr-box {
       border: 1px solid #94a3b8;
-      border-radius: 4px;
-      padding: 3px 6px;
-      font-size: 9px;
+      border-radius: 3px;
+      padding: 2px 5px;
+      font-size: 8px;
       font-weight: 700;
       background: #f8fafc;
       text-align: center;
@@ -283,38 +326,45 @@ export function generateExamCardsHtml(
     }
     .qr-box small {
       display: block;
-      font-size: 7px;
+      font-size: 6.5px;
       color: #64748b;
     }
     .location-txt {
-      font-size: 9px;
+      font-size: 8px;
       color: #64748b;
     }
     .sig-col {
       text-align: right;
     }
     .sig-title {
-      font-size: 9px;
+      font-size: 8px;
       color: #64748b;
     }
     .sig-space {
-      height: 28px;
+      height: 18px;
     }
     .sig-name {
-      font-size: 10.5px;
+      font-size: 9.5px;
       font-weight: 700;
       text-decoration: underline;
       color: #0f172a;
     }
     .sig-nip {
-      font-size: 8.5px;
+      font-size: 8px;
       color: #64748b;
       font-family: ui-monospace, monospace;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 10mm;
     }
 
     @media print {
       body {
         background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       .toolbar {
         display: none !important;
@@ -322,26 +372,41 @@ export function generateExamCardsHtml(
       .page-wrap {
         margin: 0;
         padding: 0;
-        max-width: 100%;
+        gap: 0;
+        display: block;
       }
-      .cards-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+      .print-page {
+        width: 100%;
+        min-height: auto;
+        padding: 0;
+        box-shadow: none;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: repeat(3, 86mm);
+        gap: 5.5mm;
+        page-break-after: always;
+        break-after: page;
+      }
+      .print-page:last-child {
+        page-break-after: auto;
+        break-after: auto;
       }
       .card-container {
         box-shadow: none;
         border-color: #000;
-      }
-      @page {
-        size: A4 portrait;
-        margin: 8mm 8mm 8mm 8mm;
+        height: 86mm;
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
     }
   </style>
 </head>
 <body>
   <div class="toolbar">
-    <h1>Kartu Peserta Ujian CBT &bull; ${schoolSetting.name} (${students.length} Siswa)</h1>
+    <div>
+      <h1>Kartu Peserta Ujian CBT &bull; ${schoolSetting.name} (${students.length} Siswa &bull; ${pages.length} Halaman A4)</h1>
+      <div class="toolbar-sub">Tata letak presisi: 6 Kartu per Halaman A4 Portrait (2 Kolom &times; 3 Baris, Anti-Terpotong)</div>
+    </div>
     <div class="toolbar-actions">
       <button class="btn btn-primary" onclick="window.print()">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -349,16 +414,14 @@ export function generateExamCardsHtml(
           <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
           <rect x="6" y="14" width="12" height="8"></rect>
         </svg>
-        Cetak / Simpan PDF
+        Cetak / Simpan PDF (6 Kartu/Hal)
       </button>
       <button class="btn btn-secondary" onclick="window.close()">Tutup</button>
     </div>
   </div>
 
   <div class="page-wrap">
-    <div class="cards-grid">
-      ${cardsHtml}
-    </div>
+    ${pagesHtml}
   </div>
 </body>
 </html>`;

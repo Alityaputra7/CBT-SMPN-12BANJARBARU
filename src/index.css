@@ -13,3 +13,58 @@
 .notranslate {
   translate: no !important;
 }
+
+/* Official A4 Portrait Print Layout: Exact 6 Exam Cards (2 columns x 3 rows) per page, zero mid-card splits */
+@page {
+  size: A4 portrait;
+  margin: 10mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .cbt-cards-print-container {
+    display: block !important;
+  }
+
+  .cbt-cards-print-page {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: repeat(3, 86mm) !important;
+    gap: 5.5mm !important;
+    width: 100% !important;
+    break-after: page !important;
+    page-break-after: always !important;
+    margin-bottom: 0 !important;
+  }
+
+  .cbt-cards-print-page:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  .cbt-exam-card {
+    height: 86mm !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    overflow: hidden !important;
+    box-shadow: none !important;
+    border-color: #000000 !important;
+  }
+}

@@ -40,6 +40,8 @@ import {
   resetServerData 
 } from './utils/apiSync';
 import { isExamMatchingStudentClass } from './utils/classGroups';
+import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
+import { validateExamSchedule } from './utils/scheduleValidator';
 import { Navbar } from './components/layout/Navbar';
 import { DatabaseSchemaViewer } from './components/erd/DatabaseSchemaViewer';
 import { LoginModal } from './components/auth/LoginModal';
@@ -115,6 +117,7 @@ export default function App() {
 
   // Cross-device sync tracking (ensures mobile phones and laptops stay 100% in sync)
   const lastKnownVersion = useRef<number>(1);
+  const lastKnownTimestamp = useRef<number>(0);
   const isSyncingFromServer = useRef<boolean>(false);
 
   // 1. Initial hydration from server on mount
@@ -123,6 +126,7 @@ export default function App() {
       if (serverRes && serverRes.success && serverRes.data) {
         isSyncingFromServer.current = true;
         lastKnownVersion.current = serverRes.version;
+        lastKnownTimestamp.current = serverRes.lastUpdated || Date.now();
         const d = serverRes.data;
         if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
         if (d.operator) setOperator(d.operator);
@@ -145,11 +149,16 @@ export default function App() {
     const syncInterval = setInterval(async () => {
       if (isSyncingFromServer.current) return;
       const verRes = await fetchServerVersion();
-      if (verRes && verRes.version > lastKnownVersion.current) {
+      if (
+        verRes &&
+        (verRes.version > lastKnownVersion.current ||
+          (verRes.lastUpdated && verRes.lastUpdated > lastKnownTimestamp.current))
+      ) {
         const fullRes = await fetchServerData();
         if (fullRes && fullRes.success && fullRes.data) {
           isSyncingFromServer.current = true;
           lastKnownVersion.current = fullRes.version;
+          lastKnownTimestamp.current = fullRes.lastUpdated || Date.now();
           const d = fullRes.data;
           if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
           if (d.operator) setOperator(d.operator);
@@ -158,7 +167,32 @@ export default function App() {
           if (Array.isArray(d.classes)) setClasses(d.classes);
           if (Array.isArray(d.subjects)) setSubjects(d.subjects);
           if (Array.isArray(d.exams)) setExams(d.exams);
-          if (Array.isArray(d.sessions)) setSessions(d.sessions);
+          if (Array.isArray(d.sessions)) {
+            setSessions(prevSessions => {
+              // Preserve local in-flight student answers if newer than remote, while accepting Operator unlocks/extraTime/forceSubmit
+              return d.sessions.map(remoteSess => {
+                const localSess = prevSessions.find(p => p.id === remoteSess.id);
+                if (!localSess) return remoteSess;
+                const localAnswerCount = Object.keys(localSess.answers || {}).length;
+                const remoteAnswerCount = Object.keys(remoteSess.answers || {}).length;
+                // Accept unlock, force_submitted, extra time, or session reset from Operator immediately
+                const operatorUnlocked = localSess.isLocked && !remoteSess.isLocked;
+                const operatorForceSubmitted = localSess.status !== 'force_submitted' && remoteSess.status === 'force_submitted';
+                const operatorAddedTime = remoteSess.extraTimeMinutes > localSess.extraTimeMinutes;
+                if (operatorUnlocked || operatorForceSubmitted || operatorAddedTime) {
+                  return {
+                    ...remoteSess,
+                    answers: localAnswerCount > remoteAnswerCount ? localSess.answers : remoteSess.answers,
+                  };
+                }
+                // If local session belongs to currently logged in student and has more answers or newer heartbeat, keep newer local progress
+                if (localSess.lastHeartbeat > remoteSess.lastHeartbeat && localAnswerCount >= remoteAnswerCount) {
+                  return localSess;
+                }
+                return remoteSess;
+              });
+            });
+          }
           if (d.questionBank) setQuestionBank(d.questionBank);
           if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
           setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
@@ -193,10 +227,10 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
   }, [operator, students, teachers, classes, subjects, questionBank, exams, sessions, schoolSetting, auditLogs]);
 
-  // Single active session map (prevent duplicate login per student)
+  // Active session map (only true when student genuinely has an active running exam)
   const activeSessionsMap: Record<string, boolean> = {};
   sessions.forEach(s => {
-    if (s.isOnline && s.status === 'in_progress') {
+    if (s.isOnline && s.status === 'in_progress' && !s.isLocked) {
       activeSessionsMap[s.studentId] = true;
     }
   });
@@ -449,6 +483,36 @@ export default function App() {
     triggerSyncNotification(`Hasil ulangan untuk ${resetCount} siswa pada ${scopeLabel} berhasil direset.`);
   };
 
+  // RESET LOGIN / SESI PERANGKAT ONLY (without wiping student's exam answers)
+  const handleResetLoginSession = (sessionId: string, studentName: string) => {
+    let updatedTarget: StudentExamSession | null = null;
+    setSessions(prev => {
+      const updated = prev.map(s => {
+        if (s.id === sessionId) {
+          updatedTarget = {
+            ...s,
+            isOnline: false,
+            deviceSessionId: undefined,
+            deviceInfo: 'Login Direset Operator',
+            lastHeartbeat: Date.now()
+          };
+          return updatedTarget;
+        }
+        return s;
+      });
+      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+      syncServerUpdates({ sessions: updated });
+      return updated;
+    });
+
+    if (updatedTarget) {
+      syncSingleSession(updatedTarget);
+    }
+
+    handleAddAuditLog('RESET_LOGIN_SESI', `Mereset sesi login perangkat untuk ${studentName} (jawaban tetap aman)`);
+    triggerSyncNotification(`Sesi login ${studentName} telah direset. Siswa dapat masuk kembali dari perangkat baru.`);
+  };
+
   // Restore factory data back to 92 official students & 9 official teachers
   const handleRestoreFactoryData = () => {
     if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 92 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
@@ -485,23 +549,100 @@ export default function App() {
     } else if (role === 'guru') {
       setActiveSection('guru');
       handleAddAuditLog('LOGIN_GURU', `Guru ${account?.name} berhasil login`);
-    } else if (role === 'siswa') {
+    } else if (role === 'siswa' && student) {
+      // Pick the currently scheduled ongoing exam for this student's class (or first eligible exam)
+      const eligible = exams.filter(ex => isExamMatchingStudentClass(ex, student.classId, student.className));
+      const targetExam = eligible.find(ex => validateExamSchedule(ex).canStart) || eligible[0] || exams[0] || INITIAL_EXAMS[0];
+      if (targetExam) {
+        setSelectedExamId(targetExam.id);
+      }
+
+      const deviceSessionId = getStudentSessionDeviceId(student.nis);
+      const clientInfo = detectClientDeviceInfo();
+
+      // Immediately update and sync student's session so Operator Dashboard reflects Login in real time
+      setSessions(prev => {
+        const existingIdx = prev.findIndex(
+          s => s.studentId === student.id && (s.examId === targetExam?.id || (!s.examId && targetExam))
+        );
+        const fallbackIdx = existingIdx >= 0 ? existingIdx : prev.findIndex(s => s.studentId === student.id);
+
+        let syncedSession: StudentExamSession;
+        let updatedList: StudentExamSession[];
+
+        if (fallbackIdx >= 0) {
+          const existing = prev[fallbackIdx];
+          syncedSession = {
+            ...existing,
+            examId: existing.examId || targetExam?.id || 'ex-mat-2026',
+            examTitle: existing.examTitle || targetExam?.title || 'Ujian CBT',
+            isOnline: true,
+            deviceSessionId,
+            deviceInfo: clientInfo,
+            lastHeartbeat: Date.now()
+          };
+          updatedList = prev.map((s, idx) => (idx === fallbackIdx ? syncedSession : s));
+        } else {
+          syncedSession = {
+            id: `sess-${student.id}-${targetExam?.id || 'ex-mat-2026'}`,
+            studentId: student.id,
+            studentName: student.name,
+            nis: student.nis,
+            classId: student.classId,
+            className: student.className,
+            examId: targetExam?.id || 'ex-mat-2026',
+            examTitle: targetExam?.title || 'Ujian CBT',
+            status: 'not_started',
+            timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
+            violationsCount: 0,
+            isLocked: false,
+            extraTimeMinutes: 0,
+            deviceInfo: clientInfo,
+            deviceSessionId,
+            currentQuestionIndex: 0,
+            isOnline: true,
+            lastHeartbeat: Date.now(),
+            answers: {},
+            scorePg: 0,
+            scoreEssay: 0,
+            finalScore: 0,
+            isPassed: false
+          };
+          updatedList = [...prev, syncedSession];
+        }
+
+        saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
+        syncSingleSession(syncedSession);
+        return updatedList;
+      });
+
       setActiveSection('siswa');
-      handleAddAuditLog('LOGIN_SISWA', `Siswa ${student?.name} (${student?.nis}) berhasil login dengan kode unik`);
+      handleAddAuditLog('LOGIN_SISWA', `Siswa ${student.name} (NIS ${student.nis}) masuk dari ${clientInfo}`);
     }
   };
 
   const handleLogout = () => {
     if (currentRole === 'siswa' && currentStudent) {
-      // Mark offline
+      // Mark offline and clear active device lock on explicit logout, then sync immediately
+      const modifiedSessions: StudentExamSession[] = [];
       setSessions(prev => {
         const updated = prev.map(s => {
           if (s.studentId === currentStudent.id) {
-            return { ...s, isOnline: false };
+            const nextSess: StudentExamSession = {
+              ...s,
+              isOnline: false,
+              deviceSessionId: s.status === 'in_progress' ? s.deviceSessionId : undefined,
+              lastHeartbeat: Date.now()
+            };
+            modifiedSessions.push(nextSess);
+            return nextSess;
           }
           return s;
         });
         saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+        if (modifiedSessions[0]) {
+          syncSingleSession(modifiedSessions[0]);
+        }
         return updated;
       });
     }
@@ -570,7 +711,9 @@ export default function App() {
         violationsCount: 0,
         isLocked: false,
         extraTimeMinutes: 0,
-        deviceInfo: 'Browser CBT Siswa (HP / Komputer)',
+        deviceInfo: detectClientDeviceInfo(),
+        deviceSessionId: getStudentSessionDeviceId(currentStudent.nis),
+        currentQuestionIndex: 0,
         isOnline: true,
         lastHeartbeat: Date.now(),
         answers: {},
@@ -679,6 +822,7 @@ export default function App() {
             teachers={teachers}
             operator={operator}
             activeSessions={activeSessionsMap}
+            sessions={sessions}
             schoolSetting={schoolSetting}
           />
         )}
@@ -705,6 +849,7 @@ export default function App() {
             onUpdateQuestionBank={handleUpdateQuestionBank}
             onResetSingleResult={handleResetSingleExamResult}
             onResetAllResults={handleResetAllExamResults}
+            onResetLoginSession={handleResetLoginSession}
             onRestoreFactoryData={handleRestoreFactoryData}
             lastSyncTime={lastSyncTime}
           />
@@ -725,6 +870,7 @@ export default function App() {
             schoolSetting={schoolSetting}
             onResetSingleResult={handleResetSingleExamResult}
             onResetAllResults={handleResetAllExamResults}
+            onResetLoginSession={handleResetLoginSession}
             lastSyncTime={lastSyncTime}
           />
         )}
@@ -741,7 +887,7 @@ export default function App() {
             onUpdateSession={handleUpdateStudentSession}
             onRecordViolation={handleRecordViolation}
             schoolSetting={schoolSetting}
-            onExitExam={() => setActiveSection('login')}
+            onExitExam={handleLogout}
           />
         )}
 

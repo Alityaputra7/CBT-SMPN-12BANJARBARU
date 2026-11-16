@@ -12,8 +12,9 @@ import {
   School,
   ArrowRight
 } from 'lucide-react';
-import { UserRole, UserAccount, Student, SchoolSetting } from '../../types/cbt';
+import { UserRole, UserAccount, Student, SchoolSetting, StudentExamSession } from '../../types/cbt';
 import { generateDynamicToken, verifyDynamicToken } from '../../utils/tokenGenerator';
+import { getStudentSessionDeviceId } from '../../utils/sessionDevice';
 
 interface LoginModalProps {
   onLoginSuccess: (
@@ -24,7 +25,8 @@ interface LoginModalProps {
   students: Student[];
   teachers: UserAccount[];
   operator: UserAccount;
-  activeSessions: Record<string, boolean>; // studentId -> hasActiveSession
+  activeSessions: Record<string, boolean>; // studentId -> hasActiveSession (legacy fallback)
+  sessions?: StudentExamSession[]; // Full sessions for NIS/deviceSessionId validation
   schoolSetting?: SchoolSetting;
 }
 
@@ -34,12 +36,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   teachers,
   operator,
   activeSessions,
+  sessions = [],
   schoolSetting
 }) => {
   const [role, setRole] = useState<UserRole>('siswa');
 
   // Form states
-  const [nis, setNis] = useState<string>('3132399330');
+  const [nis, setNis] = useState<string>('');
   const [uniqueCode, setUniqueCode] = useState<string>('');
   const [usernameOrNip, setUsernameOrNip] = useState<string>('197910132014061002');
   const [password, setPassword] = useState<string>('guru123');
@@ -98,7 +101,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setErrorMessage('');
 
     if (role === 'siswa') {
-      const foundStudent = students.find(s => s.nis === nis.trim());
+      const cleanNis = nis.trim();
+      const foundStudent = students.find(s => s.nis.trim() === cleanNis);
       if (!foundStudent) {
         handleFailedAttempt('NIS tidak terdaftar dalam database peserta ujian!');
         return;
@@ -111,9 +115,22 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         return;
       }
 
-      // Check single active session constraint
-      if (activeSessions[foundStudent.id]) {
-        setErrorMessage(`Akun NIS ${foundStudent.nis} (${foundStudent.name}) sedang aktif pada perangkat lain. Satu akun hanya boleh memiliki satu sesi aktif. Hubungi operator/proktor untuk reset sesi.`);
+      // Concurrent multi-user & anti-false-lock session check bound to student's NIS & deviceSessionId:
+      // Only block if this exact student truly has an active running exam session on a DIFFERENT device.
+      const localDeviceSessionId = getStudentSessionDeviceId(foundStudent.nis);
+      const studentActiveOnOtherDevice = sessions.some(s => 
+        s.studentId === foundStudent.id &&
+        s.isOnline === true &&
+        s.status === 'in_progress' &&
+        !s.isLocked &&
+        Boolean(s.deviceSessionId) &&
+        s.deviceSessionId !== localDeviceSessionId
+      );
+
+      if (studentActiveOnOtherDevice || (sessions.length === 0 && activeSessions[foundStudent.id])) {
+        setErrorMessage(
+          `Akun NIS ${foundStudent.nis} (${foundStudent.name}) sedang aktif mengerjakan ujian pada perangkat lain. Hubungi Operator untuk menekan tombol "Reset Login / Sesi" jika Anda berpindah perangkat.`
+        );
         return;
       }
 

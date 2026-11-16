@@ -168,6 +168,8 @@ export interface StudentExamSession {
   lockReason?: string;
   extraTimeMinutes: number;
   deviceInfo: string;
+  deviceSessionId?: string;
+  currentQuestionIndex?: number;
   isOnline: boolean;
   lastHeartbeat: number;
   answers: Record<string, {

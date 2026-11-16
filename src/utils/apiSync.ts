@@ -152,11 +152,13 @@ export async function decompressString(b64: string): Promise<string> {
  */
 function buildJsonBinPayload() {
   const activeSessions = (cachedStore.sessions || []).filter(s => 
+    s.isOnline ||
     s.status !== 'not_started' || 
     Object.keys(s.answers || {}).length > 0 || 
     s.isLocked || 
     s.finalScore > 0 || 
-    s.violationsCount > 0
+    s.violationsCount > 0 ||
+    !!s.deviceSessionId
   );
 
   return {
@@ -176,7 +178,7 @@ function buildJsonBinPayload() {
 }
 
 /**
- * Reconstructs full 92 sessions by merging default template with active sessions from JSONBin
+ * Reconstructs full 92+ sessions by merging default template with active sessions from JSONBin
  */
 function reconstructFullSessions(
   students: Student[], 
@@ -185,17 +187,32 @@ function reconstructFullSessions(
 ): StudentExamSession[] {
   const base = createInitialStudentSessions(students);
   const activeMap = new Map<string, StudentExamSession>();
+  const usedIds = new Set<string>();
   
   activeSessions.forEach(s => {
-    // Key by studentId and examId
-    activeMap.set(`${s.studentId}-${s.examId || primaryExam.id}`, s);
-    activeMap.set(s.studentId, s);
+    activeMap.set(`${s.studentId}-${s.examId || primaryExam?.id || 'ex-mat-2026'}`, s);
+    if (!activeMap.has(s.studentId)) {
+      activeMap.set(s.studentId, s);
+    }
   });
 
-  return base.map(defaultSess => {
+  const merged = base.map(defaultSess => {
     const matched = activeMap.get(`${defaultSess.studentId}-${defaultSess.examId}`) || activeMap.get(defaultSess.studentId);
-    return matched || defaultSess;
+    if (matched) {
+      usedIds.add(matched.id);
+      return matched;
+    }
+    return defaultSess;
   });
+
+  // Preserve any additional per-exam sessions not matching the primary base slot
+  activeSessions.forEach(s => {
+    if (!usedIds.has(s.id) && !merged.some(m => m.id === s.id)) {
+      merged.push(s);
+    }
+  });
+
+  return merged;
 }
 
 /**
@@ -408,12 +425,15 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
   }
 
   // Detect critical milestones that require immediate zero-delay server & JSONBin push:
-  // 1. Student STARTS exam (status changed to in_progress)
-  // 2. Student FINISHES exam (status is submitted or force_submitted)
-  // 3. Student violation lock event
+  // 1. Student LOGS IN or LOGS OUT (isOnline changed)
+  // 2. Student STARTS exam (status changed to in_progress)
+  // 3. Student FINISHES exam (status is submitted or force_submitted)
+  // 4. Student VIOLATION or LOCK/UNLOCK event
+  const isLoginEvent = session.isOnline !== (prevSession?.isOnline ?? false);
   const isStartEvent = session.status === 'in_progress' && (!prevSession || prevSession.status === 'not_started');
   const isFinishEvent = session.status === 'submitted' || session.status === 'force_submitted';
   const isLockEvent = session.isLocked !== (prevSession?.isLocked ?? false);
+  const isViolationEvent = session.violationsCount !== (prevSession?.violationsCount ?? 0);
 
   // Send single session to local server proxy with high priority
   fetch('/api/cbt/session', {
@@ -422,7 +442,7 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
     body: JSON.stringify({ session }),
   }).catch(err => console.warn('[CBT Server] Session update error:', err));
 
-  if (isStartEvent || isFinishEvent || isLockEvent) {
+  if (isLoginEvent || isStartEvent || isFinishEvent || isLockEvent || isViolationEvent) {
     if (debounceSaveTimer) {
       clearTimeout(debounceSaveTimer);
       debounceSaveTimer = null;
@@ -430,7 +450,7 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
     return await syncServerUpdates({ sessions: cachedStore.sessions });
   }
 
-  // For real-time keystrokes & clicks during exam, debounce JSONBin PUT (500ms) to respect rate limits
+  // For real-time keystrokes, question navigation & clicks during exam, fast debounce JSONBin PUT (350ms)
   if (debounceSaveTimer) {
     clearTimeout(debounceSaveTimer);
   }
@@ -443,7 +463,7 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
     } finally {
       isSavingToJsonBin = false;
     }
-  }, 500);
+  }, 350);
 
   return true;
 }
