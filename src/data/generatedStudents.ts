@@ -921,4 +921,14 @@ export const OFFICIAL_STUDENTS: Student[] = [
     roomNumber: "Ruang 04",
     seatNumber: "29"
   },
+  {
+    id: "std-093",
+    nis: "0123456789",
+    name: "Dimas",
+    classId: "cls-1",
+    className: "VII",
+    gender: "L",
+    roomNumber: "Ruang 01",
+    seatNumber: "30"
+  },
 ];

@@ -1,6 +1,6 @@
 {
-  "version": 1793319724841,
-  "lastUpdated": 1794793958117,
+  "version": 1793319724842,
+  "lastUpdated": 1794794942776,
   "data": {
     "schoolSetting": {
       "id": "sch-1",
@@ -948,6 +948,16 @@
         "gender": "P",
         "roomNumber": "Ruang 04",
         "seatNumber": "29"
+      },
+      {
+        "id": "std-093",
+        "nis": "0123456789",
+        "name": "Dimas",
+        "classId": "cls-1",
+        "className": "VII",
+        "gender": "L",
+        "roomNumber": "Ruang 01",
+        "seatNumber": "30"
       }
     ],
     "teachers": [
@@ -1121,7 +1131,7 @@
         "grade": "VII",
         "name": "VII",
         "homeroomTeacherName": "Ahmad Fathoni",
-        "totalStudents": 29
+        "totalStudents": 30
       },
       {
         "id": "cls-8a",
@@ -3242,6 +3252,26 @@
         "nis": "0125774453",
         "classId": "cls-9",
         "className": "IX",
+        "status": "not_started",
+        "timeRemainingSeconds": 5400,
+        "answers": {},
+        "scorePg": 0,
+        "scoreEssay": 0,
+        "finalScore": 0,
+        "isPassed": false,
+        "violationsCount": 0,
+        "isLocked": false,
+        "isOnline": false,
+        "currentQuestionIndex": 0
+      },
+      {
+        "id": "sess-std-093",
+        "examId": "ex-mat-2026",
+        "studentId": "std-093",
+        "studentName": "Dimas",
+        "nis": "0123456789",
+        "classId": "cls-1",
+        "className": "VII",
         "status": "not_started",
         "timeRemainingSeconds": 5400,
         "answers": {},

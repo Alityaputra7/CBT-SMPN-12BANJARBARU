@@ -360,7 +360,7 @@ KV_REST_API_READ_ONLY_TOKEN="AXXXAAIncDEwNzIz..."`;
                   <span>2. Vercel Postgres (Neon Serverless)</span>
                 </div>
                 <p className="text-[11px] text-slate-600 leading-relaxed">
-                  Digunakan untuk <strong>data relasional terstruktur</strong>: 92 siswa resmi, 9 guru mapel, jadwal ujian, bank soal lengkap, dan arsip nilai hasil ulangan siswa untuk pencetakan leger & kartu.
+                  Digunakan untuk <strong>data relasional terstruktur</strong>: 93 siswa resmi, 9 guru mapel, jadwal ujian, bank soal lengkap, dan arsip nilai hasil ulangan siswa untuk pencetakan leger & kartu.
                 </p>
               </div>
             </div>

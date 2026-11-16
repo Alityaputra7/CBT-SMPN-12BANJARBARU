@@ -515,7 +515,7 @@ export default function App() {
 
   // Restore factory data back to 92 official students & 9 official teachers
   const handleRestoreFactoryData = () => {
-    if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 92 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
+    if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 93 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
       clearCbtStorage();
       resetServerData();
       setStudents(INITIAL_STUDENTS);

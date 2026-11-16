@@ -148,7 +148,7 @@ export const INITIAL_CLASSES: ClassRoom[] = [
     grade: 'VII',
     name: 'VII',
     homeroomTeacherName: 'Ahmad Fathoni',
-    totalStudents: 29
+    totalStudents: 30
   },
   {
     id: 'cls-8a',
