@@ -2,6 +2,7 @@ import {
   ExamSchedule,
   ExamViolationLog,
   Question,
+  Student,
   StudentExamSession,
   StudentExamStatus,
   ViolationType,
@@ -13,6 +14,7 @@ import { syncSingleSession } from '../utils/apiSync';
 export interface SupabaseExamSessionRow {
   id: string;
   student_id: string;
+  student_nis?: string;
   student_name: string;
   nis: string;
   class_id: string;
@@ -20,6 +22,8 @@ export interface SupabaseExamSessionRow {
   exam_id: string;
   exam_title: string;
   status: string;
+  answered_count?: number;
+  total_questions?: number;
   score: number;
   score_pg: number;
   score_essay: number;
@@ -71,6 +75,30 @@ export interface SessionActionResult {
   error?: string;
 }
 
+export function buildDeterministicSessionId(nis: string, examId: string): string {
+  const cleanNis = (nis || 'unknown').trim();
+  const cleanExam = (examId || 'ex-mat-2026').trim();
+  return `sess-${cleanNis}-${cleanExam}`;
+}
+
+export function countAnsweredQuestions(answers?: StudentExamSession['answers']): number {
+  if (!answers || typeof answers !== 'object') return 0;
+  return Object.values(answers).filter(
+    a => a && a.answer !== '' && a.answer !== undefined && (!Array.isArray(a.answer) || a.answer.length > 0)
+  ).length;
+}
+
+function normalizeStatus(rawStatus?: string | null, isLocked?: boolean): StudentExamStatus {
+  if (isLocked) return 'locked';
+  const s = (rawStatus || 'not_started').toLowerCase().trim();
+  if (s === 'sedang_mengerjakan' || s === 'in_progress') return 'in_progress';
+  if (s === 'selesai' || s === 'completed') return 'completed';
+  if (s === 'submitted') return 'submitted';
+  if (s === 'force_submitted') return 'force_submitted';
+  if (s === 'terkunci' || s === 'locked') return 'locked';
+  return 'not_started';
+}
+
 function parseAnswersJson(raw: SupabaseExamSessionRow['answers_json']): StudentExamSession['answers'] {
   if (!raw) return {};
   if (typeof raw === 'string') {
@@ -84,18 +112,30 @@ function parseAnswersJson(raw: SupabaseExamSessionRow['answers_json']): StudentE
   return typeof raw === 'object' ? raw : {};
 }
 
-export function mapSessionToSupabaseRow(session: StudentExamSession): SupabaseExamSessionRow {
+export function mapSessionToSupabaseRow(
+  session: StudentExamSession,
+  totalQuestions = 0
+): SupabaseExamSessionRow {
   const nowIso = session.updatedAt || new Date().toISOString();
+  const answeredCount = countAnsweredQuestions(session.answers);
+  const deterministicId =
+    session.nis && session.examId
+      ? buildDeterministicSessionId(session.nis, session.examId)
+      : session.id;
+
   return {
-    id: session.id,
+    id: deterministicId,
     student_id: session.studentId,
-    student_name: session.studentName,
+    student_nis: session.nis,
     nis: session.nis,
+    student_name: session.studentName,
     class_id: session.classId,
     class_name: session.className,
     exam_id: session.examId,
     exam_title: session.examTitle,
-    status: session.status,
+    status: session.isLocked ? 'locked' : session.status,
+    answered_count: answeredCount,
+    total_questions: totalQuestions > 0 ? totalQuestions : undefined,
     score: Number(session.finalScore) || 0,
     score_pg: Number(session.scorePg) || 0,
     score_essay: Number(session.scoreEssay) || 0,
@@ -120,23 +160,26 @@ export function mapSessionToSupabaseRow(session: StudentExamSession): SupabaseEx
 }
 
 export function mapSupabaseRowToSession(row: SupabaseExamSessionRow): StudentExamSession {
-  const validStatus = (row.status || 'not_started') as StudentExamStatus;
+  const isLockedFlag = Boolean(row.is_locked || (row.status || '').toLowerCase() === 'locked' || (row.status || '').toLowerCase() === 'terkunci');
+  const validStatus = normalizeStatus(row.status, isLockedFlag);
   const computedFinalScore = Number(row.final_score ?? row.score ?? 0);
+  const resolvedNis = row.nis || row.student_nis || '';
+
   return {
-    id: row.id,
+    id: row.id || buildDeterministicSessionId(resolvedNis, row.exam_id),
     studentId: row.student_id,
     studentName: row.student_name || '',
-    nis: row.nis || '',
+    nis: resolvedNis,
     classId: row.class_id || '',
     className: row.class_name || '',
     examId: row.exam_id || '',
     examTitle: row.exam_title || '',
-    status: row.is_locked ? 'locked' : validStatus,
+    status: validStatus,
     startedAt: row.started_at || undefined,
     submittedAt: row.submitted_at || undefined,
     timeRemainingSeconds: Number(row.time_remaining_seconds ?? 5400),
     violationsCount: Number(row.violation_count ?? 0),
-    isLocked: Boolean(row.is_locked || validStatus === 'locked'),
+    isLocked: isLockedFlag,
     lockReason: row.lock_reason || undefined,
     extraTimeMinutes: Number(row.extra_time_minutes ?? 0),
     deviceInfo: row.device_info || 'CBT Browser',
@@ -170,8 +213,34 @@ export function mapSupabaseViolationRow(row: SupabaseViolationLogRow): ExamViola
 }
 
 /**
+ * Shared upsert helper: prioritizes composite (nis, exam_id) conflict key,
+ * and gracefully falls back to primary key `id` if DB constraint hasn't been created yet.
+ */
+async function upsertSessionRow(row: SupabaseExamSessionRow) {
+  if (!supabase) {
+    return { data: null, error: { message: 'Supabase client is not configured' } };
+  }
+
+  let res = await supabase
+    .from('cbt_exam_sessions')
+    .upsert(row, { onConflict: 'nis,exam_id' })
+    .select()
+    .single();
+
+  if (res.error && (res.error.code === '42P10' || res.error.message?.includes('ON CONFLICT'))) {
+    res = await supabase
+      .from('cbt_exam_sessions')
+      .upsert(row, { onConflict: 'id' })
+      .select()
+      .single();
+  }
+
+  return res;
+}
+
+/**
  * 1. SUBMIT EXAM (Siswa -> Supabase -> Operator/Guru)
- * Explicitly computes final score, persists answers, status='completed', and submitted_at.
+ * Explicitly computes final score, answered_count, status='completed', and submitted_at.
  * Resolves success ONLY after Supabase/server confirms persistence.
  */
 export async function submitExamToSupabase(params: {
@@ -191,6 +260,7 @@ export async function submitExamToSupabase(params: {
 
   const completedSession: StudentExamSession = {
     ...session,
+    id: buildDeterministicSessionId(session.nis, exam.id),
     examId: exam.id,
     examTitle: exam.title,
     status: forcedStatus,
@@ -209,12 +279,8 @@ export async function submitExamToSupabase(params: {
   };
 
   if (isSupabaseConfigured && supabase) {
-    const row = mapSessionToSupabaseRow(completedSession);
-    const { data, error } = await supabase
-      .from('cbt_exam_sessions')
-      .upsert(row, { onConflict: 'id' })
-      .select()
-      .single();
+    const row = mapSessionToSupabaseRow(completedSession, questions.length);
+    const { data, error } = await upsertSessionRow(row);
 
     if (error) {
       console.error('[Supabase] submitExam upsert failed:', error);
@@ -227,7 +293,6 @@ export async function submitExamToSupabase(params: {
     }
 
     const confirmedSession = data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : completedSession;
-    // Also mirror to local/JSONBin store cleanly
     await syncSingleSession(confirmedSession).catch(() => false);
     return {
       success: true,
@@ -236,7 +301,6 @@ export async function submitExamToSupabase(params: {
     };
   }
 
-  // Fallback to Express API + JSONBin when Supabase env vars are not yet configured in local dev
   const synced = await syncSingleSession(completedSession);
   if (!synced) {
     return {
@@ -257,7 +321,7 @@ export async function submitExamToSupabase(params: {
 /**
  * 2. RECORD ANTI-CHEAT VIOLATION & AUTO-LOCK AT 3/3
  * Increments violation_count + 1, writes audit row to cbt_violation_logs,
- * and sets is_locked=true when violation_count >= maxViolations.
+ * and sets is_locked=true & status='locked' when violation_count >= maxViolations.
  */
 export async function recordViolationToSupabase(params: {
   session: StudentExamSession;
@@ -265,37 +329,43 @@ export async function recordViolationToSupabase(params: {
   details: string;
   maxViolations?: number;
   timeRemainingSeconds?: number;
+  totalQuestions?: number;
 }): Promise<SessionActionResult> {
-  const { session, violationType, details, maxViolations = 3, timeRemainingSeconds } = params;
+  const {
+    session,
+    violationType,
+    details,
+    maxViolations = 3,
+    timeRemainingSeconds,
+    totalQuestions = 0,
+  } = params;
   const nextCount = (session.violationsCount || 0) + 1;
   const isNowLocked = nextCount >= maxViolations;
   const nowIso = new Date().toISOString();
 
   const updatedSession: StudentExamSession = {
     ...session,
+    id: session.nis && session.examId ? buildDeterministicSessionId(session.nis, session.examId) : session.id,
     violationsCount: nextCount,
     isLocked: isNowLocked,
     status: isNowLocked ? 'locked' : 'in_progress',
     lockReason: isNowLocked
       ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
-      : session.lockReason,
+      : `Pelanggaran ${nextCount}/${maxViolations}: ${details}`,
     timeRemainingSeconds:
       typeof timeRemainingSeconds === 'number' ? timeRemainingSeconds : session.timeRemainingSeconds,
+    isOnline: true,
     lastHeartbeat: Date.now(),
     updatedAt: nowIso,
   };
 
   if (isSupabaseConfigured && supabase) {
-    const row = mapSessionToSupabaseRow(updatedSession);
-    const { data, error } = await supabase
-      .from('cbt_exam_sessions')
-      .upsert(row, { onConflict: 'id' })
-      .select()
-      .single();
+    const row = mapSessionToSupabaseRow(updatedSession, totalQuestions);
+    const { data, error } = await upsertSessionRow(row);
 
     const logRow: SupabaseViolationLogRow = {
       id: `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      session_id: session.id,
+      session_id: row.id,
       student_id: session.studentId,
       student_name: session.studentName,
       nis: session.nis,
@@ -330,8 +400,8 @@ export async function recordViolationToSupabase(params: {
 
 /**
  * 3. UNLOCK STUDENT SESSION BY OPERATOR / GURU
- * Sets is_locked=false, resets violation_count to 0 (optional), and stamps admin_action_at
- * so the student's locked screen unlocks immediately via Supabase Realtime.
+ * Sets is_locked=false, status='in_progress', resets violation_count=0,
+ * and stamps admin_action_at so the student's locked screen unlocks immediately.
  */
 export async function unlockStudentSessionInSupabase(
   session: StudentExamSession,
@@ -343,6 +413,7 @@ export async function unlockStudentSessionInSupabase(
 
   const unlockedSession: StudentExamSession = {
     ...session,
+    id: session.nis && session.examId ? buildDeterministicSessionId(session.nis, session.examId) : session.id,
     isLocked: false,
     lockReason: undefined,
     status: 'in_progress',
@@ -355,18 +426,29 @@ export async function unlockStudentSessionInSupabase(
 
   if (isSupabaseConfigured && supabase) {
     const row = mapSessionToSupabaseRow(unlockedSession);
-    const { data, error } = await supabase
-      .from('cbt_exam_sessions')
-      .upsert(row, { onConflict: 'id' })
-      .select()
-      .single();
+    const { data, error } = await upsertSessionRow(row);
 
-    // Log operator unlock in cbt_violation_logs for complete audit trail
+    // Also update any legacy rows with matching (nis, exam_id) in case old ID existed
+    if (session.nis && session.examId) {
+      await supabase
+        .from('cbt_exam_sessions')
+        .update({
+          is_locked: false,
+          lock_reason: null,
+          status: 'in_progress',
+          violation_count: resetViolations ? 0 : session.violationsCount,
+          admin_action_at: nowMs,
+          updated_at: nowIso,
+        })
+        .eq('nis', session.nis)
+        .eq('exam_id', session.examId);
+    }
+
     await supabase
       .from('cbt_violation_logs')
       .insert({
         id: `unlock-${nowMs}-${Math.random().toString(36).slice(2, 7)}`,
-        session_id: session.id,
+        session_id: row.id,
         student_id: session.studentId,
         student_name: session.studentName,
         nis: session.nis,
@@ -375,7 +457,7 @@ export async function unlockStudentSessionInSupabase(
         exam_title: session.examTitle,
         violation_type: 'operator_unlock',
         description: resetViolations
-          ? 'Operator membuka kunci ujian dan mereset hitungan pelanggaran menjadi 0/3'
+          ? 'Operator membuka kunci ujian dan mereset pelanggaran menjadi 0/3'
           : 'Operator membuka kunci ujian siswa',
         violation_number: 0,
         action_taken: 'OPERATOR_UNLOCK',
@@ -398,16 +480,22 @@ export async function unlockStudentSessionInSupabase(
 }
 
 /**
- * 4. SYNC PROGRESS / HEARTBEAT / RESET TO SUPABASE
+ * 4. SYNC PROGRESS / LOGIN / START / ANSWERS / HEARTBEAT TO SUPABASE
  */
-export async function syncSessionProgressToSupabase(session: StudentExamSession): Promise<boolean> {
+export async function syncSessionProgressToSupabase(
+  session: StudentExamSession,
+  totalQuestions = 0
+): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return true;
   try {
-    const row = mapSessionToSupabaseRow({
-      ...session,
-      updatedAt: new Date().toISOString(),
-    });
-    const { error } = await supabase.from('cbt_exam_sessions').upsert(row, { onConflict: 'id' });
+    const row = mapSessionToSupabaseRow(
+      {
+        ...session,
+        updatedAt: new Date().toISOString(),
+      },
+      totalQuestions
+    );
+    const { error } = await upsertSessionRow(row);
     if (error) {
       console.warn('[Supabase] Session progress upsert error:', error.message);
       return false;
@@ -424,7 +512,13 @@ export async function syncMultipleSessionsToSupabase(sessions: StudentExamSessio
   try {
     const nowIso = new Date().toISOString();
     const rows = sessions.map(s => mapSessionToSupabaseRow({ ...s, updatedAt: nowIso }));
-    const { error } = await supabase.from('cbt_exam_sessions').upsert(rows, { onConflict: 'id' });
+    let { error } = await supabase
+      .from('cbt_exam_sessions')
+      .upsert(rows, { onConflict: 'nis,exam_id' });
+    if (error && (error.code === '42P10' || error.message?.includes('ON CONFLICT'))) {
+      const retry = await supabase.from('cbt_exam_sessions').upsert(rows, { onConflict: 'id' });
+      error = retry.error;
+    }
     if (error) {
       console.warn('[Supabase] Batch sessions upsert error:', error.message);
       return false;
@@ -437,8 +531,45 @@ export async function syncMultipleSessionsToSupabase(sessions: StudentExamSessio
 }
 
 /**
- * 5. DIRECT QUERIES FOR OPERATOR DASHBOARD (REKAP NILAI & MONITORING)
+ * 5. DIRECT QUERIES FOR STUDENT & OPERATOR (SUPABASE SINGLE SOURCE OF TRUTH)
  */
+export async function fetchStudentSessionFromSupabase(
+  nis: string,
+  examId: string
+): Promise<StudentExamSession | null> {
+  if (!isSupabaseConfigured || !supabase || !nis) return null;
+  try {
+    const { data, error } = await supabase
+      .from('cbt_exam_sessions')
+      .select('*')
+      .eq('nis', nis)
+      .eq('exam_id', examId)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+
+    if (!error && data && data.length > 0) {
+      return mapSupabaseRowToSession(data[0] as SupabaseExamSessionRow);
+    }
+
+    // Fallback query by deterministic ID if nis column wasn't populated
+    const detId = buildDeterministicSessionId(nis, examId);
+    const byId = await supabase
+      .from('cbt_exam_sessions')
+      .select('*')
+      .eq('id', detId)
+      .limit(1);
+
+    if (!byId.error && byId.data && byId.data.length > 0) {
+      return mapSupabaseRowToSession(byId.data[0] as SupabaseExamSessionRow);
+    }
+
+    return null;
+  } catch (err) {
+    console.warn('[Supabase] fetchStudentSession network error:', err);
+    return null;
+  }
+}
+
 export async function fetchExamResultsFromSupabase(): Promise<StudentExamSession[] | null> {
   if (!isSupabaseConfigured || !supabase) return null;
   try {
@@ -479,6 +610,102 @@ export async function fetchViolationLogsFromSupabase(limitCount = 50): Promise<E
 }
 
 /**
+ * Reconciles authoritative Supabase session rows with the official 93-student roster
+ * by matching on `(nis, examId)` (and fallback `studentId`).
+ * Prevents ghost "Belum Login" placeholders when a student already has an active/locked/completed
+ * session for a specific exam in Supabase.
+ */
+export function reconcileSessionsWithStudents(
+  students: Student[],
+  remoteSessions: StudentExamSession[],
+  defaultExam: ExamSchedule,
+  existingLocalSessions: StudentExamSession[] = []
+): StudentExamSession[] {
+  const byNisAndExam = new Map<string, StudentExamSession>();
+
+  const scoreFreshness = (s: StudentExamSession) =>
+    (s.updatedAt ? Date.parse(s.updatedAt) : 0) || s.lastHeartbeat || 0;
+
+  // Seed with local sessions first, then overwrite with authoritative remote Supabase rows
+  existingLocalSessions.forEach(s => {
+    const key = `${s.nis || s.studentId}__${s.examId}`;
+    byNisAndExam.set(key, s);
+  });
+
+  remoteSessions.forEach(remote => {
+    const matchedStudent = students.find(
+      st => st.nis === remote.nis || st.id === remote.studentId
+    );
+    const normalizedNis = matchedStudent?.nis || remote.nis;
+    const normalizedStudentId = matchedStudent?.id || remote.studentId;
+    const normalized: StudentExamSession = {
+      ...remote,
+      nis: normalizedNis,
+      studentId: normalizedStudentId,
+      studentName: matchedStudent?.name || remote.studentName,
+      classId: matchedStudent?.classId || remote.classId,
+      className: matchedStudent?.className || remote.className,
+    };
+    const key = `${normalizedNis || normalizedStudentId}__${normalized.examId}`;
+    byNisAndExam.set(key, normalized);
+  });
+
+  const allSessions = Array.from(byNisAndExam.values());
+  const isUntouchedPlaceholder = (s: StudentExamSession) =>
+    s.status === 'not_started' &&
+    !s.isOnline &&
+    !s.isLocked &&
+    s.violationsCount === 0 &&
+    s.finalScore === 0 &&
+    countAnsweredQuestions(s.answers) === 0;
+
+  const finalList: StudentExamSession[] = [];
+
+  students.forEach(std => {
+    const studentRows = allSessions
+      .filter(s => s.nis === std.nis || s.studentId === std.id)
+      .sort((a, b) => scoreFreshness(b) - scoreFreshness(a));
+
+    const activeOrDoneRows = studentRows.filter(s => !isUntouchedPlaceholder(s));
+
+    if (activeOrDoneRows.length > 0) {
+      // Student has real activity/lock/submission — show all real exam sessions (drop ghost placeholders)
+      activeOrDoneRows.forEach(row => finalList.push(row));
+    } else if (studentRows.length > 0) {
+      finalList.push(studentRows[0]);
+    } else {
+      finalList.push({
+        id: buildDeterministicSessionId(std.nis, defaultExam.id),
+        studentId: std.id,
+        studentName: std.name,
+        nis: std.nis,
+        classId: std.classId,
+        className: std.className,
+        examId: defaultExam.id,
+        examTitle: defaultExam.title,
+        status: 'not_started',
+        timeRemainingSeconds: (defaultExam.durationMinutes || 90) * 60,
+        violationsCount: 0,
+        isLocked: false,
+        extraTimeMinutes: 0,
+        deviceInfo: '-',
+        deviceSessionId: undefined,
+        currentQuestionIndex: 0,
+        isOnline: false,
+        lastHeartbeat: 0,
+        answers: {},
+        scorePg: 0,
+        scoreEssay: 0,
+        finalScore: 0,
+        isPassed: false,
+      });
+    }
+  });
+
+  return finalList;
+}
+
+/**
  * 6. SUPABASE REALTIME CHANNEL — OPERATOR & GURU LIVE MONITORING
  */
 export function subscribeToExamSessionsRealtime(callbacks: {
@@ -502,7 +729,7 @@ export function subscribeToExamSessionsRealtime(callbacks: {
       },
       payload => {
         const record = (payload.new || payload.old) as SupabaseExamSessionRow | undefined;
-        if (record && record.id) {
+        if (record && (record.id || record.nis)) {
           callbacks.onSessionUpsert(mapSupabaseRowToSession(record));
         }
       }
@@ -532,31 +759,38 @@ export function subscribeToExamSessionsRealtime(callbacks: {
 
 /**
  * 7. SUPABASE REALTIME CHANNEL — STUDENT AUTO-UNLOCK LISTENER
- * Subscribes specifically to this student's session row so when Operator sets
- * is_locked = false in Supabase, the lock screen clears instantaneously.
+ * Subscribes by student NIS so any Operator unlock update on `(nis, exam_id)`
+ * clears the lock screen immediately on the student's phone/laptop.
  */
 export function subscribeToStudentSessionLockRealtime(
   sessionId: string,
+  studentNis: string,
+  examId: string,
   onSessionChange: (updated: StudentExamSession) => void
 ): () => void {
-  if (!isSupabaseConfigured || !supabase || !sessionId) {
+  if (!isSupabaseConfigured || !supabase || (!sessionId && !studentNis)) {
     return () => {};
   }
 
   const client = supabase;
+  const filterExpr = studentNis ? `nis=eq.${studentNis}` : `id=eq.${sessionId}`;
   const channel = client
-    .channel(`cbt-student-session-${sessionId}-${Date.now()}`)
+    .channel(`cbt-student-session-${studentNis || sessionId}-${Date.now()}`)
     .on(
       'postgres_changes',
       {
-        event: 'UPDATE',
+        event: '*',
         schema: 'public',
         table: 'cbt_exam_sessions',
-        filter: `id=eq.${sessionId}`,
+        filter: filterExpr,
       },
       payload => {
         const record = payload.new as SupabaseExamSessionRow | undefined;
-        if (record && record.id) {
+        if (
+          record &&
+          (record.id === sessionId ||
+            (record.exam_id === examId && (record.nis === studentNis || record.student_nis === studentNis)))
+        ) {
           onSessionChange(mapSupabaseRowToSession(record));
         }
       }

@@ -341,7 +341,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">NIP terdaftar: 197910132014061002 (Ahmad Fathoni), 198502082009032008 (Dwi Setyarini), dll. (9 Guru)</p>
+                <p className="text-[11px] text-slate-400 mt-1">NIP terdaftar: 197910132014061002 (Ahmad Fathoni, S.Pd.I), 198502082009032008 (Dwi Setyarini, S.Pd.), dll. (9 Guru)</p>
               </div>
 
               <div>
@@ -434,7 +434,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               onClick={() => fillQuickDemo('guru')}
               className="text-[11px] py-1.5 px-2 bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 rounded text-center transition-colors font-medium cursor-pointer"
             >
-              Guru (Ahmad Fathoni)
+              Guru (Ahmad Fathoni, S.Pd.I)
             </button>
             <button
               type="button"

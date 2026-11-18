@@ -45,99 +45,99 @@ export const INITIAL_TEACHERS: UserAccount[] = [
     id: 'guru-1',
     role: 'guru',
     usernameOrNip: '197910132014061002',
-    name: 'Ahmad Fathoni',
+    name: 'Ahmad Fathoni, S.Pd.I',
     email: 'ahmad.fathoni@smpn12bjb.sch.id',
-    password: 'guru123',
-    mustChangePassword: false,
-    assignedSubjectIds: ['sbj-mat', 'sbj-inf'],
-    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
-  },
-  {
-    id: 'guru-2',
-    role: 'guru',
-    usernameOrNip: '198502082009032008',
-    name: 'Dwi Setyarini',
-    email: 'dwi.setyarini@smpn12bjb.sch.id',
-    password: 'guru123',
-    mustChangePassword: false,
-    assignedSubjectIds: ['sbj-ipa'],
-    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
-  },
-  {
-    id: 'guru-3',
-    role: 'guru',
-    usernameOrNip: '196907022000031010',
-    name: 'Legiyo',
-    email: 'legiyo@smpn12bjb.sch.id',
-    password: 'guru123',
-    mustChangePassword: false,
-    assignedSubjectIds: ['sbj-bin'],
-    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
-  },
-  {
-    id: 'guru-4',
-    role: 'guru',
-    usernameOrNip: '199703022022212002',
-    name: 'Maulida Fitriani',
-    email: 'maulida.fitriani@smpn12bjb.sch.id',
-    password: 'guru123',
-    mustChangePassword: false,
-    assignedSubjectIds: ['sbj-big'],
-    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
-  },
-  {
-    id: 'guru-5',
-    role: 'guru',
-    usernameOrNip: '199103022022212006',
-    name: 'Nisfi Nor Imaniar',
-    email: 'nisfi.imaniar@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
     assignedSubjectIds: ['sbj-pai'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   },
   {
+    id: 'guru-2',
+    role: 'guru',
+    usernameOrNip: '198502082009032008',
+    name: 'Dwi Setyarini, S.Pd.',
+    email: 'dwi.setyarini@smpn12bjb.sch.id',
+    password: 'guru123',
+    mustChangePassword: false,
+    assignedSubjectIds: ['sbj-ips', 'sbj-ppkn'],
+    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
+  },
+  {
+    id: 'guru-3',
+    role: 'guru',
+    usernameOrNip: '196907022000031010',
+    name: 'Legiyo, S.Pd.',
+    email: 'legiyo@smpn12bjb.sch.id',
+    password: 'guru123',
+    mustChangePassword: false,
+    assignedSubjectIds: ['sbj-mat'],
+    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
+  },
+  {
+    id: 'guru-4',
+    role: 'guru',
+    usernameOrNip: '199703022022212002',
+    name: 'Maulida Fitriani, S.Pd.',
+    email: 'maulida.fitriani@smpn12bjb.sch.id',
+    password: 'guru123',
+    mustChangePassword: false,
+    assignedSubjectIds: ['sbj-bin'],
+    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
+  },
+  {
+    id: 'guru-5',
+    role: 'guru',
+    usernameOrNip: '199103022022212006',
+    name: 'Nisfi Nor Imaniar, S.Pd.',
+    email: 'nisfi.imaniar@smpn12bjb.sch.id',
+    password: 'guru123',
+    mustChangePassword: false,
+    assignedSubjectIds: ['sbj-bk'],
+    assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
+  },
+  {
     id: 'guru-6',
     role: 'guru',
     usernameOrNip: '197006011997021006',
-    name: 'Riswan Hidayat',
+    name: 'Riswan Hidayat, S.Pd.',
     email: 'riswan.hidayat@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
-    assignedSubjectIds: ['sbj-ips'],
+    assignedSubjectIds: ['sbj-big'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   },
   {
     id: 'guru-7',
     role: 'guru',
     usernameOrNip: '198105082022211003',
-    name: 'Setya Kariyadi',
+    name: 'Setya Kariyadi, S.E',
     email: 'setya.kariyadi@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
-    assignedSubjectIds: ['sbj-ppkn'],
+    assignedSubjectIds: ['sbj-seni', 'sbj-inf'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   },
   {
     id: 'guru-8',
     role: 'guru',
     usernameOrNip: '123456789999999999',
-    name: 'Nazma Aulia',
+    name: 'Nazma Aulia, S.Pd.',
     email: 'nazma.aulia@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
-    assignedSubjectIds: ['sbj-pjok'],
+    assignedSubjectIds: ['sbj-ipa'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   },
   {
     id: 'guru-9',
     role: 'guru',
     usernameOrNip: '262012931000219331',
-    name: 'Alitya Putra Maulidan',
+    name: 'Alitya Putra Maulidan, S.Pd.',
     email: 'alitya.maulidan@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
-    assignedSubjectIds: ['sbj-seni'],
+    assignedSubjectIds: ['sbj-pjok'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   }
 ];
@@ -147,43 +147,44 @@ export const INITIAL_CLASSES: ClassRoom[] = [
     id: 'cls-1',
     grade: 'VII',
     name: 'VII',
-    homeroomTeacherName: 'Ahmad Fathoni',
+    homeroomTeacherName: 'Ahmad Fathoni, S.Pd.I',
     totalStudents: 30
   },
   {
     id: 'cls-8a',
     grade: 'VIII',
     name: 'VIII-A',
-    homeroomTeacherName: 'Dwi Setyarini',
+    homeroomTeacherName: 'Dwi Setyarini, S.Pd.',
     totalStudents: 17
   },
   {
     id: 'cls-8b',
     grade: 'VIII',
     name: 'VIII-B',
-    homeroomTeacherName: 'Legiyo',
+    homeroomTeacherName: 'Legiyo, S.Pd.',
     totalStudents: 17
   },
   {
     id: 'cls-9',
     grade: 'IX',
     name: 'IX',
-    homeroomTeacherName: 'Riswan Hidayat',
+    homeroomTeacherName: 'Riswan Hidayat, S.Pd.',
     totalStudents: 29
   }
 ];
 
 export const INITIAL_SUBJECTS: Subject[] = [
-  { id: 'sbj-mat', code: 'MAT-SMP', name: 'Matematika', grade: 'Semua', assignedTeacherIds: ['guru-1'] },
-  { id: 'sbj-ipa', code: 'IPA-SMP', name: 'Ilmu Pengetahuan Alam (IPA)', grade: 'Semua', assignedTeacherIds: ['guru-2'] },
-  { id: 'sbj-bin', code: 'BIN-SMP', name: 'Bahasa Indonesia', grade: 'Semua', assignedTeacherIds: ['guru-3'] },
-  { id: 'sbj-big', code: 'BIG-SMP', name: 'Bahasa Inggris', grade: 'Semua', assignedTeacherIds: ['guru-4'] },
-  { id: 'sbj-pai', code: 'PAI-SMP', name: 'Pendidikan Agama Islam', grade: 'Semua', assignedTeacherIds: ['guru-5'] },
-  { id: 'sbj-ppkn', code: 'PPKN-SMP', name: 'Pendidikan Pancasila (PPKn)', grade: 'Semua', assignedTeacherIds: ['guru-7'] },
-  { id: 'sbj-ips', code: 'IPS-SMP', name: 'Ilmu Pengetahuan Sosial (IPS)', grade: 'Semua', assignedTeacherIds: ['guru-6'] },
-  { id: 'sbj-inf', code: 'INF-SMP', name: 'Informatika', grade: 'Semua', assignedTeacherIds: ['guru-1'] },
-  { id: 'sbj-pjok', code: 'PJOK-SMP', name: 'Pendidikan Jasmani (PJOK)', grade: 'Semua', assignedTeacherIds: ['guru-8'] },
-  { id: 'sbj-seni', code: 'SBD-SMP', name: 'Seni Budaya', grade: 'Semua', assignedTeacherIds: ['guru-9'] }
+  { id: 'sbj-mat', code: 'MAT-SMP', name: 'Matematika', grade: 'Semua', assignedTeacherIds: ['guru-3'] },
+  { id: 'sbj-ipa', code: 'IPA-SMP', name: 'Ilmu Pengetahuan Alam (IPA)', grade: 'Semua', assignedTeacherIds: ['guru-8'] },
+  { id: 'sbj-bin', code: 'BIN-SMP', name: 'Bahasa Indonesia', grade: 'Semua', assignedTeacherIds: ['guru-4'] },
+  { id: 'sbj-big', code: 'BIG-SMP', name: 'Bahasa Inggris', grade: 'Semua', assignedTeacherIds: ['guru-6'] },
+  { id: 'sbj-pai', code: 'PAI-SMP', name: 'Pendidikan Agama Islam', grade: 'Semua', assignedTeacherIds: ['guru-1'] },
+  { id: 'sbj-ppkn', code: 'PPKN-SMP', name: 'Pendidikan Kewarganegaraan (PPKn)', grade: 'Semua', assignedTeacherIds: ['guru-2'] },
+  { id: 'sbj-ips', code: 'IPS-SMP', name: 'Ilmu Pengetahuan Sosial (IPS)', grade: 'Semua', assignedTeacherIds: ['guru-2'] },
+  { id: 'sbj-inf', code: 'INF-SMP', name: 'Teknologi dan Informatika', grade: 'Semua', assignedTeacherIds: ['guru-7'] },
+  { id: 'sbj-pjok', code: 'PJOK-SMP', name: 'Pendidikan Jasmani Olahraga Kesehatan (PJOK)', grade: 'Semua', assignedTeacherIds: ['guru-9'] },
+  { id: 'sbj-seni', code: 'SBD-SMP', name: 'Seni dan Prakarya', grade: 'Semua', assignedTeacherIds: ['guru-7'] },
+  { id: 'sbj-bk', code: 'BK-SMP', name: 'Bimbingan Konseling', grade: 'Semua', assignedTeacherIds: ['guru-5'] }
 ];
 
 import { OFFICIAL_QUESTION_LIST, OFFICIAL_EXAM_SCHEDULES } from './officialQuestions';
@@ -196,8 +197,8 @@ export const INITIAL_QUESTION_BANK: QuestionBank = {
   subjectName: 'Matematika',
   grade: 'VII',
   title: 'Bank Soal UAS Semester Ganjil SMP Negeri 12 Banjarbaru',
-  teacherId: 'guru-1',
-  teacherName: 'Ahmad Fathoni',
+  teacherId: 'guru-3',
+  teacherName: 'Legiyo, S.Pd.',
   totalQuestions: OFFICIAL_QUESTION_LIST.length,
   questions: OFFICIAL_QUESTION_LIST
 };
@@ -286,3 +287,59 @@ export const createInitialStudentSessions = (students: Student[]): StudentExamSe
     isPassed: false
   }));
 };
+
+/**
+ * Reconciles legacy teacher/subject seed data stored in localStorage, server disk, or JSONBin
+ * with the updated official SMPN 12 Banjarbaru teacher & subject database without clobbering
+ * custom teachers/subjects added later by Operator.
+ */
+export function reconcileOfficialTeachersAndSubjects(
+  loadedTeachers?: UserAccount[] | null,
+  loadedSubjects?: Subject[] | null
+): { teachers: UserAccount[]; subjects: Subject[]; migrated: boolean } {
+  const safeTeachers = Array.isArray(loadedTeachers) && loadedTeachers.length > 0 ? loadedTeachers : INITIAL_TEACHERS;
+  const safeSubjects = Array.isArray(loadedSubjects) && loadedSubjects.length > 0 ? loadedSubjects : INITIAL_SUBJECTS;
+
+  const isLegacyTeacherSeed = safeTeachers.some(
+    t =>
+      (t.usernameOrNip === '197910132014061002' && t.name === 'Ahmad Fathoni') ||
+      (t.usernameOrNip === '196907022000031010' && t.name === 'Legiyo') ||
+      (t.usernameOrNip === '198502082009032008' && t.name === 'Dwi Setyarini')
+  );
+
+  if (!isLegacyTeacherSeed) {
+    return {
+      teachers: safeTeachers,
+      subjects: safeSubjects,
+      migrated: false,
+    };
+  }
+
+  const officialIds = new Set(INITIAL_TEACHERS.map(t => t.id));
+  const officialNips = new Set(INITIAL_TEACHERS.map(t => t.usernameOrNip));
+
+  const mergedOfficialTeachers = INITIAL_TEACHERS.map(official => {
+    const existing = safeTeachers.find(
+      t => t.id === official.id || t.usernameOrNip === official.usernameOrNip
+    );
+    if (!existing) return official;
+    return {
+      ...official,
+      password: existing.password && existing.password !== 'guru123' ? existing.password : official.password,
+      mustChangePassword: existing.mustChangePassword ?? official.mustChangePassword,
+    };
+  });
+
+  const customTeachers = safeTeachers.filter(
+    t => !officialIds.has(t.id) && !officialNips.has(t.usernameOrNip)
+  );
+
+  const officialSubjectIds = new Set(INITIAL_SUBJECTS.map(s => s.id));
+  const customSubjects = safeSubjects.filter(s => !officialSubjectIds.has(s.id));
+
+  return {
+    teachers: [...mergedOfficialTeachers, ...customTeachers],
+    subjects: [...INITIAL_SUBJECTS, ...customSubjects],
+    migrated: true,
+  };
+}

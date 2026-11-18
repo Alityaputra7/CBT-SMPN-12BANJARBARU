@@ -979,7 +979,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-60"
                           >
                             <Unlock className="w-3 h-3" />
-                            {isUnlocking ? 'Membuka...' : 'Buka Kunci / Unlock'}
+                            {isUnlocking ? 'Membuka...' : 'Buka Kunci'}
                           </button>
                           <button
                             onClick={() => handleOpenResetSingle(ls)}
@@ -1113,9 +1113,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           </td>
                           <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{s.className}</td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            {isSessionLocked ? (
+                            {(isSessionLocked || s.violationsCount >= maxViolationsAllowed) ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded">
-                                <ShieldAlert className="w-3 h-3" /> Terkunci
+                                <ShieldAlert className="w-3 h-3" /> Terkunci ({s.violationsCount}/{maxViolationsAllowed})
                               </span>
                             ) : isSessionDone ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
@@ -1123,7 +1123,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               </span>
                             ) : s.status === 'in_progress' ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                                <Clock className="w-3 h-3" /> Mengerjakan
+                                <Clock className="w-3 h-3" /> Sedang Mengerjakan
                               </span>
                             ) : s.isOnline ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
@@ -1175,7 +1175,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                   title="Buka kunci & reset pelanggaran agar siswa bisa langsung melanjutkan ujian tanpa kehilangan jawaban"
                                 >
                                   <Unlock className="w-3 h-3" />
-                                  {isUnlockingId === s.id ? 'Membuka...' : 'Buka Kunci / Unlock'}
+                                  {isUnlockingId === s.id ? 'Membuka...' : 'Buka Kunci'}
                                 </button>
                               ) : s.status === 'in_progress' ? (
                                 <>

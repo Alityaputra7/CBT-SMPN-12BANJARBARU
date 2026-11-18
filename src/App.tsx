@@ -24,7 +24,8 @@ import {
   INITIAL_QUESTION_BANK, 
   INITIAL_EXAMS, 
   INITIAL_AUDIT_LOGS,
-  createInitialStudentSessions 
+  createInitialStudentSessions,
+  reconcileOfficialTeachersAndSubjects
 } from './data/seedData';
 import { 
   loadFromStorage, 
@@ -46,9 +47,12 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import {
   fetchExamResultsFromSupabase,
   fetchViolationLogsFromSupabase,
+  fetchStudentSessionFromSupabase,
   subscribeToExamSessionsRealtime,
   syncSessionProgressToSupabase,
-  syncMultipleSessionsToSupabase
+  syncMultipleSessionsToSupabase,
+  reconcileSessionsWithStudents,
+  buildDeterministicSessionId
 } from './services/supabaseExamService';
 import { isExamMatchingStudentClass } from './utils/classGroups';
 import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
@@ -73,10 +77,16 @@ export default function App() {
   );
   const [teachers, setTeachers] = useState<UserAccount[]>(() => {
     const loaded = loadFromStorage<UserAccount[] | null>(STORAGE_KEYS.TEACHERS, null);
+    const loadedSubjects = loadFromStorage<Subject[] | null>(STORAGE_KEYS.SUBJECTS, null);
     if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
       return INITIAL_TEACHERS;
     }
-    return loaded;
+    const reconciled = reconcileOfficialTeachersAndSubjects(loaded, loadedSubjects);
+    if (reconciled.migrated) {
+      saveToStorage(STORAGE_KEYS.TEACHERS, reconciled.teachers);
+      saveToStorage(STORAGE_KEYS.SUBJECTS, reconciled.subjects);
+    }
+    return reconciled.teachers;
   });
   const [students, setStudents] = useState<Student[]>(() => {
     const loaded = loadFromStorage<Student[] | null>(STORAGE_KEYS.STUDENTS, null);
@@ -92,10 +102,11 @@ export default function App() {
   });
   const [subjects, setSubjects] = useState<Subject[]>(() => {
     const loaded = loadFromStorage<Subject[] | null>(STORAGE_KEYS.SUBJECTS, null);
+    const loadedTeachers = loadFromStorage<UserAccount[] | null>(STORAGE_KEYS.TEACHERS, null);
     if (!loaded || !Array.isArray(loaded) || loaded.length === 0) {
       return INITIAL_SUBJECTS;
     }
-    return loaded;
+    return reconcileOfficialTeachersAndSubjects(loadedTeachers, loaded).subjects;
   });
   const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
     const loaded = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
@@ -154,41 +165,43 @@ export default function App() {
     currentStudentRef.current = currentStudent;
   }, [currentRole, currentStudent]);
 
-  // Helper to merge authoritative Supabase rows into local sessions list
-  const mergeSupabaseSessionsIntoList = (
-    baseList: StudentExamSession[],
-    supRows: StudentExamSession[]
-  ): StudentExamSession[] => {
-    if (!supRows || supRows.length === 0) return baseList;
-    const map = new Map<string, StudentExamSession>();
-    baseList.forEach(s => map.set(s.id, s));
-    supRows.forEach(remote => {
-      const existing = map.get(remote.id);
-      if (!existing) {
-        map.set(remote.id, remote);
-      } else {
-        const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
-        const existingUpdatedMs = existing.updatedAt ? Date.parse(existing.updatedAt) : existing.lastHeartbeat || 0;
-        const adminNewer = Boolean(remote.adminActionAt && remote.adminActionAt >= (existing.adminActionAt || 0));
-        if (adminNewer || remoteUpdatedMs >= existingUpdatedMs || isSessionCompleted(remote.status)) {
-          map.set(remote.id, remote);
-        }
-      }
-    });
-    return Array.from(map.values());
-  };
+  const studentsRef = useRef<Student[]>(students);
+  const examsRef = useRef<ExamSchedule[]>(exams);
 
-  // Explicit refresh from Supabase (used by Operator Rekap Nilai & Monitor Real-Time)
+  useEffect(() => {
+    studentsRef.current = students;
+  }, [students]);
+
+  useEffect(() => {
+    examsRef.current = exams;
+  }, [exams]);
+
+  // Explicit refresh from Supabase (used by Operator Monitor Real-Time, Auto-Sync 3s & Rekap Nilai)
   const handleRefreshFromSupabase = async () => {
     const [supSessions, supLogs, serverRes] = await Promise.all([
       isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
       isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
-      fetchServerData(),
+      isSupabaseConfigured ? Promise.resolve(null) : fetchServerData(),
     ]);
 
-    let nextList = serverRes?.success && serverRes.data?.sessions ? serverRes.data.sessions : sessionsRef.current;
-    if (supSessions && supSessions.length > 0) {
-      nextList = mergeSupabaseSessionsIntoList(nextList, supSessions);
+    const currentStudents = studentsRef.current;
+    const defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
+    let nextList = sessionsRef.current;
+
+    if (isSupabaseConfigured && supSessions) {
+      nextList = reconcileSessionsWithStudents(
+        currentStudents,
+        supSessions,
+        defaultExam,
+        sessionsRef.current
+      );
+    } else if (serverRes?.success && serverRes.data?.sessions) {
+      nextList = reconcileSessionsWithStudents(
+        currentStudents,
+        serverRes.data.sessions,
+        defaultExam,
+        sessionsRef.current
+      );
     }
 
     sessionsRef.current = nextList;
@@ -201,14 +214,17 @@ export default function App() {
     setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
   };
 
-  // 1. Initial hydration from server & Supabase on mount
+  // 1. Initial hydration from Supabase (SSoT) & local server master data on mount
   useEffect(() => {
     Promise.all([
       fetchServerData(),
       isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
       isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
     ]).then(([serverRes, supSessions, supLogs]) => {
-      let hydratedSessions = sessionsRef.current;
+      let currentStudentsList = studentsRef.current;
+      let defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
+      let baseSessions = sessionsRef.current;
+
       if (serverRes && serverRes.success && serverRes.data) {
         isSyncingFromServer.current = true;
         lastKnownVersion.current = serverRes.version;
@@ -216,24 +232,36 @@ export default function App() {
         const d = serverRes.data;
         if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
         if (d.operator) setOperator(d.operator);
-        if (Array.isArray(d.students)) setStudents(d.students);
-        if (Array.isArray(d.teachers)) setTeachers(d.teachers);
+        if (Array.isArray(d.students)) {
+          setStudents(d.students);
+          studentsRef.current = d.students;
+          currentStudentsList = d.students;
+        }
+        if (Array.isArray(d.teachers) || Array.isArray(d.subjects)) {
+          const reconciled = reconcileOfficialTeachersAndSubjects(d.teachers, d.subjects);
+          setTeachers(reconciled.teachers);
+          setSubjects(reconciled.subjects);
+        }
         if (Array.isArray(d.classes)) setClasses(d.classes);
-        if (Array.isArray(d.subjects)) setSubjects(d.subjects);
-        if (Array.isArray(d.exams)) setExams(d.exams);
-        if (Array.isArray(d.sessions)) {
-          hydratedSessions = d.sessions;
+        if (Array.isArray(d.exams) && d.exams.length > 0) {
+          setExams(d.exams);
+          examsRef.current = d.exams;
+          defaultExam = d.exams[0];
+        }
+        if (!isSupabaseConfigured && Array.isArray(d.sessions)) {
+          baseSessions = d.sessions;
         }
         if (d.questionBank) setQuestionBank(d.questionBank);
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
       }
 
-      if (supSessions && supSessions.length > 0) {
-        hydratedSessions = mergeSupabaseSessionsIntoList(hydratedSessions, supSessions);
-      }
+      const hydratedSessions = supSessions
+        ? reconcileSessionsWithStudents(currentStudentsList, supSessions, defaultExam, baseSessions)
+        : reconcileSessionsWithStudents(currentStudentsList, baseSessions, defaultExam, []);
 
       sessionsRef.current = hydratedSessions;
       setSessions(hydratedSessions);
+      saveToStorage(STORAGE_KEYS.SESSIONS, hydratedSessions);
       if (supLogs) setViolationLogs(supLogs);
       setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
       setTimeout(() => { isSyncingFromServer.current = false; }, 600);
@@ -246,16 +274,17 @@ export default function App() {
       return;
     }
 
-    // Fetch fresh Supabase snapshot upon entering Operator / Guru dashboard
     void handleRefreshFromSupabase();
 
     const unsubscribe = subscribeToExamSessionsRealtime({
       onSessionUpsert: incomingSession => {
         setSessions(prev => {
-          const exists = prev.some(s => s.id === incomingSession.id);
-          const next = exists
-            ? prev.map(s => (s.id === incomingSession.id ? incomingSession : s))
-            : [...prev, incomingSession];
+          const next = reconcileSessionsWithStudents(
+            studentsRef.current,
+            [incomingSession],
+            examsRef.current[0] || INITIAL_EXAMS[0],
+            prev
+          );
           sessionsRef.current = next;
           return next;
         });
@@ -275,10 +304,18 @@ export default function App() {
     };
   }, [currentRole]);
 
-  // 2. Real-time background sync interval (checks every 3 seconds)
+  // 2. Real-time Auto-Sync 3 Detik (Langsung dari Supabase SSoT saat aktif, fallback ke server lokal jika env belum diset)
   useEffect(() => {
     const syncInterval = setInterval(async () => {
       if (isSyncingFromServer.current) return;
+
+      if (isSupabaseConfigured) {
+        if (currentRoleRef.current === 'operator' || currentRoleRef.current === 'guru') {
+          await handleRefreshFromSupabase();
+        }
+        return;
+      }
+
       const verRes = await fetchServerVersion();
       if (
         verRes &&
@@ -294,13 +331,16 @@ export default function App() {
           if (d.schoolSetting) setSchoolSetting(d.schoolSetting);
           if (d.operator) setOperator(d.operator);
           if (Array.isArray(d.students)) setStudents(d.students);
-          if (Array.isArray(d.teachers)) setTeachers(d.teachers);
+          if (Array.isArray(d.teachers) || Array.isArray(d.subjects)) {
+            const reconciled = reconcileOfficialTeachersAndSubjects(d.teachers, d.subjects);
+            setTeachers(reconciled.teachers);
+            setSubjects(reconciled.subjects);
+          }
           if (Array.isArray(d.classes)) setClasses(d.classes);
-          if (Array.isArray(d.subjects)) setSubjects(d.subjects);
           if (Array.isArray(d.exams)) setExams(d.exams);
           if (Array.isArray(d.sessions)) {
             setSessions(prevSessions => {
-              // Operator & Guru views always accept the authoritative server/JSONBin state directly
+              // Operator & Guru views always accept the authoritative server state directly
               // so phone/laptop clock differences never hide student 3x locks or submitted scores.
               if (currentRoleRef.current !== 'siswa') {
                 sessionsRef.current = d.sessions;
@@ -751,6 +791,7 @@ export default function App() {
       setStudents(INITIAL_STUDENTS);
       setTeachers(INITIAL_TEACHERS);
       setClasses(INITIAL_CLASSES);
+      setSubjects(INITIAL_SUBJECTS);
       setQuestionBank(INITIAL_QUESTION_BANK);
       setExams(INITIAL_EXAMS);
       setSessions(freshSessions);
@@ -789,20 +830,22 @@ export default function App() {
         setSelectedExamId(targetExam.id);
       }
 
+      const targetExamId = targetExam?.id || 'ex-mat-2026';
+      const deterministicId = buildDeterministicSessionId(student.nis, targetExamId);
       const deviceSessionId = getStudentSessionDeviceId(student.nis);
       const clientInfo = detectClientDeviceInfo();
       const currentList = sessionsRef.current;
 
-      // 1. Exact match for (student.id, targetExam.id)
+      // 1. Exact match by (NIS / student.id, targetExamId)
       const exactIdx = currentList.findIndex(
-        s => s.studentId === student.id && s.examId === targetExam?.id
+        s => (s.nis === student.nis || s.studentId === student.id) && s.examId === targetExamId
       );
-      // 2. Otherwise repurpose untouched initial placeholder session (so we don't leave ghost Matematika isOnline rows!)
+      // 2. Otherwise repurpose untouched initial placeholder session
       const idlePlaceholderIdx = exactIdx >= 0
         ? -1
         : currentList.findIndex(
             s =>
-              s.studentId === student.id &&
+              (s.nis === student.nis || s.studentId === student.id) &&
               s.status === 'not_started' &&
               Object.keys(s.answers || {}).length === 0 &&
               s.violationsCount === 0 &&
@@ -816,7 +859,8 @@ export default function App() {
         const existing = currentList[exactIdx];
         syncedSession = {
           ...existing,
-          examId: targetExam?.id || existing.examId,
+          id: deterministicId,
+          examId: targetExamId,
           examTitle: targetExam?.title || existing.examTitle,
           isOnline: true,
           deviceSessionId,
@@ -828,7 +872,8 @@ export default function App() {
         const placeholder = currentList[idlePlaceholderIdx];
         syncedSession = {
           ...placeholder,
-          examId: targetExam?.id || placeholder.examId,
+          id: deterministicId,
+          examId: targetExamId,
           examTitle: targetExam?.title || placeholder.examTitle,
           timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
           isOnline: true,
@@ -839,13 +884,13 @@ export default function App() {
         updatedList = currentList.map((s, idx) => (idx === idlePlaceholderIdx ? syncedSession : s));
       } else {
         syncedSession = {
-          id: `sess-${student.id}-${targetExam?.id || 'ex-mat-2026'}`,
+          id: deterministicId,
           studentId: student.id,
           studentName: student.name,
           nis: student.nis,
           classId: student.classId,
           className: student.className,
-          examId: targetExam?.id || 'ex-mat-2026',
+          examId: targetExamId,
           examTitle: targetExam?.title || 'Ujian CBT',
           status: 'not_started',
           timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
@@ -870,6 +915,34 @@ export default function App() {
       setSessions(updatedList);
       saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
       syncSingleSession(syncedSession).then(syncMetaFromClientPush);
+
+      if (isSupabaseConfigured) {
+        fetchStudentSessionFromSupabase(student.nis, targetExamId).then(existingRemote => {
+          if (existingRemote && (existingRemote.isLocked || existingRemote.status !== 'not_started' || isSessionCompleted(existingRemote.status))) {
+            const hydrated: StudentExamSession = {
+              ...existingRemote,
+              isOnline: !isSessionCompleted(existingRemote.status),
+              deviceSessionId: isSessionCompleted(existingRemote.status) ? undefined : deviceSessionId,
+              deviceInfo: clientInfo,
+              lastHeartbeat: Date.now()
+            };
+            const merged = reconcileSessionsWithStudents(
+              studentsRef.current,
+              [hydrated],
+              examsRef.current[0] || INITIAL_EXAMS[0],
+              sessionsRef.current
+            );
+            sessionsRef.current = merged;
+            setSessions(merged);
+            saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+            if (!hydrated.isLocked && !isSessionCompleted(hydrated.status)) {
+              void syncSessionProgressToSupabase(hydrated);
+            }
+          } else {
+            void syncSessionProgressToSupabase(syncedSession);
+          }
+        });
+      }
 
       setActiveSection('siswa');
       handleAddAuditLog('LOGIN_SISWA', `Siswa ${student.name} (NIS ${student.nis}) masuk dari ${clientInfo}`);
@@ -969,8 +1042,8 @@ export default function App() {
 
   // Session specific to this student AND this specific exam (prevents mixing exam results)
   const currentStudentSession = currentStudent 
-    ? sessions.find(s => s.studentId === currentStudent.id && s.examId === currentExam.id) || {
-        id: `sess-${currentStudent.id}-${currentExam.id}`,
+    ? sessions.find(s => (s.nis === currentStudent.nis || s.studentId === currentStudent.id) && s.examId === currentExam.id) || {
+        id: buildDeterministicSessionId(currentStudent.nis, currentExam.id),
         studentId: currentStudent.id,
         studentName: currentStudent.name,
         nis: currentStudent.nis,
@@ -996,18 +1069,29 @@ export default function App() {
       }
     : sessions[0];
 
-  const handleUpdateStudentSession = (updatedSession: StudentExamSession) => {
+  const handleUpdateStudentSession = (
+    updatedSession: StudentExamSession,
+    options?: { skipSupabaseMirror?: boolean }
+  ) => {
     const currentList = sessionsRef.current;
-    const exists = currentList.some(s => s.id === updatedSession.id);
+    const exists = currentList.some(
+      s =>
+        s.id === updatedSession.id ||
+        ((s.nis === updatedSession.nis || s.studentId === updatedSession.studentId) && s.examId === updatedSession.examId)
+    );
     const updated = exists
-      ? currentList.map(s => (s.id === updatedSession.id ? updatedSession : s))
+      ? currentList.map(s =>
+          s.id === updatedSession.id ||
+          ((s.nis === updatedSession.nis || s.studentId === updatedSession.studentId) && s.examId === updatedSession.examId)
+            ? updatedSession
+            : s
+        )
       : [...currentList, updatedSession];
     sessionsRef.current = updated;
     setSessions(updated);
     saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-    // Instant sync to central server & Supabase for laptop & phone live synchronization
     syncSingleSession(updatedSession).then(syncMetaFromClientPush);
-    if (isSupabaseConfigured) {
+    if (isSupabaseConfigured && !options?.skipSupabaseMirror) {
       void syncSessionProgressToSupabase(updatedSession);
     }
   };
@@ -1016,10 +1100,13 @@ export default function App() {
     setSelectedExamId(ex.id);
     if (!currentStudent) return;
 
+    const deterministicId = buildDeterministicSessionId(currentStudent.nis, ex.id);
     const currentList = sessionsRef.current;
     const deviceSessionId = getStudentSessionDeviceId(currentStudent.nis);
     const clientInfo = detectClientDeviceInfo();
-    const existingTarget = currentList.find(s => s.studentId === currentStudent.id && s.examId === ex.id);
+    const existingTarget = currentList.find(
+      s => (s.nis === currentStudent.nis || s.studentId === currentStudent.id) && s.examId === ex.id
+    );
 
     let activeSess: StudentExamSession;
     let updatedList: StudentExamSession[];
@@ -1027,6 +1114,7 @@ export default function App() {
     if (existingTarget) {
       activeSess = {
         ...existingTarget,
+        id: deterministicId,
         isOnline: true,
         deviceSessionId: existingTarget.deviceSessionId || deviceSessionId,
         deviceInfo: clientInfo,
@@ -1034,7 +1122,7 @@ export default function App() {
       };
       updatedList = currentList.map(s => {
         if (s.id === existingTarget.id) return activeSess;
-        if (s.studentId === currentStudent.id && s.status === 'not_started' && s.isOnline) {
+        if ((s.nis === currentStudent.nis || s.studentId === currentStudent.id) && s.status === 'not_started' && s.isOnline) {
           return { ...s, isOnline: false, deviceSessionId: undefined };
         }
         return s;
@@ -1042,7 +1130,7 @@ export default function App() {
     } else {
       const idlePlaceholder = currentList.find(
         s =>
-          s.studentId === currentStudent.id &&
+          (s.nis === currentStudent.nis || s.studentId === currentStudent.id) &&
           s.status === 'not_started' &&
           Object.keys(s.answers || {}).length === 0 &&
           s.violationsCount === 0 &&
@@ -1051,6 +1139,7 @@ export default function App() {
       if (idlePlaceholder) {
         activeSess = {
           ...idlePlaceholder,
+          id: deterministicId,
           examId: ex.id,
           examTitle: ex.title,
           timeRemainingSeconds: ex.durationMinutes * 60,
@@ -1062,7 +1151,7 @@ export default function App() {
         updatedList = currentList.map(s => (s.id === idlePlaceholder.id ? activeSess : s));
       } else {
         activeSess = {
-          id: `sess-${currentStudent.id}-${ex.id}`,
+          id: deterministicId,
           studentId: currentStudent.id,
           studentName: currentStudent.name,
           nis: currentStudent.nis,
@@ -1087,7 +1176,7 @@ export default function App() {
           isPassed: false
         };
         updatedList = [...currentList.map(s =>
-          s.studentId === currentStudent.id && s.status === 'not_started' && s.isOnline
+          (s.nis === currentStudent.nis || s.studentId === currentStudent.id) && s.status === 'not_started' && s.isOnline
             ? { ...s, isOnline: false, deviceSessionId: undefined }
             : s
         ), activeSess];
@@ -1098,6 +1187,24 @@ export default function App() {
     setSessions(updatedList);
     saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
     syncSingleSession(activeSess).then(syncMetaFromClientPush);
+
+    if (isSupabaseConfigured) {
+      fetchStudentSessionFromSupabase(currentStudent.nis, ex.id).then(existingRemote => {
+        if (existingRemote && (existingRemote.isLocked || existingRemote.status !== 'not_started' || isSessionCompleted(existingRemote.status))) {
+          const merged = reconcileSessionsWithStudents(
+            studentsRef.current,
+            [existingRemote],
+            examsRef.current[0] || INITIAL_EXAMS[0],
+            sessionsRef.current
+          );
+          sessionsRef.current = merged;
+          setSessions(merged);
+          saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+        } else {
+          void syncSessionProgressToSupabase(activeSess);
+        }
+      });
+    }
   };
 
   return (
