@@ -11,11 +11,6 @@ const rawUrlInput = (
   ''
 ).trim();
 
-const rawSupabaseUrl =
-  rawUrlInput && !/^https?:\/\//i.test(rawUrlInput) && rawUrlInput.includes('.supabase.co')
-    ? `https://${rawUrlInput}`
-    : rawUrlInput;
-
 const rawSupabaseAnonKey = (
   envMeta.VITE_SUPABASE_ANON_KEY ||
   envMeta.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
@@ -24,23 +19,32 @@ const rawSupabaseAnonKey = (
   ''
 ).trim();
 
-function isValidHttpUrl(value: string): boolean {
-  if (!value || value.includes('YOUR_PROJECT_REF')) return false;
+function sanitizeSupabaseOriginUrl(value: string): string | null {
+  if (!value || value.includes('YOUR_PROJECT_REF')) return null;
+  const trimmed = value.trim();
+  const withScheme =
+    !/^https?:\/\//i.test(trimmed) && trimmed.includes('.supabase.co')
+      ? `https://${trimmed}`
+      : trimmed;
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+    const parsed = new URL(withScheme);
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+    // Always extract ONLY protocol + hostname (+ port if any), stripping /rest/v1, query, or trailing slash
+    return parsed.origin;
   } catch {
-    return false;
+    return null;
   }
 }
 
+const cleanSupabaseUrl = sanitizeSupabaseOriginUrl(rawUrlInput);
+
 let configError: string | null = null;
 
-if (!rawSupabaseUrl) {
+if (!rawUrlInput) {
   configError =
     'Environment variable VITE_SUPABASE_URL (atau NEXT_PUBLIC_SUPABASE_URL) belum diisi di Vercel / .env.';
-} else if (!isValidHttpUrl(rawSupabaseUrl)) {
-  configError = `VITE_SUPABASE_URL tidak valid ("${rawSupabaseUrl.slice(0, 32)}..."). Harus berupa URL https://<project-ref>.supabase.co.`;
+} else if (!cleanSupabaseUrl) {
+  configError = `VITE_SUPABASE_URL tidak valid ("${rawUrlInput.slice(0, 32)}..."). Harus berupa URL https://<project-ref>.supabase.co.`;
 } else if (!rawSupabaseAnonKey || rawSupabaseAnonKey.includes('YOUR_SUPABASE_ANON_KEY')) {
   configError =
     'Environment variable VITE_SUPABASE_ANON_KEY (atau NEXT_PUBLIC_SUPABASE_ANON_KEY) belum diisi.';
@@ -51,9 +55,9 @@ if (!rawSupabaseUrl) {
 
 let clientInstance: SupabaseClient | null = null;
 
-if (!configError) {
+if (!configError && cleanSupabaseUrl) {
   try {
-    clientInstance = createClient(rawSupabaseUrl, rawSupabaseAnonKey, {
+    clientInstance = createClient(cleanSupabaseUrl, rawSupabaseAnonKey, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
