@@ -75,6 +75,23 @@ export interface SessionActionResult {
   error?: string;
 }
 
+export interface SyncSessionResult {
+  success: boolean;
+  session?: StudentExamSession;
+  error?: string;
+  skipped?: boolean;
+}
+
+export interface FetchExamResultsWithStatus {
+  sessions: StudentExamSession[] | null;
+  error?: string;
+}
+
+export interface FetchViolationLogsWithStatus {
+  logs: ExamViolationLog[] | null;
+  error?: string;
+}
+
 export function buildDeterministicSessionId(nis: string, examId: string): string {
   const cleanNis = (nis || 'unknown').trim();
   const cleanExam = (examId || 'ex-mat-2026').trim();
@@ -208,7 +225,7 @@ export function mapSupabaseRowToSession(row: SupabaseExamSessionRow): StudentExa
   const isLockedFlag = Boolean(row.is_locked || (row.status || '').toLowerCase() === 'locked' || (row.status || '').toLowerCase() === 'terkunci');
   const validStatus = normalizeStatus(row.status, isLockedFlag);
   const computedFinalScore = Number(row.final_score ?? row.score ?? 0);
-  const resolvedNis = row.nis || row.student_nis || '';
+  const resolvedNis = (row.nis || row.student_nis || '').trim();
 
   return {
     id: row.id || buildDeterministicSessionId(resolvedNis, row.exam_id),
@@ -235,6 +252,8 @@ export function mapSupabaseRowToSession(row: SupabaseExamSessionRow): StudentExa
     adminActionAt: row.admin_action_at ?? undefined,
     updatedAt: row.updated_at || undefined,
     answers: parseAnswersJson(row.answers_json),
+    answeredCount: typeof row.answered_count === 'number' ? row.answered_count : undefined,
+    totalQuestions: typeof row.total_questions === 'number' ? row.total_questions : undefined,
     scorePg: Number(row.score_pg ?? 0),
     scoreEssay: Number(row.score_essay ?? 0),
     finalScore: computedFinalScore,
@@ -439,38 +458,54 @@ export async function recordViolationToSupabase(params: {
   };
 
   if (isSupabaseConfigured && supabase) {
-    const row = mapSessionToSupabaseRow(updatedSession, totalQuestions);
-    const { data, error } = await upsertSessionRow(row);
+    try {
+      const row = mapSessionToSupabaseRow(updatedSession, totalQuestions);
+      const { data, error } = await upsertSessionRow(row);
 
-    const logRow: SupabaseViolationLogRow = {
-      id: `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      session_id: row.id,
-      student_id: session.studentId,
-      student_name: session.studentName,
-      nis: session.nis,
-      class_name: session.className,
-      exam_id: session.examId,
-      exam_title: session.examTitle,
-      violation_type: violationType,
-      description: details,
-      violation_number: nextCount,
-      action_taken: isNowLocked ? `AUTO_LOCK_${nextCount}/${maxViolations}` : `WARNING_${nextCount}/${maxViolations}`,
-      created_at: nowIso,
-    };
+      const logRow: SupabaseViolationLogRow = {
+        id: `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        session_id: row.id,
+        student_id: session.studentId,
+        student_name: session.studentName,
+        nis: session.nis,
+        class_name: session.className,
+        exam_id: session.examId,
+        exam_title: session.examTitle,
+        violation_type: violationType,
+        description: details,
+        violation_number: nextCount,
+        action_taken: isNowLocked ? `AUTO_LOCK_${nextCount}/${maxViolations}` : `WARNING_${nextCount}/${maxViolations}`,
+        created_at: nowIso,
+      };
 
-    const { error: logErr } = await supabase.from('cbt_violation_logs').insert(logRow);
-    if (logErr) {
-      console.warn('[Supabase] Violation log insert warning:', logErr.message);
+      const { error: logErr } = await supabase.from('cbt_violation_logs').insert(logRow);
+      if (logErr) {
+        console.warn('[Supabase] Violation log insert warning:', formatSupabaseError(logErr));
+      }
+
+      if (error) {
+        const exactError = formatSupabaseError(error);
+        console.error('[Supabase] Violation session update failed:', exactError);
+        return { success: false, session: updatedSession, error: exactError };
+      }
+
+      const confirmed = data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : updatedSession;
+      syncSingleSession(confirmed).catch(() => false);
+
+      if (logErr) {
+        return {
+          success: false,
+          session: confirmed,
+          error: `Sesi tersimpan, namun log pelanggaran gagal disimpan: ${formatSupabaseError(logErr)}`,
+        };
+      }
+
+      return { success: true, session: confirmed };
+    } catch (err) {
+      const exactError = err instanceof Error ? err.message : String(err);
+      console.error('[Supabase] Violation network error:', exactError);
+      return { success: false, session: updatedSession, error: exactError };
     }
-
-    if (error) {
-      console.error('[Supabase] Violation session update failed:', error);
-      return { success: false, session: updatedSession, error: error.message };
-    }
-
-    const confirmed = data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : updatedSession;
-    syncSingleSession(confirmed).catch(() => false);
-    return { success: true, session: confirmed };
   }
 
   await syncSingleSession(updatedSession).catch(() => false);
@@ -561,11 +596,17 @@ export async function unlockStudentSessionInSupabase(
 /**
  * 4. SYNC PROGRESS / LOGIN / START / ANSWERS / HEARTBEAT TO SUPABASE
  */
-export async function syncSessionProgressToSupabase(
+export async function syncSessionProgressWithDetails(
   session: StudentExamSession,
   totalQuestions = 0
-): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) return true;
+): Promise<SyncSessionResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      success: false,
+      skipped: true,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
   try {
     const row = mapSessionToSupabaseRow(
       {
@@ -574,20 +615,41 @@ export async function syncSessionProgressToSupabase(
       },
       totalQuestions
     );
-    const { error } = await upsertSessionRow(row);
+    const { data, error } = await upsertSessionRow(row);
     if (error) {
-      console.warn('[Supabase] Session progress upsert error:', error.message);
-      return false;
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] Session progress upsert error:', exactMessage);
+      return { success: false, error: exactMessage };
     }
-    return true;
+    return {
+      success: true,
+      session: data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : session,
+    };
   } catch (err) {
-    console.warn('[Supabase] Network error syncing session:', err);
-    return false;
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] Network error syncing session:', exactMessage);
+    return { success: false, error: exactMessage };
   }
 }
 
-export async function syncMultipleSessionsToSupabase(sessions: StudentExamSession[]): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase || sessions.length === 0) return true;
+export async function syncSessionProgressToSupabase(
+  session: StudentExamSession,
+  totalQuestions = 0
+): Promise<boolean> {
+  const res = await syncSessionProgressWithDetails(session, totalQuestions);
+  return res.success || Boolean(res.skipped);
+}
+
+export async function syncMultipleSessionsWithDetails(
+  sessions: StudentExamSession[]
+): Promise<SyncSessionResult> {
+  if (!isSupabaseConfigured || !supabase || sessions.length === 0) {
+    return {
+      success: false,
+      skipped: true,
+      error: sessions.length === 0 ? undefined : (supabaseConfigError || 'Supabase belum dikonfigurasi.'),
+    };
+  }
   try {
     const nowIso = new Date().toISOString();
     const rows = sessions.map(s => mapSessionToSupabaseRow({ ...s, updatedAt: nowIso }));
@@ -599,14 +661,21 @@ export async function syncMultipleSessionsToSupabase(sessions: StudentExamSessio
       error = retry.error;
     }
     if (error) {
-      console.warn('[Supabase] Batch sessions upsert error:', error.message);
-      return false;
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] Batch sessions upsert error:', exactMessage);
+      return { success: false, error: exactMessage };
     }
-    return true;
+    return { success: true };
   } catch (err) {
-    console.warn('[Supabase] Batch sessions network error:', err);
-    return false;
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] Batch sessions network error:', exactMessage);
+    return { success: false, error: exactMessage };
   }
+}
+
+export async function syncMultipleSessionsToSupabase(sessions: StudentExamSession[]): Promise<boolean> {
+  const res = await syncMultipleSessionsWithDetails(sessions);
+  return res.success || Boolean(res.skipped);
 }
 
 /**
@@ -688,8 +757,13 @@ export async function fetchStudentSessionFromSupabase(
   return res.session;
 }
 
-export async function fetchExamResultsFromSupabase(): Promise<StudentExamSession[] | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+export async function fetchExamResultsWithStatusFromSupabase(): Promise<FetchExamResultsWithStatus> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      sessions: null,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
   try {
     const { data, error } = await supabase
       .from('cbt_exam_sessions')
@@ -697,18 +771,34 @@ export async function fetchExamResultsFromSupabase(): Promise<StudentExamSession
       .order('updated_at', { ascending: false });
 
     if (error) {
-      console.warn('[Supabase] fetchExamResults failed:', error.message);
-      return null;
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] fetchExamResults failed:', exactMessage);
+      return { sessions: null, error: exactMessage };
     }
-    return (data || []).map(row => mapSupabaseRowToSession(row as SupabaseExamSessionRow));
+    return {
+      sessions: (data || []).map(row => mapSupabaseRowToSession(row as SupabaseExamSessionRow)),
+    };
   } catch (err) {
-    console.warn('[Supabase] fetchExamResults network error:', err);
-    return null;
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] fetchExamResults network error:', exactMessage);
+    return { sessions: null, error: exactMessage };
   }
 }
 
-export async function fetchViolationLogsFromSupabase(limitCount = 50): Promise<ExamViolationLog[] | null> {
-  if (!isSupabaseConfigured || !supabase) return null;
+export async function fetchExamResultsFromSupabase(): Promise<StudentExamSession[] | null> {
+  const res = await fetchExamResultsWithStatusFromSupabase();
+  return res.sessions;
+}
+
+export async function fetchViolationLogsWithStatusFromSupabase(
+  limitCount = 50
+): Promise<FetchViolationLogsWithStatus> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      logs: null,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
   try {
     const { data, error } = await supabase
       .from('cbt_violation_logs')
@@ -717,21 +807,29 @@ export async function fetchViolationLogsFromSupabase(limitCount = 50): Promise<E
       .limit(limitCount);
 
     if (error) {
-      console.warn('[Supabase] fetchViolationLogs failed:', error.message);
-      return null;
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] fetchViolationLogs failed:', exactMessage);
+      return { logs: null, error: exactMessage };
     }
-    return (data || []).map(row => mapSupabaseViolationRow(row as SupabaseViolationLogRow));
+    return {
+      logs: (data || []).map(row => mapSupabaseViolationRow(row as SupabaseViolationLogRow)),
+    };
   } catch (err) {
-    console.warn('[Supabase] fetchViolationLogs network error:', err);
-    return null;
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] fetchViolationLogs network error:', exactMessage);
+    return { logs: null, error: exactMessage };
   }
+}
+
+export async function fetchViolationLogsFromSupabase(limitCount = 50): Promise<ExamViolationLog[] | null> {
+  const res = await fetchViolationLogsWithStatusFromSupabase(limitCount);
+  return res.logs;
 }
 
 /**
  * Reconciles authoritative Supabase session rows with the official 93-student roster
- * by matching on `(nis, examId)` (and fallback `studentId`).
- * Prevents ghost "Belum Login" placeholders when a student already has an active/locked/completed
- * session for a specific exam in Supabase.
+ * by matching on `(nis / student_nis, examId)` (and fallback `studentId`).
+ * Also preserves any extra active/completed Supabase rows not in the local roster.
  */
 export function reconcileSessionsWithStudents(
   students: Student[],
@@ -745,20 +843,19 @@ export function reconcileSessionsWithStudents(
   const scoreFreshness = (s: StudentExamSession) =>
     (s.updatedAt ? Date.parse(s.updatedAt) : 0) || s.lastHeartbeat || 0;
 
-  // For incremental events (e.g., single Realtime update), keep existing local sessions for other students.
-  // For full authoritative Supabase snapshots, do NOT preserve stale local locks/statuses that were deleted/reset remotely.
   if (!options?.isFullSnapshot) {
     existingLocalSessions.forEach(s => {
-      const key = `${s.nis || s.studentId}__${s.examId}`;
+      const key = `${(s.nis || s.studentId).trim()}__${s.examId}`;
       byNisAndExam.set(key, s);
     });
   }
 
   remoteSessions.forEach(remote => {
+    const cleanRemoteNis = (remote.nis || '').trim();
     const matchedStudent = students.find(
-      st => st.nis === remote.nis || st.id === remote.studentId
+      st => (cleanRemoteNis && st.nis.trim() === cleanRemoteNis) || st.id === remote.studentId
     );
-    const normalizedNis = matchedStudent?.nis || remote.nis;
+    const normalizedNis = (matchedStudent?.nis || cleanRemoteNis).trim();
     const normalizedStudentId = matchedStudent?.id || remote.studentId;
     const normalized: StudentExamSession = {
       ...remote,
@@ -779,19 +876,23 @@ export function reconcileSessionsWithStudents(
     !s.isLocked &&
     s.violationsCount === 0 &&
     s.finalScore === 0 &&
-    countAnsweredQuestions(s.answers) === 0;
+    countAnsweredQuestions(s.answers) === 0 &&
+    (s.answeredCount || 0) === 0;
 
   const finalList: StudentExamSession[] = [];
+  const matchedKeys = new Set<string>();
 
   students.forEach(std => {
+    const cleanStdNis = std.nis.trim();
     const studentRows = allSessions
-      .filter(s => s.nis === std.nis || s.studentId === std.id)
+      .filter(s => (s.nis && s.nis.trim() === cleanStdNis) || s.studentId === std.id)
       .sort((a, b) => scoreFreshness(b) - scoreFreshness(a));
+
+    studentRows.forEach(r => matchedKeys.add(`${(r.nis || r.studentId).trim()}__${r.examId}`));
 
     const activeOrDoneRows = studentRows.filter(s => !isUntouchedPlaceholder(s));
 
     if (activeOrDoneRows.length > 0) {
-      // Student has real activity/lock/submission — show all real exam sessions (drop ghost placeholders)
       activeOrDoneRows.forEach(row => finalList.push(row));
     } else if (studentRows.length > 0) {
       finalList.push(studentRows[0]);
@@ -821,6 +922,14 @@ export function reconcileSessionsWithStudents(
         finalScore: 0,
         isPassed: false,
       });
+    }
+  });
+
+  // Keep any active/completed remote rows that did not match the static student array
+  allSessions.forEach(s => {
+    const key = `${(s.nis || s.studentId).trim()}__${s.examId}`;
+    if (!matchedKeys.has(key) && !isUntouchedPlaceholder(s)) {
+      finalList.push(s);
     }
   });
 

@@ -184,6 +184,8 @@ export interface StudentExamSession {
     scoreObtained?: number;
     updatedAt: number;
   } | undefined>;
+  answeredCount?: number;
+  totalQuestions?: number;
   scorePg: number;
   scoreEssay: number;
   finalScore: number;

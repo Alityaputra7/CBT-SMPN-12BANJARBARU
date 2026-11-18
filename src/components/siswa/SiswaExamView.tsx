@@ -37,14 +37,14 @@ import {
 import { KatexRenderer } from '../common/KatexRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
 import { fetchServerData } from '../../utils/apiSync';
-import { isSupabaseConfigured } from '../../lib/supabaseClient';
+import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
 import {
   submitExamToSupabase,
   recordViolationToSupabase,
   subscribeToStudentSessionLockRealtime,
   fetchStudentSessionStatusFromSupabase,
   FetchStudentSessionStatusResult,
-  syncSessionProgressToSupabase
+  syncSessionProgressWithDetails
 } from '../../services/supabaseExamService';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
@@ -65,6 +65,8 @@ interface SiswaExamViewProps {
   onRecordViolation: (type: ViolationType, details: string) => void;
   schoolSetting: SchoolSetting;
   onExitExam: () => void;
+  onSupabaseError?: (message: string) => void;
+  onSupabaseSuccess?: () => void;
 }
 
 export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
@@ -77,7 +79,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   onUpdateSession,
   onRecordViolation,
   schoolSetting,
-  onExitExam
+  onExitExam,
+  onSupabaseError,
+  onSupabaseSuccess
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(session.currentQuestionIndex || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -86,6 +90,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [syncErrorBanner, setSyncErrorBanner] = useState<string | null>(null);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(false);
   const [unlockCheckNotice, setUnlockCheckNotice] = useState<{
     type: 'info' | 'warning' | 'error';
@@ -100,6 +105,16 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     max: number;
   } | null>(null);
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
+
+  const reportSyncError = (message: string) => {
+    setSyncErrorBanner(message);
+    onSupabaseError?.(message);
+  };
+
+  const clearSyncError = () => {
+    setSyncErrorBanner(null);
+    onSupabaseSuccess?.();
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<StudentExamSession>(session);
@@ -357,12 +372,22 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     };
   }, [hasStarted, session.isLocked, session.status, session.id, student.nis, exam.id, exam.durationMinutes]);
 
-  // Helper to update session state and sync directly to Supabase (with total question count)
+  // Helper to update session state and sync directly to Supabase (with total question count & visible error reporting)
   const updateSessionWithSync = (updated: StudentExamSession, mirrorToSupabase = true) => {
-    sessionRef.current = updated;
-    onUpdateSession(updated, { skipSupabaseMirror: !mirrorToSupabase });
+    const stamped: StudentExamSession = {
+      ...updated,
+      updatedAt: updated.updatedAt || new Date().toISOString(),
+    };
+    sessionRef.current = stamped;
+    onUpdateSession(stamped, { skipSupabaseMirror: !mirrorToSupabase });
     if (mirrorToSupabase && isSupabaseConfigured) {
-      void syncSessionProgressToSupabase(updated, questions.length);
+      void syncSessionProgressWithDetails(stamped, questions.length).then(res => {
+        if (!res.success && !res.skipped && res.error) {
+          reportSyncError(`Gagal menyimpan progres/jawaban ke Supabase: ${res.error}`);
+        } else if (res.success) {
+          clearSyncError();
+        }
+      });
     }
   };
 
@@ -430,7 +455,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     };
     updateSessionWithSync(startSession, false);
     if (isSupabaseConfigured) {
-      await syncSessionProgressToSupabase(startSession, questions.length);
+      const syncRes = await syncSessionProgressWithDetails(startSession, questions.length);
+      if (!syncRes.success && !syncRes.skipped && syncRes.error) {
+        reportSyncError(`Gagal menyimpan status mulai ujian ke Supabase: ${syncRes.error}`);
+      } else if (syncRes.success) {
+        clearSyncError();
+      }
     }
   };
 
@@ -513,6 +543,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         maxViolations,
         timeRemainingSeconds: timeRemainingRef.current,
         totalQuestions: questions.length
+      }).then(res => {
+        if (!res.success && res.error) {
+          reportSyncError(`Gagal mencatat pelanggaran ke Supabase: ${res.error}`);
+        } else if (res.success) {
+          clearSyncError();
+        }
       });
 
       if (isNowLocked) {
@@ -718,13 +754,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       });
 
       if (!result.success) {
-        setSubmitError(
-          result.error || 'Gagal menyimpan hasil ujian ke database. Silakan klik "Ya, Kumpulkan" lagi.'
-        );
+        const errMsg =
+          result.error || 'Gagal menyimpan hasil ujian ke database. Silakan klik "Ya, Kumpulkan" lagi.';
+        setSubmitError(errMsg);
+        reportSyncError(`Pengumpulan ujian ke Supabase gagal: ${errMsg}`);
         return false;
       }
 
       // Only transition screen AFTER database persistence is confirmed
+      clearSyncError();
       sessionRef.current = result.session;
       onUpdateSession(result.session, { skipSupabaseMirror: true });
       setShowSubmitConfirm(false);
@@ -732,6 +770,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan saat mengirim nilai.';
       setSubmitError(message);
+      reportSyncError(`Pengumpulan ujian gagal: ${message}`);
       return false;
     } finally {
       setIsSubmitting(false);
@@ -779,6 +818,34 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             {schoolSetting.name} · Ruang Ujian CBT
           </p>
         </div>
+
+        {!isSupabaseConfigured && supabaseConfigError && (
+          <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <span className="font-bold block">Konfigurasi Supabase Belum Aktif:</span>
+              <span className="font-mono text-[11px] break-words">{supabaseConfigError}</span>
+            </div>
+          </div>
+        )}
+
+        {syncErrorBanner && (
+          <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-800 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <span className="font-bold text-rose-900 block">Sinkronisasi Supabase Bermasalah:</span>
+              <span className="font-mono text-[11px] break-words">{syncErrorBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={clearSyncError}
+              className="p-0.5 text-rose-500 hover:text-rose-800 rounded cursor-pointer"
+              aria-label="Tutup peringatan"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Available Exams Selector (Strictly for Student's Class) */}
         {(() => {
@@ -1297,6 +1364,25 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Inline Sync Error Banner during Exam */}
+      {syncErrorBanner && (
+        <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-800 flex items-start gap-2.5 shadow-xs">
+          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold text-rose-900 block">Gagal Menyimpan ke Database Supabase (Cek Koneksi / SQL Migration):</span>
+            <span className="font-mono text-[11px] break-words">{syncErrorBanner}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearSyncError}
+            className="p-0.5 text-rose-500 hover:text-rose-800 rounded cursor-pointer"
+            aria-label="Tutup peringatan"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Main Grid: Question Content (Left) & Palette Navigator (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

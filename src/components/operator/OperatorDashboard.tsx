@@ -94,6 +94,7 @@ interface OperatorDashboardProps {
   violationLogs?: ExamViolationLog[];
   realtimeStatus?: string;
   onRefreshFromSupabase?: () => Promise<void>;
+  supabaseError?: string | null;
 }
 
 export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
@@ -121,7 +122,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   lastSyncTime = '',
   violationLogs = [],
   realtimeStatus = 'idle',
-  onRefreshFromSupabase
+  onRefreshFromSupabase,
+  supabaseError = null
 }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'monitoring' | 'students' | 'teachers' | 'subjects' | 'questions' | 'schedules' | 'results' | 'cards' | 'logs' | 'settings'>('overview');
   const [isUnlockingId, setIsUnlockingId] = useState<string | null>(null);
@@ -947,6 +949,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
               </div>
             )}
 
+            {supabaseError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Gagal Sinkronisasi Supabase:</span>
+                  <span className="font-mono text-[11px] break-words">{supabaseError}</span>
+                </div>
+              </div>
+            )}
+
             {/* Real-Time Violation & Lock Alert Banner */}
             {lockedOrViolatedSessions.length > 0 && (
               <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 space-y-2.5">
@@ -1063,9 +1075,10 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     </tr>
                   ) : (
                     filteredMonitoringSessions.map(s => {
-                      const answeredCount = Object.values(s.answers || {}).filter(
+                      const answeredFromMap = Object.values(s.answers || {}).filter(
                         a => a && a.answer !== '' && (!Array.isArray(a.answer) || a.answer.length > 0)
                       ).length;
+                      const answeredCount = Math.max(answeredFromMap, s.answeredCount || 0);
 
                       const matchingExam = exams.find(e => e.id === s.examId) || exams[0];
                       const examQuestionsCount = matchingExam
@@ -1079,7 +1092,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           }).length
                         : questionBank.questions.length;
 
-                      const totalQ = examQuestionsCount > 0 ? examQuestionsCount : (matchingExam?.totalQuestions || 25);
+                      const totalQ = examQuestionsCount > 0 ? examQuestionsCount : (s.totalQuestions || matchingExam?.totalQuestions || 25);
                       const isSessionLocked = s.isLocked || s.status === 'locked';
                       const isSessionDone = isSessionCompleted(s.status);
                       const canResetAccount =
@@ -2062,6 +2075,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <div>
                   <span className="font-bold block">Konfigurasi Supabase Belum Aktif:</span>
                   <span className="font-mono text-[11px] break-words">{supabaseConfigError}</span>
+                </div>
+              </div>
+            )}
+
+            {supabaseError && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Gagal Membaca Data dari Supabase:</span>
+                  <span className="font-mono text-[11px] break-words">{supabaseError}</span>
                 </div>
               </div>
             )}

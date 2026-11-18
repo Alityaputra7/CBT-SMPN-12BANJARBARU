@@ -45,12 +45,12 @@ import {
 } from './utils/apiSync';
 import { isSupabaseConfigured } from './lib/supabaseClient';
 import {
-  fetchExamResultsFromSupabase,
-  fetchViolationLogsFromSupabase,
+  fetchExamResultsWithStatusFromSupabase,
+  fetchViolationLogsWithStatusFromSupabase,
   fetchStudentSessionStatusFromSupabase,
   subscribeToExamSessionsRealtime,
-  syncSessionProgressToSupabase,
-  syncMultipleSessionsToSupabase,
+  syncSessionProgressWithDetails,
+  syncMultipleSessionsWithDetails,
   reconcileSessionsWithStudents,
   buildDeterministicSessionId
 } from './services/supabaseExamService';
@@ -65,7 +65,7 @@ import { OperatorDashboard } from './components/operator/OperatorDashboard';
 import { GuruDashboard } from './components/guru/GuruDashboard';
 import { SiswaExamView } from './components/siswa/SiswaExamView';
 import { SecurityAndDeployGuide } from './components/common/SecurityAndDeployGuide';
-import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2 } from 'lucide-react';
+import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, X } from 'lucide-react';
 
 export default function App() {
   // App State with permanent local storage persistence
@@ -137,9 +137,10 @@ export default function App() {
     isSupabaseConfigured ? 'CONNECTING' : 'POLLING_3S'
   );
 
-  // Auto-sync notification feedback
+  // Auto-sync notification feedback & Supabase error banner
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('id-ID'));
   const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
+  const [supabaseSyncError, setSupabaseSyncError] = useState<string | null>(null);
 
   // Cross-device sync tracking (ensures mobile phones and laptops stay 100% in sync)
   const lastKnownVersion = useRef<number>(1);
@@ -178,9 +179,9 @@ export default function App() {
 
   // Explicit refresh from Supabase (used by Operator Monitor Real-Time, Auto-Sync 3s & Rekap Nilai)
   const handleRefreshFromSupabase = async () => {
-    const [supSessions, supLogs, serverRes] = await Promise.all([
-      isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
-      isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
+    const [supSessionsRes, supLogsRes, serverRes] = await Promise.all([
+      isSupabaseConfigured ? fetchExamResultsWithStatusFromSupabase() : Promise.resolve({ sessions: null, error: undefined as string | undefined }),
+      isSupabaseConfigured ? fetchViolationLogsWithStatusFromSupabase() : Promise.resolve({ logs: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? Promise.resolve(null) : fetchServerData(),
     ]);
 
@@ -188,10 +189,13 @@ export default function App() {
     const defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
     let nextList = sessionsRef.current;
 
-    if (isSupabaseConfigured && supSessions) {
+    if (isSupabaseConfigured && supSessionsRes.error) {
+      setSupabaseSyncError(`Gagal membaca data dari Supabase: ${supSessionsRes.error}`);
+    } else if (isSupabaseConfigured && supSessionsRes.sessions) {
+      setSupabaseSyncError(null);
       nextList = reconcileSessionsWithStudents(
         currentStudents,
-        supSessions,
+        supSessionsRes.sessions,
         defaultExam,
         sessionsRef.current,
         { isFullSnapshot: true }
@@ -209,8 +213,8 @@ export default function App() {
     setSessions(nextList);
     saveToStorage(STORAGE_KEYS.SESSIONS, nextList);
 
-    if (supLogs) {
-      setViolationLogs(supLogs);
+    if (supLogsRes.logs) {
+      setViolationLogs(supLogsRes.logs);
     }
     setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
   };
@@ -219,9 +223,9 @@ export default function App() {
   useEffect(() => {
     Promise.all([
       fetchServerData(),
-      isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
-      isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
-    ]).then(([serverRes, supSessions, supLogs]) => {
+      isSupabaseConfigured ? fetchExamResultsWithStatusFromSupabase() : Promise.resolve({ sessions: null, error: undefined as string | undefined }),
+      isSupabaseConfigured ? fetchViolationLogsWithStatusFromSupabase() : Promise.resolve({ logs: null, error: undefined as string | undefined }),
+    ]).then(([serverRes, supSessionsRes, supLogsRes]) => {
       let currentStudentsList = studentsRef.current;
       let defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
       let baseSessions = sessionsRef.current;
@@ -256,14 +260,20 @@ export default function App() {
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
       }
 
-      const hydratedSessions = supSessions
-        ? reconcileSessionsWithStudents(currentStudentsList, supSessions, defaultExam, baseSessions, { isFullSnapshot: true })
+      if (isSupabaseConfigured && supSessionsRes.error) {
+        setSupabaseSyncError(`Gagal memuat data Supabase: ${supSessionsRes.error}`);
+      } else if (supSessionsRes.sessions) {
+        setSupabaseSyncError(null);
+      }
+
+      const hydratedSessions = supSessionsRes.sessions
+        ? reconcileSessionsWithStudents(currentStudentsList, supSessionsRes.sessions, defaultExam, baseSessions, { isFullSnapshot: true })
         : reconcileSessionsWithStudents(currentStudentsList, baseSessions, defaultExam, []);
 
       sessionsRef.current = hydratedSessions;
       setSessions(hydratedSessions);
       saveToStorage(STORAGE_KEYS.SESSIONS, hydratedSessions);
-      if (supLogs) setViolationLogs(supLogs);
+      if (supLogsRes.logs) setViolationLogs(supLogsRes.logs);
       setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
       setTimeout(() => { isSyncingFromServer.current = false; }, 600);
     });
@@ -448,6 +458,14 @@ export default function App() {
     }, 4000);
   };
 
+  const triggerSupabaseErrorNotification = (msg: string) => {
+    setSupabaseSyncError(msg);
+  };
+
+  const clearSupabaseErrorNotification = () => {
+    setSupabaseSyncError(null);
+  };
+
   const handleAddAuditLog = (action: string, details: string) => {
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
@@ -584,7 +602,13 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SESSIONS, newSessions);
     syncServerUpdates({ sessions: newSessions }).then(syncMetaFromClientPush);
     if (isSupabaseConfigured && changed.length > 0) {
-      void syncMultipleSessionsToSupabase(changed);
+      void syncMultipleSessionsWithDetails(changed).then(res => {
+        if (!res.success && !res.skipped && res.error) {
+          triggerSupabaseErrorNotification(`Gagal sinkronisasi sesi ke Supabase: ${res.error}`);
+        } else if (res.success) {
+          clearSupabaseErrorNotification();
+        }
+      });
     }
   };
 
@@ -674,7 +698,11 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SESSIONS, updated);
     syncServerUpdates({ sessions: updated }).then(syncMetaFromClientPush);
     if (isSupabaseConfigured && touchedSessions.length > 0) {
-      void syncMultipleSessionsToSupabase(touchedSessions);
+      void syncMultipleSessionsWithDetails(touchedSessions).then(res => {
+        if (!res.success && !res.skipped && res.error) {
+          triggerSupabaseErrorNotification(`Gagal mereset sesi di Supabase: ${res.error}`);
+        }
+      });
     }
 
     handleAddAuditLog(
@@ -728,7 +756,11 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SESSIONS, updated);
     syncServerUpdates({ sessions: updated }).then(syncMetaFromClientPush);
     if (isSupabaseConfigured && touchedSessions.length > 0) {
-      void syncMultipleSessionsToSupabase(touchedSessions);
+      void syncMultipleSessionsWithDetails(touchedSessions).then(res => {
+        if (!res.success && !res.skipped && res.error) {
+          triggerSupabaseErrorNotification(`Gagal reset massal di Supabase: ${res.error}`);
+        }
+      });
     }
 
     const scopeLabel = !targetClassId || targetClassId === 'all' 
@@ -774,7 +806,11 @@ export default function App() {
     if (updatedTarget) {
       syncSingleSession(updatedTarget).then(syncMetaFromClientPush);
       if (isSupabaseConfigured) {
-        void syncSessionProgressToSupabase(updatedTarget);
+        void syncSessionProgressWithDetails(updatedTarget).then(res => {
+          if (!res.success && !res.skipped && res.error) {
+            triggerSupabaseErrorNotification(`Gagal mereset login perangkat di Supabase: ${res.error}`);
+          }
+        });
       }
     }
 
@@ -918,9 +954,22 @@ export default function App() {
       syncSingleSession(syncedSession).then(syncMetaFromClientPush);
 
       if (isSupabaseConfigured) {
-        fetchStudentSessionStatusFromSupabase(student.nis, targetExamId).then(res => {
-          if (res.error) return;
+        void fetchStudentSessionStatusFromSupabase(student.nis, targetExamId).then(async res => {
           const defaultDurationSec = (targetExam?.durationMinutes || 90) * 60;
+
+          if (res.error) {
+            triggerSupabaseErrorNotification(
+              `Gagal sinkronisasi status login ke Supabase: ${res.error}`
+            );
+            // Still attempt direct upsert so write failure (e.g. RLS / schema / column error) surfaces immediately
+            const fallbackWrite = await syncSessionProgressWithDetails(syncedSession);
+            if (!fallbackWrite.success && !fallbackWrite.skipped && fallbackWrite.error) {
+              triggerSupabaseErrorNotification(
+                `Gagal menyimpan sesi login siswa ke Supabase: ${fallbackWrite.error}`
+              );
+            }
+            return;
+          }
 
           if (res.found && res.session) {
             const remote = res.session;
@@ -950,7 +999,14 @@ export default function App() {
             setSessions(merged);
             saveToStorage(STORAGE_KEYS.SESSIONS, merged);
             if (!hydrated.isLocked && !isRemoteDone) {
-              void syncSessionProgressToSupabase(hydrated);
+              const writeRes = await syncSessionProgressWithDetails(hydrated);
+              if (!writeRes.success && !writeRes.skipped && writeRes.error) {
+                triggerSupabaseErrorNotification(
+                  `Gagal memperbarui status login di Supabase: ${writeRes.error}`
+                );
+              } else if (writeRes.success) {
+                clearSupabaseErrorNotification();
+              }
             }
           } else {
             // No row in Supabase: never preserve a stale local lock or old violation state
@@ -981,7 +1037,14 @@ export default function App() {
             sessionsRef.current = merged;
             setSessions(merged);
             saveToStorage(STORAGE_KEYS.SESSIONS, merged);
-            void syncSessionProgressToSupabase(cleanSession);
+            const writeRes = await syncSessionProgressWithDetails(cleanSession);
+            if (!writeRes.success && !writeRes.skipped && writeRes.error) {
+              triggerSupabaseErrorNotification(
+                `Gagal mencatat sesi login siswa ke Supabase: ${writeRes.error}`
+              );
+            } else if (writeRes.success) {
+              clearSupabaseErrorNotification();
+            }
           }
         });
       }
@@ -1134,7 +1197,13 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SESSIONS, updated);
     syncSingleSession(updatedSession).then(syncMetaFromClientPush);
     if (isSupabaseConfigured && !options?.skipSupabaseMirror) {
-      void syncSessionProgressToSupabase(updatedSession);
+      void syncSessionProgressWithDetails(updatedSession).then(res => {
+        if (!res.success && !res.skipped && res.error) {
+          triggerSupabaseErrorNotification(`Gagal menyimpan progres ke Supabase: ${res.error}`);
+        } else if (res.success) {
+          clearSupabaseErrorNotification();
+        }
+      });
     }
   };
 
@@ -1231,8 +1300,15 @@ export default function App() {
     syncSingleSession(activeSess).then(syncMetaFromClientPush);
 
     if (isSupabaseConfigured) {
-      fetchStudentSessionStatusFromSupabase(currentStudent.nis, ex.id).then(res => {
-        if (res.error) return;
+      void fetchStudentSessionStatusFromSupabase(currentStudent.nis, ex.id).then(async res => {
+        if (res.error) {
+          triggerSupabaseErrorNotification(`Gagal memeriksa sesi mapel di Supabase: ${res.error}`);
+          const fallbackWrite = await syncSessionProgressWithDetails(activeSess);
+          if (!fallbackWrite.success && !fallbackWrite.skipped && fallbackWrite.error) {
+            triggerSupabaseErrorNotification(`Gagal menyimpan sesi mapel ke Supabase: ${fallbackWrite.error}`);
+          }
+          return;
+        }
         if (res.found && res.session) {
           const remote = res.session;
           const isRemoteDone = isSessionCompleted(remote.status);
@@ -1252,6 +1328,14 @@ export default function App() {
           sessionsRef.current = merged;
           setSessions(merged);
           saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+          if (!hydrated.isLocked && !isRemoteDone) {
+            const writeRes = await syncSessionProgressWithDetails(hydrated);
+            if (!writeRes.success && !writeRes.skipped && writeRes.error) {
+              triggerSupabaseErrorNotification(`Gagal menyimpan sesi mapel ke Supabase: ${writeRes.error}`);
+            } else if (writeRes.success) {
+              clearSupabaseErrorNotification();
+            }
+          }
         } else {
           const cleanSession: StudentExamSession =
             activeSess.isLocked || activeSess.violationsCount > 0 || activeSess.status !== 'not_started'
@@ -1280,7 +1364,12 @@ export default function App() {
           sessionsRef.current = merged;
           setSessions(merged);
           saveToStorage(STORAGE_KEYS.SESSIONS, merged);
-          void syncSessionProgressToSupabase(cleanSession);
+          const writeRes = await syncSessionProgressWithDetails(cleanSession);
+          if (!writeRes.success && !writeRes.skipped && writeRes.error) {
+            triggerSupabaseErrorNotification(`Gagal membuat sesi ujian di Supabase: ${writeRes.error}`);
+          } else if (writeRes.success) {
+            clearSupabaseErrorNotification();
+          }
         }
       });
     }
@@ -1297,6 +1386,25 @@ export default function App() {
         onNavigate={setActiveSection}
         onLogout={handleLogout}
       />
+
+      {/* Supabase Sync Error Alert Toast */}
+      {supabaseSyncError && (
+        <div className="fixed top-16 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-[60] bg-rose-950 text-rose-50 px-4 py-3 rounded-xl shadow-2xl border-2 border-rose-500 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="text-xs flex-1 min-w-0">
+            <span className="font-bold text-white block">Gagal Sinkronisasi Database Supabase</span>
+            <span className="font-mono text-[11px] break-words text-rose-100 block mt-0.5">{supabaseSyncError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearSupabaseErrorNotification}
+            className="p-1 text-rose-300 hover:text-white rounded cursor-pointer shrink-0"
+            aria-label="Tutup peringatan"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Real-time Sync & Update Toast Notification */}
       {syncFeedbackMessage && (
@@ -1404,6 +1512,7 @@ export default function App() {
             violationLogs={violationLogs}
             realtimeStatus={realtimeStatus}
             onRefreshFromSupabase={handleRefreshFromSupabase}
+            supabaseError={supabaseSyncError}
           />
         )}
 
@@ -1440,6 +1549,8 @@ export default function App() {
             onRecordViolation={handleRecordViolation}
             schoolSetting={schoolSetting}
             onExitExam={handleLogout}
+            onSupabaseError={triggerSupabaseErrorNotification}
+            onSupabaseSuccess={clearSupabaseErrorNotification}
           />
         )}
 
