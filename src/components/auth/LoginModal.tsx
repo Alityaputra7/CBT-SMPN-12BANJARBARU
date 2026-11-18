@@ -10,7 +10,9 @@ import {
   GraduationCap,
   Sparkles,
   School,
-  ArrowRight
+  ArrowRight,
+  Copy,
+  Check
 } from 'lucide-react';
 import { UserRole, UserAccount, Student, SchoolSetting, StudentExamSession } from '../../types/cbt';
 import { generateDynamicToken, verifyDynamicToken } from '../../utils/tokenGenerator';
@@ -55,6 +57,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   // Status & error messages
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [liveTokenInfo, setLiveTokenInfo] = useState(generateDynamicToken());
+  const [copiedUrl, setCopiedUrl] = useState<boolean>(false);
+
+  const inAppBrowserName = React.useMemo(() => {
+    if (typeof navigator === 'undefined') return null;
+    const ua = navigator.userAgent || '';
+    if (/WhatsApp/i.test(ua)) return 'WhatsApp';
+    if (/Instagram/i.test(ua)) return 'Instagram';
+    if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'Facebook';
+    if (/Line\//i.test(ua)) return 'LINE';
+    if (/Musical_ly|TikTok|BytedanceWebview/i.test(ua)) return 'TikTok';
+    if (/; wv\)/i.test(ua)) return 'Browser Dalam Aplikasi (WebView)';
+    return null;
+  }, []);
 
   // Auto-fill active dynamic token for demo convenience
   useEffect(() => {
@@ -250,6 +265,36 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
       {/* Form Content */}
       <div className="p-6">
+        {inAppBrowserName && (
+          <div className="mb-4 p-3.5 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-950 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-amber-900">
+                  Terdeteksi Browser {inAppBrowserName}
+                </p>
+                <p className="text-[11px] text-amber-900/90 leading-relaxed">
+                  Demi kestabilan koneksi realtime, mode layar penuh, dan penyimpanan jawaban, buka halaman ujian ini melalui <strong>Google Chrome</strong> atau <strong>Safari</strong> (ketuk menu <strong>⋮</strong> atau ikon bagikan lalu pilih <em>Buka di Browser</em>).
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                  void navigator.clipboard.writeText(window.location.href).then(() => {
+                    setCopiedUrl(true);
+                    setTimeout(() => setCopiedUrl(false), 2500);
+                  });
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold bg-white border border-amber-300 text-amber-900 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+            >
+              {copiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedUrl ? 'Link Disalin!' : 'Salin Link Ujian'}</span>
+            </button>
+          </div>
+        )}
         {errorMessage && (
           <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-start gap-2.5 text-xs text-rose-700 leading-relaxed">
             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />

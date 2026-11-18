@@ -47,7 +47,7 @@ import { isSupabaseConfigured } from './lib/supabaseClient';
 import {
   fetchExamResultsFromSupabase,
   fetchViolationLogsFromSupabase,
-  fetchStudentSessionFromSupabase,
+  fetchStudentSessionStatusFromSupabase,
   subscribeToExamSessionsRealtime,
   syncSessionProgressToSupabase,
   syncMultipleSessionsToSupabase,
@@ -193,7 +193,8 @@ export default function App() {
         currentStudents,
         supSessions,
         defaultExam,
-        sessionsRef.current
+        sessionsRef.current,
+        { isFullSnapshot: true }
       );
     } else if (serverRes?.success && serverRes.data?.sessions) {
       nextList = reconcileSessionsWithStudents(
@@ -256,7 +257,7 @@ export default function App() {
       }
 
       const hydratedSessions = supSessions
-        ? reconcileSessionsWithStudents(currentStudentsList, supSessions, defaultExam, baseSessions)
+        ? reconcileSessionsWithStudents(currentStudentsList, supSessions, defaultExam, baseSessions, { isFullSnapshot: true })
         : reconcileSessionsWithStudents(currentStudentsList, baseSessions, defaultExam, []);
 
       sessionsRef.current = hydratedSessions;
@@ -917,14 +918,27 @@ export default function App() {
       syncSingleSession(syncedSession).then(syncMetaFromClientPush);
 
       if (isSupabaseConfigured) {
-        fetchStudentSessionFromSupabase(student.nis, targetExamId).then(existingRemote => {
-          if (existingRemote && (existingRemote.isLocked || existingRemote.status !== 'not_started' || isSessionCompleted(existingRemote.status))) {
+        fetchStudentSessionStatusFromSupabase(student.nis, targetExamId).then(res => {
+          if (res.error) return;
+          const defaultDurationSec = (targetExam?.durationMinutes || 90) * 60;
+
+          if (res.found && res.session) {
+            const remote = res.session;
+            const isRemoteDone = isSessionCompleted(remote.status);
+            const isRemoteReset = remote.status === 'not_started' && !remote.isLocked;
             const hydrated: StudentExamSession = {
-              ...existingRemote,
-              isOnline: !isSessionCompleted(existingRemote.status),
-              deviceSessionId: isSessionCompleted(existingRemote.status) ? undefined : deviceSessionId,
+              ...remote,
+              isOnline: !isRemoteDone,
+              deviceSessionId: isRemoteDone ? undefined : deviceSessionId,
               deviceInfo: clientInfo,
-              lastHeartbeat: Date.now()
+              lastHeartbeat: Date.now(),
+              answers: isRemoteReset
+                ? (remote.answers || {})
+                : Object.keys(syncedSession.answers || {}).length > Object.keys(remote.answers || {}).length &&
+                    !remote.adminActionAt &&
+                    remote.status === 'in_progress'
+                  ? syncedSession.answers
+                  : remote.answers,
             };
             const merged = reconcileSessionsWithStudents(
               studentsRef.current,
@@ -935,11 +949,39 @@ export default function App() {
             sessionsRef.current = merged;
             setSessions(merged);
             saveToStorage(STORAGE_KEYS.SESSIONS, merged);
-            if (!hydrated.isLocked && !isSessionCompleted(hydrated.status)) {
+            if (!hydrated.isLocked && !isRemoteDone) {
               void syncSessionProgressToSupabase(hydrated);
             }
           } else {
-            void syncSessionProgressToSupabase(syncedSession);
+            // No row in Supabase: never preserve a stale local lock or old violation state
+            const cleanSession: StudentExamSession =
+              syncedSession.isLocked || syncedSession.violationsCount > 0 || syncedSession.status !== 'not_started'
+                ? {
+                    ...syncedSession,
+                    status: 'not_started',
+                    isLocked: false,
+                    lockReason: undefined,
+                    violationsCount: 0,
+                    answers: {},
+                    scorePg: 0,
+                    scoreEssay: 0,
+                    finalScore: 0,
+                    isPassed: false,
+                    submittedAt: undefined,
+                    timeRemainingSeconds: defaultDurationSec,
+                    currentQuestionIndex: 0,
+                  }
+                : syncedSession;
+            const merged = reconcileSessionsWithStudents(
+              studentsRef.current,
+              [cleanSession],
+              examsRef.current[0] || INITIAL_EXAMS[0],
+              sessionsRef.current
+            );
+            sessionsRef.current = merged;
+            setSessions(merged);
+            saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+            void syncSessionProgressToSupabase(cleanSession);
           }
         });
       }
@@ -1189,11 +1231,21 @@ export default function App() {
     syncSingleSession(activeSess).then(syncMetaFromClientPush);
 
     if (isSupabaseConfigured) {
-      fetchStudentSessionFromSupabase(currentStudent.nis, ex.id).then(existingRemote => {
-        if (existingRemote && (existingRemote.isLocked || existingRemote.status !== 'not_started' || isSessionCompleted(existingRemote.status))) {
+      fetchStudentSessionStatusFromSupabase(currentStudent.nis, ex.id).then(res => {
+        if (res.error) return;
+        if (res.found && res.session) {
+          const remote = res.session;
+          const isRemoteDone = isSessionCompleted(remote.status);
+          const hydrated: StudentExamSession = {
+            ...remote,
+            isOnline: !isRemoteDone,
+            deviceSessionId: isRemoteDone ? undefined : deviceSessionId,
+            deviceInfo: clientInfo,
+            lastHeartbeat: Date.now(),
+          };
           const merged = reconcileSessionsWithStudents(
             studentsRef.current,
-            [existingRemote],
+            [hydrated],
             examsRef.current[0] || INITIAL_EXAMS[0],
             sessionsRef.current
           );
@@ -1201,7 +1253,34 @@ export default function App() {
           setSessions(merged);
           saveToStorage(STORAGE_KEYS.SESSIONS, merged);
         } else {
-          void syncSessionProgressToSupabase(activeSess);
+          const cleanSession: StudentExamSession =
+            activeSess.isLocked || activeSess.violationsCount > 0 || activeSess.status !== 'not_started'
+              ? {
+                  ...activeSess,
+                  status: 'not_started',
+                  isLocked: false,
+                  lockReason: undefined,
+                  violationsCount: 0,
+                  answers: {},
+                  scorePg: 0,
+                  scoreEssay: 0,
+                  finalScore: 0,
+                  isPassed: false,
+                  submittedAt: undefined,
+                  timeRemainingSeconds: ex.durationMinutes * 60,
+                  currentQuestionIndex: 0,
+                }
+              : activeSess;
+          const merged = reconcileSessionsWithStudents(
+            studentsRef.current,
+            [cleanSession],
+            examsRef.current[0] || INITIAL_EXAMS[0],
+            sessionsRef.current
+          );
+          sessionsRef.current = merged;
+          setSessions(merged);
+          saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+          void syncSessionProgressToSupabase(cleanSession);
         }
       });
     }

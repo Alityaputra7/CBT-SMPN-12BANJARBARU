@@ -7,7 +7,7 @@ import {
   StudentExamStatus,
   ViolationType,
 } from '../types/cbt';
-import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured, supabaseConfigError } from '../lib/supabaseClient';
 import { calculateProvisionalScore } from '../utils/sessionDevice';
 import { syncSingleSession } from '../utils/apiSync';
 
@@ -112,49 +112,94 @@ function parseAnswersJson(raw: SupabaseExamSessionRow['answers_json']): StudentE
   return typeof raw === 'object' ? raw : {};
 }
 
+function normalizeIsoTimestamp(value?: string | null): string | null {
+  if (!value || typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const directMs = Date.parse(trimmed);
+  if (!Number.isNaN(directMs)) {
+    return new Date(directMs).toISOString();
+  }
+  // Convert locale time-only strings like "08.30.15" or "08:30:15" into valid ISO-8601 timestamp
+  const timeMatch = trimmed.match(/^(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?$/);
+  if (timeMatch) {
+    const d = new Date();
+    d.setHours(Number(timeMatch[1]), Number(timeMatch[2]), Number(timeMatch[3] || 0), 0);
+    return d.toISOString();
+  }
+  return null;
+}
+
+function sanitizeAnswersJson(
+  answers?: StudentExamSession['answers']
+): StudentExamSession['answers'] {
+  if (!answers || typeof answers !== 'object') return {};
+  try {
+    const serialized = JSON.stringify(answers);
+    const parsed = serialized ? JSON.parse(serialized) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function roundNumericScore(val: unknown): number {
+  const num = Number(val);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(0, Math.min(9999.99, Math.round(num * 100) / 100));
+}
+
 export function mapSessionToSupabaseRow(
   session: StudentExamSession,
   totalQuestions = 0
 ): SupabaseExamSessionRow {
-  const nowIso = session.updatedAt || new Date().toISOString();
-  const answeredCount = countAnsweredQuestions(session.answers);
+  const nowIso = normalizeIsoTimestamp(session.updatedAt) || new Date().toISOString();
+  const cleanAnswers = sanitizeAnswersJson(session.answers);
+  const answeredCount = countAnsweredQuestions(cleanAnswers);
+  const resolvedNis = (session.nis || session.studentId || '').trim();
+  const resolvedExamId = (session.examId || 'ex-mat-2026').trim();
   const deterministicId =
-    session.nis && session.examId
-      ? buildDeterministicSessionId(session.nis, session.examId)
-      : session.id;
+    resolvedNis && resolvedExamId
+      ? buildDeterministicSessionId(resolvedNis, resolvedExamId)
+      : session.id || `sess-${Date.now()}`;
+
+  const cleanAdminActionAt =
+    typeof session.adminActionAt === 'number' && Number.isFinite(session.adminActionAt)
+      ? Math.round(session.adminActionAt)
+      : null;
 
   return {
     id: deterministicId,
-    student_id: session.studentId,
-    student_nis: session.nis,
-    nis: session.nis,
-    student_name: session.studentName,
-    class_id: session.classId,
-    class_name: session.className,
-    exam_id: session.examId,
-    exam_title: session.examTitle,
+    student_id: session.studentId || resolvedNis,
+    student_nis: resolvedNis,
+    nis: resolvedNis,
+    student_name: session.studentName || '',
+    class_id: session.classId || '',
+    class_name: session.className || '',
+    exam_id: resolvedExamId,
+    exam_title: session.examTitle || '',
     status: session.isLocked ? 'locked' : session.status,
     answered_count: answeredCount,
-    total_questions: totalQuestions > 0 ? totalQuestions : undefined,
-    score: Number(session.finalScore) || 0,
-    score_pg: Number(session.scorePg) || 0,
-    score_essay: Number(session.scoreEssay) || 0,
-    final_score: Number(session.finalScore) || 0,
+    ...(totalQuestions > 0 ? { total_questions: Math.round(totalQuestions) } : {}),
+    score: roundNumericScore(session.finalScore),
+    score_pg: roundNumericScore(session.scorePg),
+    score_essay: roundNumericScore(session.scoreEssay),
+    final_score: roundNumericScore(session.finalScore),
     is_passed: Boolean(session.isPassed),
-    violation_count: Number(session.violationsCount) || 0,
+    violation_count: Math.max(0, Math.round(Number(session.violationsCount) || 0)),
     is_locked: Boolean(session.isLocked || session.status === 'locked'),
     lock_reason: session.lockReason || null,
-    answers_json: session.answers || {},
-    time_remaining_seconds: Number(session.timeRemainingSeconds) || 0,
-    extra_time_minutes: Number(session.extraTimeMinutes) || 0,
-    current_question_index: Number(session.currentQuestionIndex) || 0,
+    answers_json: cleanAnswers,
+    time_remaining_seconds: Math.max(0, Math.round(Number(session.timeRemainingSeconds) || 0)),
+    extra_time_minutes: Math.max(0, Math.round(Number(session.extraTimeMinutes) || 0)),
+    current_question_index: Math.max(0, Math.round(Number(session.currentQuestionIndex) || 0)),
     device_info: session.deviceInfo || 'CBT Browser',
     device_session_id: session.deviceSessionId || null,
     is_online: Boolean(session.isOnline),
-    last_heartbeat: Number(session.lastHeartbeat) || Date.now(),
-    admin_action_at: session.adminActionAt ?? null,
-    started_at: session.startedAt || null,
-    submitted_at: session.submittedAt || null,
+    last_heartbeat: Math.round(Number(session.lastHeartbeat) || Date.now()),
+    admin_action_at: cleanAdminActionAt,
+    started_at: normalizeIsoTimestamp(session.startedAt),
+    submitted_at: normalizeIsoTimestamp(session.submittedAt),
     updated_at: nowIso,
   };
 }
@@ -212,27 +257,52 @@ export function mapSupabaseViolationRow(row: SupabaseViolationLogRow): ExamViola
   };
 }
 
+function formatSupabaseError(err: {
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+  code?: string;
+}): string {
+  const base = err.message || 'Unknown Supabase error';
+  const extras = [err.code ? `Kode: ${err.code}` : '', err.details || '', err.hint || '']
+    .filter(Boolean)
+    .join(' | ');
+  return extras ? `${base} (${extras})` : base;
+}
+
 /**
  * Shared upsert helper: prioritizes composite (nis, exam_id) conflict key,
- * and gracefully falls back to primary key `id` if DB constraint hasn't been created yet.
+ * and falls back to primary key `id` if DB constraint hasn't been created yet.
  */
 async function upsertSessionRow(row: SupabaseExamSessionRow) {
   if (!supabase) {
-    return { data: null, error: { message: 'Supabase client is not configured' } };
+    return {
+      data: null,
+      error: {
+        message:
+          supabaseConfigError ||
+          'Supabase client belum terkonfigurasi. Periksa VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY.',
+      },
+    };
   }
 
   let res = await supabase
     .from('cbt_exam_sessions')
     .upsert(row, { onConflict: 'nis,exam_id' })
     .select()
-    .single();
+    .maybeSingle();
 
-  if (res.error && (res.error.code === '42P10' || res.error.message?.includes('ON CONFLICT'))) {
+  if (
+    res.error &&
+    (res.error.code === '42P10' ||
+      res.error.code === '23505' ||
+      res.error.message?.includes('ON CONFLICT'))
+  ) {
     res = await supabase
       .from('cbt_exam_sessions')
       .upsert(row, { onConflict: 'id' })
       .select()
-      .single();
+      .maybeSingle();
   }
 
   return res;
@@ -241,7 +311,8 @@ async function upsertSessionRow(row: SupabaseExamSessionRow) {
 /**
  * 1. SUBMIT EXAM (Siswa -> Supabase -> Operator/Guru)
  * Explicitly computes final score, answered_count, status='completed', and submitted_at.
- * Resolves success ONLY after Supabase/server confirms persistence.
+ * Writes directly to Supabase via supabaseClient.ts (no /api/ local fallback).
+ * Surfaces the exact Supabase error.message on failure.
  */
 export async function submitExamToSupabase(params: {
   session: StudentExamSession;
@@ -278,44 +349,52 @@ export async function submitExamToSupabase(params: {
     lastHeartbeat: Date.now(),
   };
 
-  if (isSupabaseConfigured && supabase) {
+  if (!isSupabaseConfigured || !supabase) {
+    const errMsg =
+      supabaseConfigError ||
+      'Konfigurasi Supabase belum aktif (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY belum diatur).';
+    console.error('[Supabase] submitExam blocked — client not configured:', errMsg);
+    return {
+      success: false,
+      session: completedSession,
+      source: 'supabase',
+      error: errMsg,
+    };
+  }
+
+  try {
     const row = mapSessionToSupabaseRow(completedSession, questions.length);
     const { data, error } = await upsertSessionRow(row);
 
     if (error) {
+      const exactMessage = formatSupabaseError(error);
       console.error('[Supabase] submitExam upsert failed:', error);
       return {
         success: false,
         session: completedSession,
         source: 'supabase',
-        error: `Gagal menyimpan nilai ke Supabase: ${error.message}`,
+        error: exactMessage,
       };
     }
 
-    const confirmedSession = data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : completedSession;
-    await syncSingleSession(confirmedSession).catch(() => false);
+    const confirmedSession = data
+      ? mapSupabaseRowToSession(data as SupabaseExamSessionRow)
+      : completedSession;
     return {
       success: true,
       session: confirmedSession,
       source: 'supabase',
     };
-  }
-
-  const synced = await syncSingleSession(completedSession);
-  if (!synced) {
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] submitExam unexpected error:', err);
     return {
       success: false,
       session: completedSession,
-      source: 'server',
-      error: 'Gagal mengirim lembar jawaban ke server. Periksa koneksi internet Anda lalu coba lagi.',
+      source: 'supabase',
+      error: exactMessage,
     };
   }
-
-  return {
-    success: true,
-    session: completedSession,
-    source: 'server',
-  };
 }
 
 /**
@@ -533,41 +612,80 @@ export async function syncMultipleSessionsToSupabase(sessions: StudentExamSessio
 /**
  * 5. DIRECT QUERIES FOR STUDENT & OPERATOR (SUPABASE SINGLE SOURCE OF TRUTH)
  */
-export async function fetchStudentSessionFromSupabase(
+export interface FetchStudentSessionStatusResult {
+  found: boolean;
+  session: StudentExamSession | null;
+  error?: string;
+}
+
+export async function fetchStudentSessionStatusFromSupabase(
   nis: string,
   examId: string
-): Promise<StudentExamSession | null> {
-  if (!isSupabaseConfigured || !supabase || !nis) return null;
+): Promise<FetchStudentSessionStatusResult> {
+  const cleanNis = (nis || '').trim();
+  const cleanExamId = (examId || '').trim();
+  if (!isSupabaseConfigured || !supabase || !cleanNis) {
+    return {
+      found: false,
+      session: null,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+
   try {
     const { data, error } = await supabase
       .from('cbt_exam_sessions')
       .select('*')
-      .eq('nis', nis)
-      .eq('exam_id', examId)
+      .or(`nis.eq.${cleanNis},student_nis.eq.${cleanNis}`)
+      .eq('exam_id', cleanExamId)
       .order('updated_at', { ascending: false })
       .limit(1);
 
-    if (!error && data && data.length > 0) {
-      return mapSupabaseRowToSession(data[0] as SupabaseExamSessionRow);
+    if (error) {
+      console.warn('[Supabase] fetchStudentSessionStatus failed:', error.message);
+      return { found: false, session: null, error: error.message };
     }
 
-    // Fallback query by deterministic ID if nis column wasn't populated
-    const detId = buildDeterministicSessionId(nis, examId);
+    if (data && data.length > 0) {
+      return {
+        found: true,
+        session: mapSupabaseRowToSession(data[0] as SupabaseExamSessionRow),
+      };
+    }
+
+    // Fallback query by deterministic ID if nis/student_nis wasn't matched
+    const detId = buildDeterministicSessionId(cleanNis, cleanExamId);
     const byId = await supabase
       .from('cbt_exam_sessions')
       .select('*')
       .eq('id', detId)
       .limit(1);
 
-    if (!byId.error && byId.data && byId.data.length > 0) {
-      return mapSupabaseRowToSession(byId.data[0] as SupabaseExamSessionRow);
+    if (byId.error) {
+      return { found: false, session: null, error: byId.error.message };
     }
 
-    return null;
+    if (byId.data && byId.data.length > 0) {
+      return {
+        found: true,
+        session: mapSupabaseRowToSession(byId.data[0] as SupabaseExamSessionRow),
+      };
+    }
+
+    return { found: false, session: null };
   } catch (err) {
-    console.warn('[Supabase] fetchStudentSession network error:', err);
-    return null;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] fetchStudentSessionStatus network error:', msg);
+    return { found: false, session: null, error: msg };
   }
+}
+
+export async function fetchStudentSessionFromSupabase(
+  nis: string,
+  examId: string
+): Promise<StudentExamSession | null> {
+  const res = await fetchStudentSessionStatusFromSupabase(nis, examId);
+  return res.session;
 }
 
 export async function fetchExamResultsFromSupabase(): Promise<StudentExamSession[] | null> {
@@ -619,18 +737,22 @@ export function reconcileSessionsWithStudents(
   students: Student[],
   remoteSessions: StudentExamSession[],
   defaultExam: ExamSchedule,
-  existingLocalSessions: StudentExamSession[] = []
+  existingLocalSessions: StudentExamSession[] = [],
+  options?: { isFullSnapshot?: boolean }
 ): StudentExamSession[] {
   const byNisAndExam = new Map<string, StudentExamSession>();
 
   const scoreFreshness = (s: StudentExamSession) =>
     (s.updatedAt ? Date.parse(s.updatedAt) : 0) || s.lastHeartbeat || 0;
 
-  // Seed with local sessions first, then overwrite with authoritative remote Supabase rows
-  existingLocalSessions.forEach(s => {
-    const key = `${s.nis || s.studentId}__${s.examId}`;
-    byNisAndExam.set(key, s);
-  });
+  // For incremental events (e.g., single Realtime update), keep existing local sessions for other students.
+  // For full authoritative Supabase snapshots, do NOT preserve stale local locks/statuses that were deleted/reset remotely.
+  if (!options?.isFullSnapshot) {
+    existingLocalSessions.forEach(s => {
+      const key = `${s.nis || s.studentId}__${s.examId}`;
+      byNisAndExam.set(key, s);
+    });
+  }
 
   remoteSessions.forEach(remote => {
     const matchedStudent = students.find(

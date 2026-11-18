@@ -42,7 +42,8 @@ import {
   submitExamToSupabase,
   recordViolationToSupabase,
   subscribeToStudentSessionLockRealtime,
-  fetchStudentSessionFromSupabase,
+  fetchStudentSessionStatusFromSupabase,
+  FetchStudentSessionStatusResult,
   syncSessionProgressToSupabase
 } from '../../services/supabaseExamService';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
@@ -86,6 +87,10 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(false);
+  const [unlockCheckNotice, setUnlockCheckNotice] = useState<{
+    type: 'info' | 'warning' | 'error';
+    message: string;
+  } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const [violationAlert, setViolationAlert] = useState<{
     show: boolean;
@@ -147,98 +152,183 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const currentQ = questions[currentQuestionIndex] || questions[0];
 
-  // Sync authoritative session snapshot from Supabase whenever exam opens/switches
+  // Authoritative reconciler: Supabase ALWAYS overrides stale localStorage lock/violation/reset state
+  const applyAuthoritativeRemoteState = (
+    res: FetchStudentSessionStatusResult,
+    source: 'mount' | 'realtime' | 'poll' | 'manual'
+  ): { unlocked: boolean; statusText?: string } => {
+    if (res.error) {
+      return { unlocked: false, statusText: `Gagal memeriksa Supabase: ${res.error}` };
+    }
+
+    const localLatest = sessionRef.current;
+    const defaultDurationSec = (exam.durationMinutes || 90) * 60;
+
+    // 1. Row was reset/deleted in Supabase -> clear any stale localStorage lock immediately
+    if (!res.found || !res.session) {
+      if (
+        localLatest.isLocked ||
+        localLatest.status !== 'not_started' ||
+        localLatest.violationsCount > 0 ||
+        Object.keys(localLatest.answers || {}).length > 0
+      ) {
+        const cleanResetSession: StudentExamSession = {
+          ...localLatest,
+          status: 'not_started',
+          isLocked: false,
+          lockReason: undefined,
+          violationsCount: 0,
+          answers: {},
+          scorePg: 0,
+          scoreEssay: 0,
+          finalScore: 0,
+          isPassed: false,
+          submittedAt: undefined,
+          timeRemainingSeconds: defaultDurationSec,
+          currentQuestionIndex: 0,
+          adminActionAt: Date.now(),
+          updatedAt: new Date().toISOString(),
+        };
+        sessionRef.current = cleanResetSession;
+        onUpdateSession(cleanResetSession, { skipSupabaseMirror: true });
+        setHasStarted(false);
+        setViolationAlert(null);
+        setShowSubmitConfirm(false);
+        setUnlockCheckNotice(null);
+        setCurrentQuestionIndex(0);
+        setTimeRemaining(defaultDurationSec);
+        return { unlocked: true, statusText: 'Sesi ujian telah direset oleh Operator.' };
+      }
+      return { unlocked: false, statusText: 'Belum ada sesi ujian tersimpan di Supabase.' };
+    }
+
+    const remote = res.session;
+    const isLocalLocked = localLatest.isLocked || localLatest.status === 'locked';
+    const isRemoteUnlocked = !remote.isLocked && remote.status !== 'locked';
+    const isRemoteReset = remote.status === 'not_started' && !remote.isLocked;
+    const isRemoteDone = isSessionCompleted(remote.status);
+    const isAdminIntervention = Boolean(
+      remote.adminActionAt && remote.adminActionAt !== localLatest.adminActionAt
+    );
+
+    const unlockedOrReset =
+      (isLocalLocked && isRemoteUnlocked) ||
+      (localLatest.status !== 'not_started' && isRemoteReset) ||
+      (localLatest.violationsCount > 0 && remote.violationsCount === 0 && isRemoteUnlocked) ||
+      isAdminIntervention;
+
+    const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
+    const localUpdatedMs = localLatest.updatedAt ? Date.parse(localLatest.updatedAt) : localLatest.lastHeartbeat || 0;
+
+    const shouldApplyRemote =
+      unlockedOrReset ||
+      source === 'mount' ||
+      remote.isLocked !== localLatest.isLocked ||
+      remote.status !== localLatest.status ||
+      remote.violationsCount !== localLatest.violationsCount ||
+      isRemoteDone ||
+      remoteUpdatedMs > localUpdatedMs;
+
+    if (shouldApplyRemote) {
+      const nextSess: StudentExamSession = isRemoteReset
+        ? {
+            ...remote,
+            isLocked: false,
+            lockReason: undefined,
+            violationsCount: 0,
+            answers: remote.answers || {},
+            timeRemainingSeconds: remote.timeRemainingSeconds || defaultDurationSec,
+          }
+        : {
+            ...remote,
+            answers:
+              !isRemoteDone &&
+              Object.keys(localLatest.answers || {}).length > Object.keys(remote.answers || {}).length
+                ? localLatest.answers
+                : remote.answers,
+          };
+
+      sessionRef.current = nextSess;
+      onUpdateSession(nextSess, { skipSupabaseMirror: true });
+
+      if (isRemoteReset) {
+        setHasStarted(false);
+        setViolationAlert(null);
+        setShowSubmitConfirm(false);
+        setUnlockCheckNotice(null);
+        setCurrentQuestionIndex(0);
+        setTimeRemaining(nextSess.timeRemainingSeconds || defaultDurationSec);
+        return { unlocked: true, statusText: 'Sesi ujian telah direset oleh Operator.' };
+      }
+
+      if (isRemoteDone) {
+        setHasStarted(true);
+        setViolationAlert(null);
+        setUnlockCheckNotice(null);
+        return { unlocked: true, statusText: 'Ujian sudah berstatus selesai di Supabase.' };
+      }
+
+      if (!nextSess.isLocked && nextSess.status !== 'locked') {
+        if (nextSess.status === 'in_progress') {
+          setHasStarted(true);
+        }
+        setViolationAlert(null);
+        setUnlockCheckNotice(null);
+        if (nextSess.timeRemainingSeconds > 0) {
+          setTimeRemaining(nextSess.timeRemainingSeconds);
+        }
+        if (unlockedOrReset) {
+          return { unlocked: true, statusText: 'Kunci ujian telah dibuka oleh Operator!' };
+        }
+      } else {
+        setHasStarted(true);
+        setViolationAlert(null);
+      }
+    }
+
+    if (remote.isLocked || remote.status === 'locked') {
+      return {
+        unlocked: false,
+        statusText: `Status di Supabase masih TERKUNCI (${remote.violationsCount}/${schoolSetting.maxViolations || 3} pelanggaran). Pastikan Operator sudah menekan tombol "Buka Kunci" di Dashboard Operator.`,
+      };
+    }
+
+    return { unlocked: false };
+  };
+
+  // 1. Sync authoritative session snapshot from Supabase whenever exam opens/switches (Supabase overrides localStorage)
   useEffect(() => {
     if (!isSupabaseConfigured || !student.nis || !exam.id) return;
     let cancelled = false;
-    fetchStudentSessionFromSupabase(student.nis, exam.id).then(remote => {
-      if (cancelled || !remote) return;
-      const localLatest = sessionRef.current;
-      const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
-      const localUpdatedMs = localLatest.updatedAt ? Date.parse(localLatest.updatedAt) : localLatest.lastHeartbeat || 0;
-      if (
-        remote.isLocked ||
-        isSessionCompleted(remote.status) ||
-        remoteUpdatedMs > localUpdatedMs ||
-        (remote.adminActionAt && remote.adminActionAt !== localLatest.adminActionAt)
-      ) {
-        sessionRef.current = remote;
-        onUpdateSession(remote, { skipSupabaseMirror: true });
-        if (remote.isLocked || remote.status === 'locked') {
-          setHasStarted(true);
-        } else if (remote.status === 'in_progress') {
-          setHasStarted(true);
-          if (remote.timeRemainingSeconds > 0) setTimeRemaining(remote.timeRemainingSeconds);
-        }
-      }
+    fetchStudentSessionStatusFromSupabase(student.nis, exam.id).then(res => {
+      if (cancelled) return;
+      applyAuthoritativeRemoteState(res, 'mount');
     });
     return () => {
       cancelled = true;
     };
   }, [student.nis, exam.id]);
 
-  // If student session is locked (or active), attach Supabase Realtime listener + fallback 2.5s poller
+  // 2. Real-time WebSocket listener + periodic 3-second polling directly against Supabase when active or locked
   useEffect(() => {
     if (!hasStarted && !session.isLocked && session.status !== 'locked') return;
 
-    const applyRemoteUnlockOrReset = (remoteSession: StudentExamSession) => {
-      const localLatest = sessionRef.current;
-      const isUnlockedFromLock =
-        (localLatest.isLocked || localLatest.status === 'locked') &&
-        !remoteSession.isLocked &&
-        remoteSession.status !== 'locked';
-      const isOperatorReset =
-        localLatest.status !== 'not_started' && remoteSession.status === 'not_started';
-      const isAdminIntervention =
-        Boolean(remoteSession.adminActionAt && remoteSession.adminActionAt !== localLatest.adminActionAt);
-
-      if (isUnlockedFromLock || isOperatorReset || isAdminIntervention) {
-        const nextSess: StudentExamSession = isOperatorReset
-          ? remoteSession
-          : {
-              ...remoteSession,
-              answers:
-                Object.keys(localLatest.answers || {}).length > Object.keys(remoteSession.answers || {}).length
-                  ? localLatest.answers
-                  : remoteSession.answers,
-            };
-        sessionRef.current = nextSess;
-        onUpdateSession(nextSess, { skipSupabaseMirror: true });
-
-        if (nextSess.status === 'not_started') {
-          setHasStarted(false);
-          setViolationAlert(null);
-          setShowSubmitConfirm(false);
-          setCurrentQuestionIndex(0);
-          setTimeRemaining(nextSess.timeRemainingSeconds || exam.durationMinutes * 60);
-        } else if (!nextSess.isLocked && nextSess.status !== 'locked') {
-          setHasStarted(true);
-          setViolationAlert(null);
-          if (nextSess.timeRemainingSeconds > 0) {
-            setTimeRemaining(nextSess.timeRemainingSeconds);
-          }
-        }
-      }
-    };
-
-    // 1. Real-time WebSocket listener via supabase.channel (filtered by student NIS)
     const unsubscribeRealtime = subscribeToStudentSessionLockRealtime(
       session.id,
       student.nis,
       exam.id,
-      applyRemoteUnlockOrReset
+      remoteSession => {
+        applyAuthoritativeRemoteState({ found: true, session: remoteSession }, 'realtime');
+      }
     );
 
-    // 2. Polling backup every 2.5s directly against Supabase while locked
     let unlockChecker: ReturnType<typeof setInterval> | null = null;
     if (session.isLocked || session.status === 'locked') {
-      unlockChecker = setInterval(async () => {
+      const checkLockFromDb = async () => {
         try {
           if (isSupabaseConfigured) {
-            const supTarget = await fetchStudentSessionFromSupabase(student.nis, exam.id);
-            if (supTarget && !supTarget.isLocked && supTarget.status !== 'locked') {
-              applyRemoteUnlockOrReset(supTarget);
-            }
+            const res = await fetchStudentSessionStatusFromSupabase(student.nis, exam.id);
+            applyAuthoritativeRemoteState(res, 'poll');
             return;
           }
           const fullData = await fetchServerData();
@@ -247,13 +337,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               s => s.id === session.id || (s.nis === student.nis && s.examId === exam.id)
             );
             if (remoteSession && !remoteSession.isLocked && remoteSession.status !== 'locked') {
-              applyRemoteUnlockOrReset(remoteSession);
+              applyAuthoritativeRemoteState({ found: true, session: remoteSession }, 'poll');
             }
           }
         } catch (err) {
           console.warn('Unlock poll check failed:', err);
         }
-      }, 2500);
+      };
+
+      void checkLockFromDb();
+      unlockChecker = setInterval(() => {
+        void checkLockFromDb();
+      }, 3000);
     }
 
     return () => {
@@ -324,7 +419,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       status: latest.isLocked ? 'locked' : 'in_progress',
       violationsCount: latest.violationsCount || 0,
       isLocked: Boolean(latest.isLocked),
-      startedAt: latest.startedAt || new Date().toLocaleTimeString('id-ID'),
+      startedAt: latest.startedAt || new Date().toISOString(),
       isOnline: true,
       deviceSessionId: latest.deviceSessionId || getStudentSessionDeviceId(student.nis),
       deviceInfo: detectClientDeviceInfo(),
@@ -643,6 +738,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
   };
 
+  const openSubmitConfirm = () => {
+    setSubmitError(null);
+    setShowSubmitConfirm(true);
+  };
+
   const handleFinalSubmit = async () => {
     await submitExam('completed');
   };
@@ -950,41 +1050,46 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
         {/* Real-time waiting indicator */}
         <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2 text-xs text-amber-900">
-          <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
+          <RefreshCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
           <span>
             {isSupabaseConfigured
-              ? 'Supabase Realtime aktif: Layar otomatis terbuka begitu Operator menekan Buka Kunci.'
+              ? 'Supabase Realtime & Auto-Cek 3 Detik aktif: Layar otomatis terbuka begitu Operator menekan Buka Kunci atau Reset.'
               : 'Menunggu operator membuka kunci... Sistem otomatis memuat ulang saat dibuka.'}
           </span>
         </div>
 
+        {unlockCheckNotice && (
+          <div
+            className={`p-3 rounded-xl border text-xs text-left leading-relaxed ${
+              unlockCheckNotice.type === 'error'
+                ? 'bg-rose-50 border-rose-200 text-rose-800'
+                : unlockCheckNotice.type === 'warning'
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}
+          >
+            {unlockCheckNotice.message}
+          </div>
+        )}
+
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
           <button
+            type="button"
             disabled={isCheckingUnlock}
             onClick={async () => {
               setIsCheckingUnlock(true);
+              setUnlockCheckNotice(null);
               try {
                 if (isSupabaseConfigured) {
-                  const supRefreshed = await fetchStudentSessionFromSupabase(student.nis, exam.id);
-                  if (supRefreshed) {
-                    const mergedSession: StudentExamSession = {
-                      ...supRefreshed,
-                      answers:
-                        Object.keys(sessionRef.current.answers || {}).length > Object.keys(supRefreshed.answers || {}).length
-                          ? sessionRef.current.answers
-                          : supRefreshed.answers,
-                    };
-                    sessionRef.current = mergedSession;
-                    onUpdateSession(mergedSession, { skipSupabaseMirror: true });
-                    if (!mergedSession.isLocked && mergedSession.status !== 'locked') {
-                      setHasStarted(true);
-                      setViolationAlert(null);
-                      alert('Kunci telah dibuka oleh operator! Anda dapat melanjutkan ujian tanpa kehilangan jawaban.');
-                    } else {
-                      alert('Sesi Anda masih terkunci di Supabase. Silakan konfirmasi ke operator untuk menekan tombol Buka Kunci.');
-                    }
-                    return;
+                  const res = await fetchStudentSessionStatusFromSupabase(student.nis, exam.id);
+                  const applied = applyAuthoritativeRemoteState(res, 'manual');
+                  if (!applied.unlocked && applied.statusText) {
+                    setUnlockCheckNotice({
+                      type: res.error ? 'error' : 'warning',
+                      message: applied.statusText,
+                    });
                   }
+                  return;
                 }
                 const fullData = await fetchServerData();
                 if (fullData?.data?.sessions) {
@@ -992,14 +1097,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                     s => s.id === session.id || (s.nis === student.nis && s.examId === exam.id)
                   );
                   if (refreshed) {
-                    sessionRef.current = refreshed;
-                    onUpdateSession(refreshed, { skipSupabaseMirror: true });
-                    if (!refreshed.isLocked && refreshed.status !== 'locked') {
-                      setHasStarted(true);
-                      setViolationAlert(null);
-                      alert('Kunci telah dibuka oleh operator! Anda dapat melanjutkan ujian.');
-                    } else {
-                      alert('Sesi Anda masih terkunci. Silakan konfirmasi ke operator atau guru pengawas.');
+                    const applied = applyAuthoritativeRemoteState({ found: true, session: refreshed }, 'manual');
+                    if (!applied.unlocked && applied.statusText) {
+                      setUnlockCheckNotice({ type: 'warning', message: applied.statusText });
                     }
                   }
                 }
@@ -1455,7 +1555,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               </button>
             ) : (
               <button
-                onClick={() => setShowSubmitConfirm(true)}
+                onClick={openSubmitConfirm}
                 className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors shadow-xs cursor-pointer"
               >
                 <Send className="w-4 h-4" />
@@ -1517,7 +1617,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             </div>
 
             <button
-              onClick={() => setShowSubmitConfirm(true)}
+              onClick={openSubmitConfirm}
               className="w-full mt-2 py-2 px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
             >
               Kumpulkan Ujian Sekarang
@@ -1559,7 +1659,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </button>
         ) : (
           <button
-            onClick={() => setShowSubmitConfirm(true)}
+            onClick={openSubmitConfirm}
             className="inline-flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-xs min-w-[85px] cursor-pointer"
           >
             <Send className="w-3.5 h-3.5" />
@@ -1635,7 +1735,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               <button
                 onClick={() => {
                   setShowMobileQuestionList(false);
-                  setShowSubmitConfirm(true);
+                  openSubmitConfirm();
                 }}
                 className="w-full py-2.5 px-3 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-xl cursor-pointer"
               >
@@ -1665,9 +1765,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left text-xs text-rose-700 space-y-1">
                 <div className="font-bold flex items-center gap-1.5 text-rose-800">
                   <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>Pengiriman Gagal</span>
+                  <span>Pengiriman Gagal (Detail Error Supabase)</span>
                 </div>
-                <p>{submitError}</p>
+                <p className="font-mono text-[11px] break-words leading-relaxed">{submitError}</p>
               </div>
             )}
             <div className="flex items-center justify-center gap-2 pt-2">

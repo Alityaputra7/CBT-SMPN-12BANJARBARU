@@ -65,7 +65,7 @@ import {
   getQuestionClassLabel 
 } from '../../utils/classGroups';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
-import { isSupabaseConfigured } from '../../lib/supabaseClient';
+import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
 import { unlockStudentSessionInSupabase } from '../../services/supabaseExamService';
 
 interface OperatorDashboardProps {
@@ -936,6 +936,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 </button>
               </div>
             </div>
+
+            {!isSupabaseConfigured && supabaseConfigError && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Konfigurasi Supabase Belum Aktif:</span>
+                  <span className="font-mono text-[11px] break-words">{supabaseConfigError}</span>
+                </div>
+              </div>
+            )}
 
             {/* Real-Time Violation & Lock Alert Banner */}
             {lockedOrViolatedSessions.length > 0 && (
@@ -2045,6 +2055,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 </button>
               </div>
             </div>
+
+            {!isSupabaseConfigured && supabaseConfigError && (
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold block">Konfigurasi Supabase Belum Aktif:</span>
+                  <span className="font-mono text-[11px] break-words">{supabaseConfigError}</span>
+                </div>
+              </div>
+            )}
 
             {/* Quick Metrics & Class/Subject Filter */}
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">

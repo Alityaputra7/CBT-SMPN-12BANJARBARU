@@ -74,6 +74,46 @@ ALTER TABLE public.cbt_exam_sessions ADD COLUMN IF NOT EXISTS started_at TEXT;
 ALTER TABLE public.cbt_exam_sessions ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
 ALTER TABLE public.cbt_exam_sessions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- Hapus constraint FK lama (jika berasal dari skema legacy) & pastikan tipe kolom nilai mendukung desimal
+DO $$
+DECLARE
+  fk_record RECORD;
+BEGIN
+  FOR fk_record IN
+    SELECT conname
+    FROM pg_constraint
+    WHERE conrelid = 'public.cbt_exam_sessions'::regclass
+      AND contype = 'f'
+  LOOP
+    EXECUTE format('ALTER TABLE public.cbt_exam_sessions DROP CONSTRAINT IF EXISTS %I', fk_record.conname);
+  END LOOP;
+END $$;
+
+ALTER TABLE public.cbt_exam_sessions ALTER COLUMN score TYPE NUMERIC(6,2) USING COALESCE(score::numeric, 0);
+ALTER TABLE public.cbt_exam_sessions ALTER COLUMN score_pg TYPE NUMERIC(6,2) USING COALESCE(score_pg::numeric, 0);
+ALTER TABLE public.cbt_exam_sessions ALTER COLUMN score_essay TYPE NUMERIC(6,2) USING COALESCE(score_essay::numeric, 0);
+ALTER TABLE public.cbt_exam_sessions ALTER COLUMN final_score TYPE NUMERIC(6,2) USING COALESCE(final_score::numeric, 0);
+
+-- Pastikan kolom answers_json bertipe JSONB jika berasal dari skema lama bertipe TEXT
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'cbt_exam_sessions'
+      AND column_name = 'answers_json'
+      AND data_type <> 'jsonb'
+  ) THEN
+    ALTER TABLE public.cbt_exam_sessions
+      ALTER COLUMN answers_json TYPE JSONB
+      USING CASE
+        WHEN answers_json IS NULL OR btrim(answers_json::text) = '' THEN '{}'::jsonb
+        ELSE answers_json::jsonb
+      END;
+  END IF;
+END $$;
+
 -- Sinkronkan student_nis <-> nis bila ada baris lama yang hanya mengisi salah satunya
 UPDATE public.cbt_exam_sessions
 SET
@@ -156,7 +196,11 @@ CREATE TRIGGER trg_cbt_exam_sessions_updated_at
 ALTER TABLE public.cbt_exam_sessions REPLICA IDENTITY FULL;
 ALTER TABLE public.cbt_violation_logs REPLICA IDENTITY FULL;
 
--- 5. Row Level Security (RLS) Policies untuk akses baca/tulis Siswa (HP/Laptop) & Operator
+-- 5. Hak akses GRANT & Row Level Security (RLS) Policies untuk Siswa (anon/authenticated) & Operator
+GRANT USAGE ON SCHEMA public TO anon, authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.cbt_exam_sessions TO anon, authenticated;
+GRANT SELECT, INSERT ON TABLE public.cbt_violation_logs TO anon, authenticated;
+
 ALTER TABLE public.cbt_exam_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cbt_violation_logs ENABLE ROW LEVEL SECURITY;
 
