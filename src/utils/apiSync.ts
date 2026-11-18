@@ -7,7 +7,8 @@ import {
   ExamSchedule, 
   StudentExamSession, 
   QuestionBank, 
-  AuditLog 
+  AuditLog,
+  isSessionCompleted
 } from '../types/cbt';
 import { 
   INITIAL_SCHOOL_SETTING,
@@ -86,6 +87,13 @@ let lastUpdatedTimestamp = Date.now();
 let debounceSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let isSavingToJsonBin = false;
 
+export function getLatestSyncMeta() {
+  return {
+    version: currentVersion,
+    lastUpdated: lastUpdatedTimestamp,
+  };
+}
+
 /**
  * Browser & Node compatible string compression via standard CompressionStream ('deflate')
  */
@@ -158,7 +166,8 @@ function buildJsonBinPayload() {
     s.isLocked || 
     s.finalScore > 0 || 
     s.violationsCount > 0 ||
-    !!s.deviceSessionId
+    !!s.deviceSessionId ||
+    !!s.adminActionAt
   );
 
   return {
@@ -410,9 +419,66 @@ export async function syncServerUpdates(updates: CbtStorePayload): Promise<boole
 }
 
 /**
- * 4. SIMPAN SESI SISWA KE JSONBIN.IO
- * Menyimpan progres jawaban siswa secara real-time.
+ * Helper to merge a single student session into the latest remote JSONBin state
+ * so simultaneous students never overwrite each other's scores/locks and
+ * stale heartbeats never overwrite newer Operator/Guru resets or unlocks.
  */
+async function mergeAndPushSingleSession(session: StudentExamSession): Promise<boolean> {
+  try {
+    const latest = await fetchServerData();
+    if (latest && latest.success && Array.isArray(latest.data.sessions)) {
+      const remoteSessions = [...latest.data.sessions];
+      const remoteIdx = remoteSessions.findIndex(s => s.id === session.id);
+      const remoteTarget = remoteIdx >= 0 ? remoteSessions[remoteIdx] : null;
+
+      // If Operator/Guru executed an unlock or reset that this student client hasn't applied yet,
+      // preserve the Operator/Guru action instead of overwriting it with stale student state.
+      if (
+        remoteTarget?.adminActionAt &&
+        remoteTarget.adminActionAt !== session.adminActionAt &&
+        (!session.adminActionAt || remoteTarget.adminActionAt > session.adminActionAt)
+      ) {
+        cachedStore.sessions = remoteSessions;
+        return true;
+      }
+
+      if (remoteIdx >= 0) {
+        remoteSessions[remoteIdx] = session;
+      } else {
+        remoteSessions.push(session);
+      }
+
+      // If student switched to a different exam (e.g. sess-std-001-ex-ipa-2026),
+      // clear ghost isOnline flag on their unused placeholder session if untouched
+      const cleanedSessions = remoteSessions.map(s => {
+        if (
+          s.studentId === session.studentId &&
+          s.id !== session.id &&
+          s.status === 'not_started' &&
+          s.isOnline &&
+          Object.keys(s.answers || {}).length === 0
+        ) {
+          return { ...s, isOnline: false, deviceSessionId: undefined };
+        }
+        return s;
+      });
+
+      cachedStore.sessions = cleanedSessions;
+      return await syncServerUpdates({ sessions: cleanedSessions });
+    }
+  } catch (err) {
+    console.warn('[JSONBin] Pre-merge failed, falling back to cached store:', err);
+  }
+
+  return await syncServerUpdates({ sessions: cachedStore.sessions });
+}
+
+/**
+ * 4. SIMPAN SESI SISWA KE JSONBIN.IO
+ * Menyimpan progres jawaban, pelanggaran 3x, dan nilai akhir siswa secara real-time.
+ */
+let latestQueuedSession: StudentExamSession | null = null;
+
 export async function syncSingleSession(session: StudentExamSession): Promise<boolean> {
   // Update in-memory session immediately
   const existingIdx = cachedStore.sessions.findIndex(s => s.id === session.id);
@@ -428,12 +494,13 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
   // 1. Student LOGS IN or LOGS OUT (isOnline changed)
   // 2. Student STARTS exam (status changed to in_progress)
   // 3. Student FINISHES exam (status is submitted or force_submitted)
-  // 4. Student VIOLATION or LOCK/UNLOCK event
+  // 4. Student VIOLATION or LOCK/UNLOCK/RESET event
   const isLoginEvent = session.isOnline !== (prevSession?.isOnline ?? false);
   const isStartEvent = session.status === 'in_progress' && (!prevSession || prevSession.status === 'not_started');
-  const isFinishEvent = session.status === 'submitted' || session.status === 'force_submitted';
-  const isLockEvent = session.isLocked !== (prevSession?.isLocked ?? false);
+  const isFinishEvent = isSessionCompleted(session.status);
+  const isLockEvent = session.isLocked !== (prevSession?.isLocked ?? false) || session.status === 'locked';
   const isViolationEvent = session.violationsCount !== (prevSession?.violationsCount ?? 0);
+  const isAdminEvent = session.adminActionAt !== prevSession?.adminActionAt;
 
   // Send single session to local server proxy with high priority
   fetch('/api/cbt/session', {
@@ -442,24 +509,28 @@ export async function syncSingleSession(session: StudentExamSession): Promise<bo
     body: JSON.stringify({ session }),
   }).catch(err => console.warn('[CBT Server] Session update error:', err));
 
-  if (isLoginEvent || isStartEvent || isFinishEvent || isLockEvent || isViolationEvent) {
+  if (isLoginEvent || isStartEvent || isFinishEvent || isLockEvent || isViolationEvent || isAdminEvent) {
     if (debounceSaveTimer) {
       clearTimeout(debounceSaveTimer);
       debounceSaveTimer = null;
     }
-    return await syncServerUpdates({ sessions: cachedStore.sessions });
+    latestQueuedSession = null;
+    return await mergeAndPushSingleSession(session);
   }
 
   // For real-time keystrokes, question navigation & clicks during exam, fast debounce JSONBin PUT (350ms)
+  latestQueuedSession = session;
   if (debounceSaveTimer) {
     clearTimeout(debounceSaveTimer);
   }
 
   debounceSaveTimer = setTimeout(async () => {
+    const toPush = latestQueuedSession || session;
+    latestQueuedSession = null;
     if (isSavingToJsonBin) return;
     isSavingToJsonBin = true;
     try {
-      await syncServerUpdates({ sessions: cachedStore.sessions });
+      await mergeAndPushSingleSession(toPush);
     } finally {
       isSavingToJsonBin = false;
     }

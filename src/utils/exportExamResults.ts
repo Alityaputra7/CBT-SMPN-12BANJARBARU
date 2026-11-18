@@ -1,4 +1,4 @@
-import { StudentExamSession, ExamSchedule, Student, Subject, ClassRoom } from '../types/cbt';
+import { StudentExamSession, ExamSchedule, Student, Subject, ClassRoom, isSessionCompleted } from '../types/cbt';
 
 export interface ExportFilterOptions {
   subjectId?: string;
@@ -65,7 +65,7 @@ export function getFilteredResultRows(
 
       // 3. Filter by status
       if (statusFilter === 'completed') {
-        return session.status === 'submitted' || session.status === 'force_submitted';
+        return isSessionCompleted(session.status);
       } else if (statusFilter === 'in_progress') {
         return session.status === 'in_progress';
       } else if (statusFilter === 'not_started') {
@@ -88,20 +88,24 @@ export function getFilteredResultRows(
       const kkm = currentExam?.kkm || 75;
 
       let statusLabel = 'Belum Mulai';
-      if (session.status === 'submitted') statusLabel = 'Selesai';
+      if (session.isLocked || session.status === 'locked') statusLabel = 'Terkunci (Pelanggaran 3/3)';
       else if (session.status === 'force_submitted') statusLabel = 'Dikumpulkan Otomatis';
+      else if (session.status === 'submitted' || session.status === 'completed') statusLabel = 'Selesai';
       else if (session.status === 'in_progress') statusLabel = 'Sedang Mengerjakan';
-      else if (session.status === 'locked') statusLabel = 'Terkunci (Pelanggaran)';
 
-      const formattedSubmittedAt = session.submittedAt 
-        ? new Date(session.submittedAt).toLocaleString('id-ID', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        : '-';
+      let formattedSubmittedAt = '-';
+      if (session.submittedAt) {
+        const parsedMs = Date.parse(session.submittedAt);
+        formattedSubmittedAt = !Number.isNaN(parsedMs)
+          ? new Date(parsedMs).toLocaleString('id-ID', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : session.submittedAt;
+      }
 
       return {
         no: index + 1,

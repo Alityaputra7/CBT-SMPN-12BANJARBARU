@@ -20,7 +20,8 @@ import {
   CheckSquare,
   Square,
   Printer,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ShieldAlert
 } from 'lucide-react';
 import { 
   UserAccount, 
@@ -31,7 +32,8 @@ import {
   ClassRoom,
   Subject,
   Student,
-  SchoolSetting
+  SchoolSetting,
+  isSessionCompleted
 } from '../../types/cbt';
 import { generateDynamicToken } from '../../utils/tokenGenerator';
 import { KatexRenderer } from '../common/KatexRenderer';
@@ -45,6 +47,7 @@ import {
   isQuestionMatchingClass, 
   getQuestionClassLabel 
 } from '../../utils/classGroups';
+import { unlockStudentSessionInSupabase } from '../../services/supabaseExamService';
 
 interface GuruDashboardProps {
   teacher: UserAccount;
@@ -163,6 +166,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     if (onResetSingleResult) {
       onResetSingleResult(sessionId, reason);
     } else {
+      const now = Date.now();
       onUpdateSessions(sessions.map(s => s.id === sessionId ? {
         ...s,
         status: 'not_started',
@@ -173,6 +177,9 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
         isPassed: false,
         violationsCount: 0,
         isLocked: false,
+        lockReason: undefined,
+        deviceSessionId: undefined,
+        adminActionAt: now,
         submittedAt: undefined,
         timeRemainingSeconds: 90 * 60,
         isOnline: false
@@ -184,6 +191,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     if (onResetAllResults) {
       onResetAllResults(targetClassId, reason);
     } else {
+      const now = Date.now();
       onUpdateSessions(sessions.map(s => {
         if (targetClassId === 'all' || s.classId === targetClassId) {
           return {
@@ -196,6 +204,9 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
             isPassed: false,
             violationsCount: 0,
             isLocked: false,
+            lockReason: undefined,
+            deviceSessionId: undefined,
+            adminActionAt: now,
             submittedAt: undefined,
             timeRemainingSeconds: 90 * 60,
             isOnline: false
@@ -206,22 +217,12 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     }
   };
 
-  const handleUnlockSession = (sessionId: string, studentName: string) => {
-    onUpdateSessions(sessions.map(s => {
-      if (s.id === sessionId) {
-        return {
-          ...s,
-          isLocked: false,
-          lockReason: undefined,
-          status: 'in_progress',
-          violationsCount: 0,
-          isOnline: true,
-          lastHeartbeat: Date.now()
-        };
-      }
-      return s;
-    }));
-    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka! Siswa kini dapat melanjutkan ujian kembali tanpa kehilangan jawaban.`);
+  const handleUnlockSession = async (sessionId: string, studentName: string) => {
+    const targetSession = sessions.find(s => s.id === sessionId);
+    if (!targetSession) return;
+    const result = await unlockStudentSessionInSupabase(targetSession, { resetViolations: true });
+    onUpdateSessions(sessions.map(s => (s.id === sessionId ? result.session : s)));
+    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka dan pelanggaran di-reset ke 0! Siswa kini dapat melanjutkan ujian kembali tanpa kehilangan jawaban.`);
   };
 
 
@@ -378,10 +379,15 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       }
     };
 
-    // Calculate total essay score across all essay questions
+    // Calculate total essay score across all essay questions matching student's subject & class
     const currentExam = exams.find(e => e.id === session.examId);
     const exSubId = currentExam?.subjectId || selectedSubjectFilter;
-    const essayQs = questionBank.questions.filter(q => q.type === 'uraian' && (q.subjectId === exSubId || (!q.subjectId && exSubId === 'sbj-mat')));
+    const essayQs = questionBank.questions.filter(
+      q =>
+        q.type === 'uraian' &&
+        (q.subjectId === exSubId || (!q.subjectId && exSubId === 'sbj-mat')) &&
+        isQuestionMatchingClass(q.classId, q.grade, session.classId)
+    );
     
     let totalEssayScore = 0;
     essayQs.forEach(eq => {
@@ -394,6 +400,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
 
     const updatedFinalScore = Math.min(100, session.scorePg + totalEssayScore);
     const kkm = currentExam?.kkm || 75;
+    const now = Date.now();
 
     const updatedSessions = sessions.map(s => {
       if (s.id === session.id) {
@@ -402,7 +409,8 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
           answers: updatedAnswers,
           scoreEssay: totalEssayScore,
           finalScore: updatedFinalScore,
-          isPassed: updatedFinalScore >= kkm
+          isPassed: updatedFinalScore >= kkm,
+          adminActionAt: now
         };
       }
       return s;
@@ -414,12 +422,26 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     setSelectedEssayQuestion(null);
   };
 
-  // Class analytics calculations
-  const completedSessions = sessions.filter(s => s.status === 'submitted' || s.status === 'force_submitted');
+  // Sessions scoped strictly to this teacher's assigned subjects
+  const teacherSessions = sessions.filter(s => {
+    const ex = exams.find(e => e.id === s.examId);
+    return ex ? teacherSubjectIds.includes(ex.subjectId) : false;
+  });
+
+  const teacherLockedSessions = teacherSessions.filter(s => s.isLocked || s.status === 'locked');
+  const teacherViolatedSessions = teacherSessions.filter(
+    s => s.isLocked || s.status === 'locked' || s.violationsCount > 0
+  );
+
+  // Class analytics calculations scoped to teacher's subjects
+  const completedSessions = teacherSessions.filter(s => isSessionCompleted(s.status));
   const averageScore = completedSessions.length > 0 
     ? Math.round(completedSessions.reduce((acc, curr) => acc + curr.finalScore, 0) / completedSessions.length)
     : 0;
-  const passCount = completedSessions.filter(s => s.finalScore >= 75).length;
+  const passCount = completedSessions.filter(s => {
+    const kkm = exams.find(e => e.id === s.examId)?.kkm || 75;
+    return s.finalScore >= kkm;
+  }).length;
   const passRate = completedSessions.length > 0 
     ? Math.round((passCount / completedSessions.length) * 100)
     : 0;
@@ -438,7 +460,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {teacher.name} (NIP: {teacher.usernameOrNip}) · Kelas VII-A & VII-B
+            {teacher.name} (NIP: {teacher.usernameOrNip}) · {effectiveTeacherSubjects.map(s => s.name).join(', ')}
           </p>
         </div>
 
@@ -463,37 +485,42 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg max-w-xl">
+      <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg overflow-x-auto max-w-3xl">
         <button
           onClick={() => setActiveTab('bank')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
             activeTab === 'bank' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <BookOpen className="w-3.5 h-3.5" />
-          Bank Soal ({questionBank.questions.length})
+          Bank Soal ({questionBank.questions.filter(q => !q.subjectId || teacherSubjectIds.includes(q.subjectId)).length})
         </button>
         <button
           onClick={() => setActiveTab('monitor')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
             activeTab === 'monitor' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
-          Monitor Ujian
+          <span>Monitor Ujian</span>
+          {teacherLockedSessions.length > 0 && (
+            <span className="px-1.5 py-0.2 bg-rose-600 text-white text-[10px] font-bold rounded-full">
+              {teacherLockedSessions.length} Terkunci
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('correction')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
             activeTab === 'correction' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <FileCheck2 className="w-3.5 h-3.5" />
-          Koreksi Uraian
+          Koreksi Uraian ({completedSessions.length})
         </button>
         <button
           onClick={() => setActiveTab('analysis')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
             activeTab === 'analysis' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
@@ -502,12 +529,12 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
         </button>
         <button
           onClick={() => setActiveTab('results')}
-          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+          className={`flex items-center gap-2 px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
             activeTab === 'results' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
           }`}
         >
           <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-          Rekap & Ekspor Nilai
+          Rekap & Ekspor Nilai ({completedSessions.length})
         </button>
       </div>
 
@@ -855,156 +882,240 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       )}
 
       {/* TAB 2: MONITOR UJIAN */}
-      {activeTab === 'monitor' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Pemantauan Kelas ({classes.map(c => c.name).join(', ')})
-              </h3>
-              <p className="text-xs text-slate-500">
-                Memantau {sessions.length} siswa yang sedang mengikuti ujian {teacher.assignedSubjectIds?.[0] ? 'mata pelajaran ini' : 'aktif'}.
-              </p>
+      {activeTab === 'monitor' && (() => {
+        const maxViolations = schoolSetting?.maxViolations || 3;
+        const getPriority = (s: StudentExamSession) => {
+          if (s.isLocked || s.status === 'locked') return 0;
+          if (s.violationsCount > 0 && s.status === 'in_progress') return 1;
+          if (s.status === 'in_progress') return 2;
+          if (isSessionCompleted(s.status)) return 3;
+          if (s.isOnline) return 4;
+          return 5;
+        };
+
+        const sortedTeacherSessions = [...teacherSessions].sort((a, b) => {
+          const pDiff = getPriority(a) - getPriority(b);
+          if (pDiff !== 0) return pDiff;
+          const hbDiff = (b.lastHeartbeat || 0) - (a.lastHeartbeat || 0);
+          if (hbDiff !== 0) return hbDiff;
+          return a.studentName.localeCompare(b.studentName);
+        });
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-base font-bold text-slate-900">
+                    Pemantauan Ujian ({effectiveTeacherSubjects.map(s => s.name).join(', ')})
+                  </h3>
+                  {lastSyncTime && (
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                      Sync: {lastSyncTime}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500">
+                  Memantau {sortedTeacherSessions.length} sesi siswa pada mata pelajaran Anda · Kelas {classes.map(c => c.name).join(', ')}.
+                </p>
+              </div>
+              <button
+                onClick={handleOpenResetBatch}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer shadow-2xs self-start sm:self-auto"
+                title="Reset semua hasil ujian siswa untuk remedial kelas"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                Reset Hasil Ujian Kelas
+              </button>
             </div>
-            <button
-              onClick={handleOpenResetBatch}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer shadow-2xs self-start sm:self-auto"
-              title="Reset semua hasil ujian siswa untuk remedial kelas"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-              Reset Hasil Ujian Kelas
-            </button>
-          </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
-                  <th className="py-2.5 px-3 font-semibold">NIS</th>
-                  <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
-                  <th className="py-2.5 px-3 font-semibold">Kelas</th>
-                  <th className="py-2.5 px-3 font-semibold">Status Pengerjaan</th>
-                  <th className="py-2.5 px-3 font-semibold">Progres Soal</th>
-                  <th className="py-2.5 px-3 font-semibold">Pelanggaran</th>
-                  <th className="py-2.5 px-3 font-semibold">Nilai</th>
-                  <th className="py-2.5 px-3 font-semibold text-right">Aksi Guru</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {sessions.map(s => {
-                  const maxViolations = schoolSetting?.maxViolations || 3;
-                  const studentExam = exams.find(e => e.id === s.examId);
-                  const subjectTotalQ = studentExam
-                    ? questionBank.questions.filter(q =>
-                        q.subjectId === studentExam.subjectId &&
-                        isQuestionMatchingClass(q.classId, q.grade, s.classId)
-                      ).length
-                    : 0;
-                  const totalQ = subjectTotalQ > 0 ? subjectTotalQ : (studentExam?.totalQuestions || 40);
-                  const answeredCount = Object.keys(s.answers || {}).length;
-                  const hasScore = s.status === 'submitted' || s.status === 'force_submitted' || (s.status === 'in_progress' && answeredCount > 0);
-
-                  return (
-                    <tr key={s.id} className={`hover:bg-slate-50/60 ${s.isLocked ? 'bg-rose-50/40' : ''}`}>
-                      <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
-                      <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
-                      <td className="py-2 px-3 text-slate-600">{s.className}</td>
-                      <td className="py-2 px-3">
-                        {s.isLocked ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold">
-                            Terkunci
-                          </span>
-                        ) : s.status === 'submitted' || s.status === 'force_submitted' ? (
-                          <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
-                            <CheckCircle className="w-3.5 h-3.5" /> Selesai
-                          </span>
-                        ) : s.status === 'in_progress' ? (
-                          <span className="text-blue-700 font-medium inline-flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" /> Mengerjakan
-                          </span>
-                        ) : s.isOnline ? (
-                          <span className="text-sky-700 font-medium inline-flex items-center gap-1">
-                            Sudah Login
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">Belum Login</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-slate-700">
-                        {answeredCount}/{totalQ} soal
-                        {s.status === 'in_progress' && typeof s.currentQuestionIndex === 'number' && (
-                          <span className="block text-[10px] text-slate-400">No. {s.currentQuestionIndex + 1}</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`font-mono font-bold ${
-                          s.violationsCount >= maxViolations
-                            ? 'text-rose-700'
-                            : s.violationsCount > 0
-                              ? 'text-amber-700'
-                              : 'text-slate-400'
-                        }`}>
-                          {s.violationsCount}/{maxViolations}
+            {teacherViolatedSessions.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 space-y-2">
+                <div className="flex items-center gap-2 text-rose-800 text-xs font-bold">
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>
+                    Terdeteksi {teacherLockedSessions.length} siswa terkunci ({maxViolations}/{maxViolations} pelanggaran) dan {teacherViolatedSessions.length} catatan pelanggaran pada mata pelajaran Anda.
+                  </span>
+                </div>
+                {teacherLockedSessions.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {teacherLockedSessions.map(ls => (
+                      <div key={ls.id} className="flex items-center gap-2 bg-white border border-rose-300 rounded-lg px-2.5 py-1.5 text-xs">
+                        <span className="font-bold text-slate-900">{ls.studentName}</span>
+                        <span className="text-slate-500">({ls.className})</span>
+                        <span className="font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">
+                          {ls.violationsCount}/{maxViolations}
                         </span>
-                      </td>
-                      <td className="py-2 px-3 font-mono font-bold text-slate-800">
-                        {hasScore ? (
-                          <span className={s.finalScore >= 75 ? 'text-emerald-700' : 'text-amber-700'}>
-                            {s.finalScore}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {s.isLocked && (
-                            <button
-                              onClick={() => handleUnlockSession(s.id, s.studentName)}
-                              className="px-2 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors shadow-2xs cursor-pointer"
-                              title="Buka blokiran ujian siswa agar bisa melanjutkan ujian"
-                            >
-                              Buka Kunci / Izinkan Lanjut
-                            </button>
-                          )}
-                          {(s.isOnline || s.deviceSessionId) && onResetLoginSession && (
-                            <button
-                              onClick={() => onResetLoginSession(s.id, s.studentName)}
-                              className="px-2 py-1 text-[11px] font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors cursor-pointer"
-                              title="Reset login perangkat agar siswa bisa masuk ulang dari perangkat baru"
-                            >
-                              Reset Login / Sesi
-                            </button>
-                          )}
-                          {(s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0) && (
-                            <button
-                              onClick={() => handleOpenResetSingle(s)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
-                              title="Izinkan siswa mengikuti ujian remedial / ulang"
-                            >
-                              <RotateCcw className="w-3 h-3 text-rose-600" />
-                              <span>Reset Nilai</span>
-                            </button>
-                          )}
-                        </div>
+                        <button
+                          onClick={() => handleUnlockSession(ls.id, ls.studentName)}
+                          className="px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 cursor-pointer"
+                        >
+                          Buka Kunci
+                        </button>
+                        <button
+                          onClick={() => handleOpenResetSingle(ls)}
+                          className="px-2 py-1 text-[11px] font-semibold bg-rose-100 text-rose-800 rounded hover:bg-rose-200 cursor-pointer"
+                        >
+                          Reset Akun
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600">
+                    <th className="py-2.5 px-3 font-semibold">NIS</th>
+                    <th className="py-2.5 px-3 font-semibold">Nama Siswa & Mapel</th>
+                    <th className="py-2.5 px-3 font-semibold">Kelas</th>
+                    <th className="py-2.5 px-3 font-semibold">Status Pengerjaan</th>
+                    <th className="py-2.5 px-3 font-semibold">Progres Soal</th>
+                    <th className="py-2.5 px-3 font-semibold">Pelanggaran</th>
+                    <th className="py-2.5 px-3 font-semibold">Nilai</th>
+                    <th className="py-2.5 px-3 font-semibold text-right">Aksi Guru</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sortedTeacherSessions.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-slate-500 italic">
+                        Belum ada siswa yang memulai ujian untuk mata pelajaran {effectiveTeacherSubjects.map(s => s.name).join(', ')}. Data akan muncul otomatis secara real-time saat siswa mulai mengerjakan.
                       </td>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  ) : (
+                    sortedTeacherSessions.map(s => {
+                      const studentExam = exams.find(e => e.id === s.examId);
+                      const subjectTotalQ = studentExam
+                        ? questionBank.questions.filter(q =>
+                            q.subjectId === studentExam.subjectId &&
+                            isQuestionMatchingClass(q.classId, q.grade, s.classId)
+                          ).length
+                        : 0;
+                      const totalQ = subjectTotalQ > 0 ? subjectTotalQ : (studentExam?.totalQuestions || 25);
+                      const answeredCount = Object.values(s.answers || {}).filter(
+                        a => a && a.answer !== '' && (!Array.isArray(a.answer) || a.answer.length > 0)
+                      ).length;
+                      const isSessionLocked = s.isLocked || s.status === 'locked';
+                      const isSessionDone = isSessionCompleted(s.status);
+                      const hasScore = isSessionDone || (s.status === 'in_progress' && answeredCount > 0) || s.finalScore > 0;
+                      const kkm = studentExam?.kkm || 75;
+                      const canResetAccount =
+                        isSessionLocked ||
+                        s.violationsCount > 0 ||
+                        s.status !== 'not_started' ||
+                        isSessionDone ||
+                        s.finalScore > 0 ||
+                        answeredCount > 0 ||
+                        s.isOnline ||
+                        Boolean(s.deviceSessionId);
+
+                      return (
+                        <tr key={s.id} className={`hover:bg-slate-50/60 ${isSessionLocked ? 'bg-rose-50/40' : ''}`}>
+                          <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
+                          <td className="py-2 px-3 font-medium text-slate-900">
+                            <div>{s.studentName}</div>
+                            {studentExam && (
+                              <span className="inline-block mt-0.5 text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
+                                {studentExam.subjectName}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-slate-600">{s.className}</td>
+                          <td className="py-2 px-3">
+                            {isSessionLocked ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-200 font-bold">
+                                <ShieldAlert className="w-3 h-3" /> Terkunci
+                              </span>
+                            ) : isSessionDone ? (
+                              <span className="text-emerald-700 font-medium inline-flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" /> Selesai
+                              </span>
+                            ) : s.status === 'in_progress' ? (
+                              <span className="text-blue-700 font-medium inline-flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> Mengerjakan
+                              </span>
+                            ) : s.isOnline ? (
+                              <span className="text-sky-700 font-medium inline-flex items-center gap-1">
+                                Sudah Login
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Belum Login</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-slate-700">
+                            {answeredCount}/{totalQ} soal
+                            {s.status === 'in_progress' && typeof s.currentQuestionIndex === 'number' && (
+                              <span className="block text-[10px] text-slate-400">No. {s.currentQuestionIndex + 1}</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3">
+                            <span className={`font-mono font-bold ${
+                              isSessionLocked || s.violationsCount >= maxViolations
+                                ? 'text-rose-700'
+                                : s.violationsCount > 0
+                                  ? 'text-amber-700'
+                                  : 'text-slate-400'
+                            }`}>
+                              {s.violationsCount}/{maxViolations}
+                            </span>
+                          </td>
+                          <td className="py-2 px-3 font-mono font-bold text-slate-800">
+                            {hasScore ? (
+                              <span className={s.finalScore >= kkm ? 'text-emerald-700' : 'text-amber-700'}>
+                                {s.finalScore}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {isSessionLocked && (
+                                <button
+                                  onClick={() => handleUnlockSession(s.id, s.studentName)}
+                                  className="px-2 py-1 text-[11px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded transition-colors shadow-2xs cursor-pointer"
+                                  title="Buka blokiran ujian siswa agar bisa melanjutkan ujian"
+                                >
+                                  Buka Kunci / Izinkan Lanjut
+                                </button>
+                              )}
+                              {(s.isOnline || s.deviceSessionId || s.status === 'in_progress' || isSessionLocked) && onResetLoginSession && (
+                                <button
+                                  onClick={() => onResetLoginSession(s.id, s.studentName)}
+                                  className="px-2 py-1 text-[11px] font-medium text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded transition-colors cursor-pointer"
+                                  title="Reset login perangkat agar siswa bisa masuk ulang dari perangkat baru"
+                                >
+                                  Reset Login / Sesi
+                                </button>
+                              )}
+                              {canResetAccount && (
+                                <button
+                                  onClick={() => handleOpenResetSingle(s)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                                  title="Reset akun, pelanggaran, atau nilai siswa untuk remedial / ulang"
+                                >
+                                  <RotateCcw className="w-3 h-3 text-rose-600" />
+                                  <span>Reset Akun</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 3: KOREKSI URAIAN (HANYA MATA PELAJARAN GURU SENDIRI) */}
       {activeTab === 'correction' && (() => {
-        const teacherExamIds = exams.filter(e => teacherSubjectIds.includes(e.subjectId)).map(e => e.id);
-        const teacherSessions = sessions.filter(s => {
-          if (s.examId && teacherExamIds.includes(s.examId)) return true;
-          const ex = exams.find(e => e.id === s.examId);
-          if (ex) return teacherSubjectIds.includes(ex.subjectId);
-          return teacherSubjectIds.includes('sbj-mat');
-        });
-        const submittedSessions = teacherSessions.filter(s => s.status === 'submitted' || s.status === 'force_submitted');
+        const submittedSessions = teacherSessions.filter(s => isSessionCompleted(s.status));
 
         return (
           <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
@@ -1036,9 +1147,12 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                   const currentExam = exams.find(e => e.id === s.examId);
                   const examSubId = currentExam?.subjectId || teacherSubjectIds[0] || 'sbj-mat';
                   const examSubName = subjects.find(sub => sub.id === examSubId)?.name || 'Mata Pelajaran';
+                  const kkm = currentExam?.kkm || 75;
                   
                   const essayQuestions = questionBank.questions.filter(q => 
-                    q.type === 'uraian' && (q.subjectId === examSubId || (!q.subjectId && examSubId === 'sbj-mat'))
+                    q.type === 'uraian' &&
+                    (q.subjectId === examSubId || (!q.subjectId && examSubId === 'sbj-mat')) &&
+                    isQuestionMatchingClass(q.classId, q.grade, s.classId)
                   );
 
                   return (
@@ -1102,7 +1216,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
 
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100">
                         <span className="text-xs text-slate-600">
-                          Total Nilai Akhir: <strong className={s.finalScore >= 75 ? 'text-emerald-700' : 'text-rose-600'}>{s.finalScore}/100</strong>
+                          Total Nilai Akhir: <strong className={s.finalScore >= kkm ? 'text-emerald-700' : 'text-rose-600'}>{s.finalScore}/100</strong>
                         </span>
                         <button
                           onClick={() => handleOpenResetSingle(s)}
@@ -1123,84 +1237,89 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
       })()}
 
       {/* TAB 4: ANALISIS BUTIR & NILAI */}
-      {activeTab === 'analysis' && (
-        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Analisis Butir Soal & Statistik Kelas
-              </h3>
-              <p className="text-xs text-slate-500">
-                Rata-rata kelas, tingkat kesukaran soal, dan daya beda untuk evaluasi kurikulum.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleDirectExportGuruCSV}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
-                title="Unduh file Microsoft Excel (.csv)"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Ekspor Excel</span>
-              </button>
-              <button
-                onClick={() => setShowExportModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
-                title="Cetak Leger Nilai resmi atau simpan PDF"
-              >
-                <Printer className="w-3.5 h-3.5 text-blue-600" />
-                <span>Cetak / PDF</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <span className="text-xs font-medium text-slate-500">Rata-rata Nilai Kelas</span>
-              <div className="text-2xl font-bold font-mono text-blue-700 mt-1">{averageScore} / 100</div>
-              <span className="text-[11px] text-slate-400">KKM: 75.00</span>
+      {activeTab === 'analysis' && (() => {
+        const teacherQuestions = questionBank.questions.filter(
+          q => !q.subjectId || teacherSubjectIds.includes(q.subjectId)
+        );
+        return (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Analisis Butir Soal & Statistik Kelas ({effectiveTeacherSubjects.map(s => s.name).join(', ')})
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Rata-rata kelas, tingkat kesukaran soal, dan daya beda untuk mata pelajaran yang Anda ampu.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDirectExportGuruCSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="Unduh file Microsoft Excel (.csv)"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Ekspor Excel</span>
+                </button>
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                  title="Cetak Leger Nilai resmi atau simpan PDF"
+                >
+                  <Printer className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Cetak / PDF</span>
+                </button>
+              </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <span className="text-xs font-medium text-slate-500">Persentase Ketuntasan</span>
-              <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">{passRate}%</div>
-              <span className="text-[11px] text-slate-400">{passCount} Siswa Tuntas</span>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-xs font-medium text-slate-500">Rata-rata Nilai Kelas</span>
+                <div className="text-2xl font-bold font-mono text-blue-700 mt-1">{averageScore} / 100</div>
+                <span className="text-[11px] text-slate-400">KKM: 75.00</span>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-xs font-medium text-slate-500">Persentase Ketuntasan</span>
+                <div className="text-2xl font-bold font-mono text-emerald-600 mt-1">{passRate}%</div>
+                <span className="text-[11px] text-slate-400">{passCount} Siswa Tuntas</span>
+              </div>
+
+              <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                <span className="text-xs font-medium text-slate-500">Jumlah Peserta Mengumpulkan</span>
+                <div className="text-2xl font-bold font-mono text-slate-800 mt-1">{completedSessions.length}</div>
+                <span className="text-[11px] text-slate-400">Dari total {students.length || teacherSessions.length} siswa</span>
+              </div>
             </div>
 
-            <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-              <span className="text-xs font-medium text-slate-500">Jumlah Peserta Mengumpulkan</span>
-              <div className="text-2xl font-bold font-mono text-slate-800 mt-1">{completedSessions.length}</div>
-              <span className="text-[11px] text-slate-400">Dari total 30 siswa</span>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <h4 className="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wide">
-              Tingkat Kesukaran Butir Soal (Item Difficulty)
-            </h4>
-            <div className="space-y-2">
-              {questionBank.questions.map((q, idx) => (
-                <div key={q.id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
-                  <div>
-                    <span className="font-bold text-slate-900 mr-2">Soal #{idx + 1}</span>
-                    <span className="text-slate-600">({q.type.toUpperCase()})</span>
+            <div className="pt-2">
+              <h4 className="text-xs font-bold text-slate-800 mb-3 uppercase tracking-wide">
+                Tingkat Kesukaran Butir Soal ({teacherQuestions.length} Soal)
+              </h4>
+              <div className="space-y-2">
+                {teacherQuestions.map((q, idx) => (
+                  <div key={q.id} className="p-3 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-slate-900 mr-2">Soal #{idx + 1}</span>
+                      <span className="text-slate-600">({q.type.toUpperCase()} · {getQuestionClassLabel(q.classId, q.grade)})</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-slate-700">{q.points} Poin</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        q.difficulty === 'mudah' ? 'bg-emerald-100 text-emerald-800' :
+                        q.difficulty === 'sedang' ? 'bg-blue-100 text-blue-800' :
+                        'bg-amber-100 text-amber-800'
+                      }`}>
+                        {q.difficulty}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-slate-700">{q.points} Poin</span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                      q.difficulty === 'mudah' ? 'bg-emerald-100 text-emerald-800' :
-                      q.difficulty === 'sedang' ? 'bg-blue-100 text-blue-800' :
-                      'bg-amber-100 text-amber-800'
-                    }`}>
-                      {q.difficulty}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 5: REKAP & EKSPOR NILAI SISWA */}
       {activeTab === 'results' && (() => {
@@ -1213,15 +1332,34 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
         };
 
         const isMatchingSubject = (s: StudentExamSession) => {
-          if (selectedSubjectFilter === 'all') return true;
           const ex = exams.find(e => e.id === s.examId);
-          const sSubId = ex?.subjectId || effectiveTeacherSubjects[0]?.id;
-          return sSubId === selectedSubjectFilter;
+          if (!ex) return false;
+          if (selectedSubjectFilter === 'all') return teacherSubjectIds.includes(ex.subjectId);
+          return ex.subjectId === selectedSubjectFilter;
         };
 
-        const filteredTeacherSessions = sessions.filter(s => isMatchingClass(s) && isMatchingSubject(s));
-        const completedTeacherSessions = filteredTeacherSessions.filter(s => s.status === 'submitted' || s.status === 'force_submitted');
-        const passedTeacherSessions = filteredTeacherSessions.filter(s => s.finalScore >= 75);
+        const getResultPriority = (s: StudentExamSession) => {
+          if (isSessionCompleted(s.status)) return 0;
+          if (s.isLocked || s.status === 'locked') return 1;
+          if (s.status === 'in_progress' || s.finalScore > 0) return 2;
+          return 3;
+        };
+
+        const filteredTeacherSessions = sessions
+          .filter(s => isMatchingClass(s) && isMatchingSubject(s))
+          .sort((a, b) => {
+            const pDiff = getResultPriority(a) - getResultPriority(b);
+            if (pDiff !== 0) return pDiff;
+            const hbDiff = (b.lastHeartbeat || 0) - (a.lastHeartbeat || 0);
+            if (hbDiff !== 0) return hbDiff;
+            return a.studentName.localeCompare(b.studentName);
+          });
+
+        const completedTeacherSessions = filteredTeacherSessions.filter(s => isSessionCompleted(s.status));
+        const passedTeacherSessions = completedTeacherSessions.filter(s => {
+          const kkm = exams.find(e => e.id === s.examId)?.kkm || 75;
+          return s.finalScore >= kkm;
+        });
         const avgTeacherScore = completedTeacherSessions.length > 0 
           ? Math.round(completedTeacherSessions.reduce((acc, curr) => acc + curr.finalScore, 0) / completedTeacherSessions.length)
           : 0;
@@ -1243,7 +1381,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                   )}
                 </div>
                 <p className="text-xs text-slate-500">
-                  Daftar nilai hasil ulangan siswa untuk mata pelajaran yang Anda ampu dengan batas kelulusan KKM 75.00.
+                  Nilai siswa yang selesai mengerjakan ulangan {currentSubName} langsung masuk dan terkumpul secara real-time di sini dan di Operator.
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1297,7 +1435,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                     onChange={e => setSelectedClassFilter(e.target.value)}
                     className="px-2.5 py-1 text-xs border border-slate-300 rounded-md bg-white outline-none font-medium"
                   >
-                    <option value="all">Semua Rombel ({sessions.length} Siswa)</option>
+                    <option value="all">Semua Rombel ({teacherSessions.length} Sesi)</option>
                     <option value="cls-8">Kelas VIII (Gabungan VIII-A & VIII-B)</option>
                     {classes.map(c => (
                       <option key={c.id} value={c.id}>Kelas {c.name}</option>
@@ -1308,17 +1446,17 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
 
               <div className="flex flex-wrap items-center gap-4 text-xs">
                 <div>
-                  <span className="text-slate-500">Peserta:</span>{' '}
-                  <span className="font-bold text-slate-800 font-mono">{filteredTeacherSessions.length}</span>
+                  <span className="text-slate-500">Selesai:</span>{' '}
+                  <span className="font-bold text-slate-800 font-mono">{completedTeacherSessions.length}/{filteredTeacherSessions.length}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500">Tuntas (≥75):</span>{' '}
+                  <span className="text-slate-500">Tuntas (≥KKM):</span>{' '}
                   <span className="font-bold text-emerald-700 font-mono">{passedTeacherSessions.length}</span>
                 </div>
                 <div>
                   <span className="text-slate-500">Belum Tuntas:</span>{' '}
                   <span className="font-bold text-rose-600 font-mono">
-                    {completedTeacherSessions.length - passedTeacherSessions.length}
+                    {Math.max(0, completedTeacherSessions.length - passedTeacherSessions.length)}
                   </span>
                 </div>
                 <div>
@@ -1336,6 +1474,7 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                     <th className="py-2.5 px-3 font-semibold">NIS</th>
                     <th className="py-2.5 px-3 font-semibold">Nama Siswa</th>
                     <th className="py-2.5 px-3 font-semibold">Kelas</th>
+                    <th className="py-2.5 px-3 font-semibold">Status Ujian</th>
                     <th className="py-2.5 px-3 font-semibold">Skor Otomatis (PG)</th>
                     <th className="py-2.5 px-3 font-semibold">Skor Uraian</th>
                     <th className="py-2.5 px-3 font-semibold">Nilai Akhir</th>
@@ -1346,42 +1485,70 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {filteredTeacherSessions.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-500 italic">
-                        Belum ada siswa yang tercatat pada filter ini.
+                      <td colSpan={9} className="py-8 text-center text-slate-500 italic">
+                        Belum ada siswa yang tercatat mengerjakan {currentSubName} pada filter ini. Nilai akan muncul otomatis saat siswa mengerjakan atau selesai ujian.
                       </td>
                     </tr>
                   ) : (
-                    filteredTeacherSessions.map(s => (
-                      <tr key={s.id} className="hover:bg-slate-50/60">
-                        <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
-                        <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
-                        <td className="py-2 px-3 text-slate-600">{s.className}</td>
-                        <td className="py-2 px-3 font-mono text-slate-700">{s.scorePg}</td>
-                        <td className="py-2 px-3 font-mono text-slate-700">{s.scoreEssay}</td>
-                        <td className="py-2 px-3 font-mono font-bold text-blue-700">{s.finalScore}</td>
-                        <td className="py-2 px-3">
-                          {s.finalScore >= 75 ? (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                              TUNTAS
-                            </span>
-                          ) : (
-                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
-                              BELUM TUNTAS
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-2 px-3 text-right">
-                          <button
-                            onClick={() => handleOpenResetSingle(s)}
-                            className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
-                            title="Reset hasil ujian siswa ini"
-                          >
-                            <RotateCcw className="w-3 h-3 text-rose-600" />
-                            <span>Reset</span>
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filteredTeacherSessions.map(s => {
+                      const ex = exams.find(e => e.id === s.examId);
+                      const kkm = ex?.kkm || 75;
+                      const isDone = isSessionCompleted(s.status);
+                      const isLockedFlag = s.isLocked || s.status === 'locked';
+
+                      return (
+                        <tr key={s.id} className={`hover:bg-slate-50/60 ${isDone ? 'bg-emerald-50/20' : isLockedFlag ? 'bg-rose-50/30' : ''}`}>
+                          <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
+                          <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
+                          <td className="py-2 px-3 text-slate-600">{s.className}</td>
+                          <td className="py-2 px-3">
+                            {isDone ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                Selesai
+                              </span>
+                            ) : isLockedFlag ? (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded">
+                                Terkunci
+                              </span>
+                            ) : s.status === 'in_progress' ? (
+                              <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                                Mengerjakan
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                Belum Ujian
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 font-mono text-slate-700">{s.scorePg}</td>
+                          <td className="py-2 px-3 font-mono text-slate-700">{s.scoreEssay}</td>
+                          <td className="py-2 px-3 font-mono font-bold text-blue-700">{s.finalScore}</td>
+                          <td className="py-2 px-3">
+                            {!isDone && s.finalScore === 0 ? (
+                              <span className="text-[10px] text-slate-400">-</span>
+                            ) : s.finalScore >= kkm ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                                TUNTAS
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                                BELUM TUNTAS
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right">
+                            <button
+                              onClick={() => handleOpenResetSingle(s)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded transition-colors cursor-pointer"
+                              title="Reset akun atau hasil ujian siswa ini"
+                            >
+                              <RotateCcw className="w-3 h-3 text-rose-600" />
+                              <span>Reset Akun</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>

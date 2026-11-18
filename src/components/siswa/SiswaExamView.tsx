@@ -31,11 +31,20 @@ import {
   Question, 
   StudentExamSession, 
   ViolationType,
-  SchoolSetting 
+  SchoolSetting,
+  isSessionCompleted
 } from '../../types/cbt';
 import { KatexRenderer } from '../common/KatexRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
-import { syncSingleSession, fetchServerData } from '../../utils/apiSync';
+import { fetchServerData } from '../../utils/apiSync';
+import { isSupabaseConfigured } from '../../lib/supabaseClient';
+import {
+  submitExamToSupabase,
+  recordViolationToSupabase,
+  subscribeToStudentSessionLockRealtime,
+  fetchExamResultsFromSupabase,
+  syncSessionProgressToSupabase
+} from '../../services/supabaseExamService';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 import { 
@@ -74,6 +83,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [hasStarted, setHasStarted] = useState(session.status === 'in_progress' || session.isLocked);
   const [timeRemaining, setTimeRemaining] = useState(session.timeRemainingSeconds || 5400);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const [violationAlert, setViolationAlert] = useState<{
     show: boolean;
@@ -86,19 +97,32 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<StudentExamSession>(session);
+  const timeRemainingRef = useRef<number>(timeRemaining);
   const lastViolationAtRef = useRef<number>(0);
 
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
 
-  // Keep hasStarted synchronized when Operator unlocks a locked session or session is in progress
   useEffect(() => {
-    if (!session.isLocked && session.status === 'in_progress') {
+    timeRemainingRef.current = timeRemaining;
+  }, [timeRemaining]);
+
+  // Keep local exam screen synchronized with Operator actions (Reset Akun, Buka Kunci, Paksa Kumpul)
+  useEffect(() => {
+    if (session.status === 'not_started' && !session.isLocked) {
+      setHasStarted(false);
+      setViolationAlert(null);
+      setShowSubmitConfirm(false);
+      setCurrentQuestionIndex(0);
+      setTimeRemaining(session.timeRemainingSeconds || exam.durationMinutes * 60);
+    } else if (session.isLocked || session.status === 'locked') {
+      setViolationAlert(null);
+    } else if (!session.isLocked && session.status === 'in_progress') {
       setHasStarted(true);
       setViolationAlert(null);
     }
-  }, [session.isLocked, session.status]);
+  }, [session.status, session.isLocked, session.id, session.adminActionAt, exam.durationMinutes]);
 
   // Live Clock to track exam schedule timing in real-time
   const [nowTime, setNowTime] = useState<Date>(() => new Date());
@@ -122,35 +146,92 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const currentQ = questions[currentQuestionIndex] || questions[0];
 
-  // If student session was previously locked, poll server every 2.5 seconds to detect when operator unlocks it
+  // If student session is locked (or active), attach Supabase Realtime listener + fallback 2.5s poller
   useEffect(() => {
-    if (!session.isLocked) return;
+    if (!hasStarted && !session.isLocked && session.status !== 'locked') return;
 
-    const unlockChecker = setInterval(async () => {
-      try {
-        const fullData = await fetchServerData();
-        if (fullData?.data?.sessions) {
-          const remoteSession = fullData.data.sessions.find(s => s.id === session.id);
-          if (remoteSession && !remoteSession.isLocked) {
-            onUpdateSession(remoteSession);
-            setHasStarted(true);
-            if (remoteSession.timeRemainingSeconds > 0) {
-              setTimeRemaining(remoteSession.timeRemainingSeconds);
-            }
+    const applyRemoteUnlockOrReset = (remoteSession: StudentExamSession) => {
+      const localLatest = sessionRef.current;
+      const isUnlockedFromLock =
+        (localLatest.isLocked || localLatest.status === 'locked') &&
+        !remoteSession.isLocked &&
+        remoteSession.status !== 'locked';
+      const isOperatorReset =
+        localLatest.status !== 'not_started' && remoteSession.status === 'not_started';
+      const isAdminIntervention =
+        Boolean(remoteSession.adminActionAt && remoteSession.adminActionAt !== localLatest.adminActionAt);
+
+      if (isUnlockedFromLock || isOperatorReset || isAdminIntervention) {
+        const nextSess: StudentExamSession = isOperatorReset
+          ? remoteSession
+          : {
+              ...remoteSession,
+              answers:
+                Object.keys(localLatest.answers || {}).length > Object.keys(remoteSession.answers || {}).length
+                  ? localLatest.answers
+                  : remoteSession.answers,
+            };
+        sessionRef.current = nextSess;
+        onUpdateSession(nextSess);
+
+        if (nextSess.status === 'not_started') {
+          setHasStarted(false);
+          setViolationAlert(null);
+          setShowSubmitConfirm(false);
+          setCurrentQuestionIndex(0);
+          setTimeRemaining(nextSess.timeRemainingSeconds || exam.durationMinutes * 60);
+        } else if (!nextSess.isLocked && nextSess.status !== 'locked') {
+          setHasStarted(true);
+          setViolationAlert(null);
+          if (nextSess.timeRemainingSeconds > 0) {
+            setTimeRemaining(nextSess.timeRemainingSeconds);
           }
         }
-      } catch (err) {
-        console.warn('Unlock poll check failed:', err);
       }
-    }, 2500);
+    };
 
-    return () => clearInterval(unlockChecker);
-  }, [session.isLocked, session.id, onUpdateSession]);
+    // 1. Real-time WebSocket listener via supabase.channel
+    const unsubscribeRealtime = subscribeToStudentSessionLockRealtime(session.id, applyRemoteUnlockOrReset);
 
-  // Helper to update session state and sync directly to server for mobile/laptop consistency
-  const updateSessionWithSync = (updated: StudentExamSession) => {
+    // 2. Polling backup every 2.5s when locked (ensures unlock works even if WS is blocked or Supabase env is unset)
+    let unlockChecker: ReturnType<typeof setInterval> | null = null;
+    if (session.isLocked || session.status === 'locked') {
+      unlockChecker = setInterval(async () => {
+        try {
+          if (isSupabaseConfigured) {
+            const supSessions = await fetchExamResultsFromSupabase();
+            const supTarget = supSessions?.find(s => s.id === session.id);
+            if (supTarget && !supTarget.isLocked && supTarget.status !== 'locked') {
+              applyRemoteUnlockOrReset(supTarget);
+              return;
+            }
+          }
+          const fullData = await fetchServerData();
+          if (fullData?.data?.sessions) {
+            const remoteSession = fullData.data.sessions.find(s => s.id === session.id);
+            if (remoteSession && !remoteSession.isLocked && remoteSession.status !== 'locked') {
+              applyRemoteUnlockOrReset(remoteSession);
+            }
+          }
+        } catch (err) {
+          console.warn('Unlock poll check failed:', err);
+        }
+      }, 2500);
+    }
+
+    return () => {
+      unsubscribeRealtime();
+      if (unlockChecker) clearInterval(unlockChecker);
+    };
+  }, [hasStarted, session.isLocked, session.status, session.id, exam.durationMinutes]);
+
+  // Helper to update session state and sync directly to server & Supabase for mobile/laptop consistency
+  const updateSessionWithSync = (updated: StudentExamSession, mirrorToSupabase = true) => {
     sessionRef.current = updated;
     onUpdateSession(updated);
+    if (mirrorToSupabase && isSupabaseConfigured) {
+      syncSessionProgressToSupabase(updated).catch(() => {});
+    }
   };
 
   // Navigate to a question index and sync current progress immediately
@@ -161,7 +242,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       updateSessionWithSync({
         ...sessionRef.current,
         currentQuestionIndex: clamped,
-        timeRemainingSeconds: timeRemaining,
+        timeRemainingSeconds: timeRemainingRef.current,
         isOnline: true,
         lastHeartbeat: Date.now()
       });
@@ -198,29 +279,32 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
     await enterFullscreen();
     setHasStarted(true);
+    const latest = sessionRef.current;
     const startSession: StudentExamSession = {
-      ...session,
-      status: session.isLocked ? 'locked' : 'in_progress',
-      startedAt: session.startedAt || new Date().toLocaleTimeString('id-ID'),
+      ...latest,
+      examId: exam.id,
+      examTitle: exam.title,
+      status: latest.isLocked ? 'locked' : 'in_progress',
+      startedAt: latest.startedAt || new Date().toLocaleTimeString('id-ID'),
       isOnline: true,
-      deviceSessionId: session.deviceSessionId || getStudentSessionDeviceId(student.nis),
+      deviceSessionId: latest.deviceSessionId || getStudentSessionDeviceId(student.nis),
       deviceInfo: detectClientDeviceInfo(),
       currentQuestionIndex,
       lastHeartbeat: Date.now(),
-      timeRemainingSeconds: session.timeRemainingSeconds || exam.durationMinutes * 60
+      timeRemainingSeconds: latest.timeRemainingSeconds || exam.durationMinutes * 60
     };
     updateSessionWithSync(startSession);
   };
 
   // Timer countdown
   useEffect(() => {
-    if (!hasStarted || session.status === 'submitted' || session.status === 'force_submitted' || session.isLocked) return;
+    if (!hasStarted || isSessionCompleted(session.status) || session.isLocked || session.status === 'locked') return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          handleAutoSubmit('Waktu ujian telah habis');
+          void handleAutoSubmit('Waktu ujian telah habis');
           return 0;
         }
         return prev - 1;
@@ -230,15 +314,16 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     return () => clearInterval(timer);
   }, [hasStarted, session.status, session.isLocked]);
 
-  // Real-Time Periodic Heartbeat to Operator Dashboard (every 10 seconds)
+  // Real-Time Periodic Heartbeat to Operator Dashboard (every 10 seconds, without tearing down on every 1s tick)
   useEffect(() => {
     if (!hasStarted || session.status !== 'in_progress' || session.isLocked) return;
 
     const heartbeatTimer = setInterval(() => {
+      const latest = sessionRef.current;
+      if (latest.isLocked || latest.status !== 'in_progress') return;
       const activeSession: StudentExamSession = {
-        ...sessionRef.current,
-        timeRemainingSeconds: timeRemaining,
-        currentQuestionIndex,
+        ...latest,
+        timeRemainingSeconds: timeRemainingRef.current,
         isOnline: true,
         lastHeartbeat: Date.now()
       };
@@ -246,7 +331,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }, 10000);
 
     return () => clearInterval(heartbeatTimer);
-  }, [hasStarted, session.status, session.isLocked, timeRemaining, currentQuestionIndex]);
+  }, [hasStarted, session.status, session.isLocked]);
 
   // Anti-Cheat Event Listeners (3x tolerance: 1/3 warning, 2/3 final warning, 3/3 auto-lock)
   useEffect(() => {
@@ -276,10 +361,20 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         lockReason: isNowLocked
           ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
           : undefined,
-        timeRemainingSeconds: timeRemaining,
-        lastHeartbeat: Date.now()
+        timeRemainingSeconds: timeRemainingRef.current,
+        lastHeartbeat: Date.now(),
+        updatedAt: new Date().toISOString()
       };
-      updateSessionWithSync(updatedSession);
+
+      // Update local state immediately and persist + insert violation log to Supabase in real time
+      updateSessionWithSync(updatedSession, false);
+      void recordViolationToSupabase({
+        session: latestSession,
+        violationType: type,
+        details,
+        maxViolations,
+        timeRemainingSeconds: timeRemainingRef.current
+      });
 
       if (isNowLocked) {
         setViolationAlert(null);
@@ -361,19 +456,20 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [hasStarted, session.status, session.isLocked, schoolSetting.maxViolations, timeRemaining]);
+  }, [hasStarted, session.status, session.isLocked, schoolSetting.maxViolations]);
 
-  // Answer handlers (recalculate live provisional score & sync immediately)
+  // Answer handlers (recalculate live provisional score & sync immediately using latest ref state)
   const applyAnswersUpdate = (updatedAnswers: StudentExamSession['answers']) => {
-    const { scorePg, finalScore } = calculateProvisionalScore(questions, updatedAnswers, session.scoreEssay);
+    const latest = sessionRef.current;
+    const { scorePg, finalScore } = calculateProvisionalScore(questions, updatedAnswers, latest.scoreEssay || 0);
     updateSessionWithSync({
-      ...session,
+      ...latest,
       answers: updatedAnswers,
       scorePg,
       finalScore,
       isPassed: finalScore >= exam.kkm,
       currentQuestionIndex,
-      timeRemainingSeconds: timeRemaining,
+      timeRemainingSeconds: timeRemainingRef.current,
       isOnline: true,
       lastHeartbeat: Date.now()
     });
@@ -381,10 +477,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleSelectOption = (questionId: string, optionId: string) => {
-    if (session.isLocked) return;
-    const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
+    const latest = sessionRef.current;
+    if (latest.isLocked || latest.status === 'locked') return;
+    const currentAnswerObj = latest.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
     applyAnswersUpdate({
-      ...session.answers,
+      ...latest.answers,
       [questionId]: {
         ...currentAnswerObj,
         answer: optionId,
@@ -394,8 +491,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleToggleComplexOption = (questionId: string, optionId: string) => {
-    if (session.isLocked) return;
-    const currentAnswerObj = session.answers[questionId] || { answer: [], isDoubtful: false, updatedAt: Date.now() };
+    const latest = sessionRef.current;
+    if (latest.isLocked || latest.status === 'locked') return;
+    const currentAnswerObj = latest.answers[questionId] || { answer: [], isDoubtful: false, updatedAt: Date.now() };
     const currentList = Array.isArray(currentAnswerObj.answer) ? [...currentAnswerObj.answer] : [];
 
     const exists = currentList.includes(optionId);
@@ -404,7 +502,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       : [...currentList, optionId].sort();
 
     applyAnswersUpdate({
-      ...session.answers,
+      ...latest.answers,
       [questionId]: {
         ...currentAnswerObj,
         answer: updatedList,
@@ -414,10 +512,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleTextAnswerChange = (questionId: string, text: string) => {
-    if (session.isLocked) return;
-    const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
+    const latest = sessionRef.current;
+    if (latest.isLocked || latest.status === 'locked') return;
+    const currentAnswerObj = latest.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
     applyAnswersUpdate({
-      ...session.answers,
+      ...latest.answers,
       [questionId]: {
         ...currentAnswerObj,
         answer: text,
@@ -427,9 +526,10 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleToggleDoubtful = (questionId: string) => {
-    const currentAnswerObj = session.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
+    const latest = sessionRef.current;
+    const currentAnswerObj = latest.answers[questionId] || { answer: '', isDoubtful: false, updatedAt: Date.now() };
     applyAnswersUpdate({
-      ...session.answers,
+      ...latest.answers,
       [questionId]: {
         ...currentAnswerObj,
         isDoubtful: !currentAnswerObj.isDoubtful,
@@ -439,8 +539,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   };
 
   const handleMatchingSelect = (questionId: string, pairId: string, rightVal: string) => {
-    if (session.isLocked) return;
-    const currentAnswerObj = session.answers[questionId] || { answer: '{}', isDoubtful: false, updatedAt: Date.now() };
+    const latest = sessionRef.current;
+    if (latest.isLocked || latest.status === 'locked') return;
+    const currentAnswerObj = latest.answers[questionId] || { answer: '{}', isDoubtful: false, updatedAt: Date.now() };
     let currentMap: Record<string, string> = {};
     try {
       currentMap = typeof currentAnswerObj.answer === 'string' && currentAnswerObj.answer.startsWith('{')
@@ -453,7 +554,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     currentMap[pairId] = rightVal;
 
     applyAnswersUpdate({
-      ...session.answers,
+      ...latest.answers,
       [questionId]: {
         ...currentAnswerObj,
         answer: JSON.stringify(currentMap),
@@ -462,62 +563,53 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     });
   };
 
-  // Submission calculation
-  const handleFinalSubmit = () => {
-    // Grade automatic questions (PG, Kompleks, Benar/Salah, Isian, Mencocokkan)
-    let scorePgTotal = 0;
-    questions.forEach(q => {
-      const studentAns = session.answers[q.id]?.answer;
-      if (!studentAns) return;
+  // Submission function (`submitExam`): explicitly computes score, awaits Supabase/server confirmation, handles loading & error states
+  const submitExam = async (forcedStatus: 'completed' | 'force_submitted' = 'completed'): Promise<boolean> => {
+    if (isSubmitting) return false;
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-      if (q.type === 'pg' && Array.isArray(q.correctAnswers)) {
-        if (studentAns === q.correctAnswers[0]) scorePgTotal += q.points;
-      } else if (q.type === 'benar_salah' && Array.isArray(q.correctAnswers)) {
-        if (studentAns === q.correctAnswers[0]) scorePgTotal += q.points;
-      } else if (q.type === 'isian' && q.correctAnswerText) {
-        if (typeof studentAns === 'string' && studentAns.trim().toLowerCase() === q.correctAnswerText.trim().toLowerCase()) {
-          scorePgTotal += q.points;
-        }
-      } else if (q.type === 'pg_kompleks' && Array.isArray(q.correctAnswers) && Array.isArray(studentAns)) {
-        const sortedCorrect = [...q.correctAnswers].sort().join(',');
-        const sortedStudent = [...studentAns].sort().join(',');
-        if (sortedCorrect === sortedStudent) scorePgTotal += q.points;
-      } else if (q.type === 'mencocokkan' && q.matchingPairs) {
-        try {
-          const map: Record<string, string> = typeof studentAns === 'string' && studentAns.startsWith('{')
-            ? JSON.parse(studentAns)
-            : {};
-          let matches = 0;
-          q.matchingPairs.forEach(p => {
-            if (map[p.id] === p.rightText) matches++;
-          });
-          const earned = (matches / q.matchingPairs.length) * q.points;
-          scorePgTotal += Math.round(earned);
-        } catch {
-          // ignore
-        }
+    try {
+      const latest = sessionRef.current;
+      const result = await submitExamToSupabase({
+        session: latest,
+        questions,
+        exam,
+        forcedStatus,
+      });
+
+      if (!result.success) {
+        setSubmitError(
+          result.error || 'Gagal menyimpan hasil ujian ke database. Silakan klik "Ya, Kumpulkan" lagi.'
+        );
+        return false;
       }
-    });
 
-    const final = scorePgTotal + session.scoreEssay;
-    const finalSession: StudentExamSession = {
-      ...session,
-      status: 'submitted',
-      submittedAt: new Date().toLocaleTimeString('id-ID'),
-      timeRemainingSeconds: 0,
-      scorePg: scorePgTotal,
-      finalScore: final,
-      isPassed: final >= exam.kkm,
-      isOnline: false,
-      lastHeartbeat: Date.now()
-    };
-    updateSessionWithSync(finalSession);
-    setShowSubmitConfirm(false);
+      // Only transition screen AFTER database persistence is confirmed
+      sessionRef.current = result.session;
+      onUpdateSession(result.session);
+      setShowSubmitConfirm(false);
+      return true;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan saat mengirim nilai.';
+      setSubmitError(message);
+      return false;
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleAutoSubmit = (reason: string) => {
-    handleFinalSubmit();
-    alert(`Ujian Anda otomatis dikumpulkan karena: ${reason}`);
+  const handleFinalSubmit = async () => {
+    await submitExam('completed');
+  };
+
+  const handleAutoSubmit = async (reason: string) => {
+    const ok = await submitExam('force_submitted');
+    if (ok) {
+      alert(`Ujian Anda otomatis dikumpulkan karena: ${reason}`);
+    } else {
+      setShowSubmitConfirm(true);
+    }
   };
 
   const formatTimer = (seconds: number) => {
@@ -792,7 +884,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   }
 
   // 2. If Locked out due to cheat violations
-  if (session.isLocked) {
+  if (session.isLocked || session.status === 'locked') {
     return (
       <div className="max-w-lg mx-auto my-12 bg-white border-2 border-rose-500 rounded-2xl shadow-2xl p-6 text-center space-y-4">
         <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
@@ -815,18 +907,35 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         {/* Real-time waiting indicator */}
         <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center gap-2 text-xs text-amber-900">
           <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
-          <span>Menunggu operator membuka kunci... Sistem otomatis memuat ulang saat dibuka.</span>
+          <span>
+            {isSupabaseConfigured
+              ? 'Supabase Realtime aktif: Layar otomatis terbuka begitu Operator menekan Buka Kunci.'
+              : 'Menunggu operator membuka kunci... Sistem otomatis memuat ulang saat dibuka.'}
+          </span>
         </div>
 
         <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-2">
           <button
             onClick={async () => {
+              if (isSupabaseConfigured) {
+                const supList = await fetchExamResultsFromSupabase();
+                const supRefreshed = supList?.find(s => s.id === session.id);
+                if (supRefreshed) {
+                  onUpdateSession(supRefreshed);
+                  if (!supRefreshed.isLocked && supRefreshed.status !== 'locked') {
+                    alert('Kunci telah dibuka oleh operator! Anda dapat melanjutkan ujian.');
+                  } else {
+                    alert('Sesi Anda masih terkunci. Silakan konfirmasi ke operator atau guru pengawas.');
+                  }
+                  return;
+                }
+              }
               const fullData = await fetchServerData();
               if (fullData?.data?.sessions) {
                 const refreshed = fullData.data.sessions.find(s => s.id === session.id);
                 if (refreshed) {
                   onUpdateSession(refreshed);
-                  if (!refreshed.isLocked) {
+                  if (!refreshed.isLocked && refreshed.status !== 'locked') {
                     alert('Kunci telah dibuka oleh operator! Anda dapat melanjutkan ujian.');
                   } else {
                     alert('Sesi Anda masih terkunci. Silakan konfirmasi ke operator atau guru pengawas.');
@@ -850,8 +959,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     );
   }
 
-  // 3. If submitted
-  if (session.status === 'submitted' || session.status === 'force_submitted') {
+  // 3. If submitted / completed
+  if (isSessionCompleted(session.status)) {
     return (
       <div className="max-w-md mx-auto my-10 bg-white border border-slate-200 rounded-2xl shadow-xl p-6 text-center space-y-5">
         <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
@@ -1478,26 +1587,45 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-center">
             <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-              <Send className="w-6 h-6" />
+              {isSubmitting ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
             </div>
-            <h4 className="font-bold text-slate-900 text-base">Konfirmasi Pengumpulan</h4>
+            <h4 className="font-bold text-slate-900 text-base">
+              {isSubmitting ? 'Mengirim Lembar Jawaban...' : 'Konfirmasi Pengumpulan'}
+            </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Apakah Anda yakin ingin menyelesaikan dan mengumpulkan lembar jawaban ujian ini? Setelah dikumpulkan, Anda tidak dapat mengubah jawaban lagi.
+              {isSubmitting
+                ? 'Sedang menghitung skor akhir dan menyimpan jawaban Anda ke database. Mohon jangan tutup halaman ini.'
+                : 'Apakah Anda yakin ingin menyelesaikan dan mengumpulkan lembar jawaban ujian ini? Nilai akan langsung dikirim ke Operator dan Guru.'}
             </p>
+            {submitError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left text-xs text-rose-700 space-y-1">
+                <div className="font-bold flex items-center gap-1.5 text-rose-800">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Pengiriman Gagal</span>
+                </div>
+                <p>{submitError}</p>
+              </div>
+            )}
             <div className="flex items-center justify-center gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setShowSubmitConfirm(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setSubmitError(null);
+                  setShowSubmitConfirm(false);
+                }}
+                className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-50 rounded-lg cursor-pointer"
               >
-                Batal & Lanjut
+                Batal &amp; Lanjut
               </button>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={handleFinalSubmit}
-                className="px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm"
+                className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-lg shadow-sm cursor-pointer"
               >
-                Ya, Kumpulkan
+                {isSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                <span>{isSubmitting ? 'Menyimpan...' : submitError ? 'Coba Kirim Lagi' : 'Ya, Kumpulkan'}</span>
               </button>
             </div>
           </div>

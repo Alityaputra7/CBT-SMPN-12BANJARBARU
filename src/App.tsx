@@ -10,7 +10,9 @@ import {
   ClassRoom, 
   Subject, 
   SchoolSetting, 
-  AuditLog 
+  AuditLog,
+  ExamViolationLog,
+  isSessionCompleted
 } from './types/cbt';
 import { 
   INITIAL_SCHOOL_SETTING, 
@@ -37,8 +39,17 @@ import {
   fetchServerVersion, 
   syncServerUpdates, 
   syncSingleSession, 
-  resetServerData 
+  resetServerData,
+  getLatestSyncMeta
 } from './utils/apiSync';
+import { isSupabaseConfigured } from './lib/supabaseClient';
+import {
+  fetchExamResultsFromSupabase,
+  fetchViolationLogsFromSupabase,
+  subscribeToExamSessionsRealtime,
+  syncSessionProgressToSupabase,
+  syncMultipleSessionsToSupabase
+} from './services/supabaseExamService';
 import { isExamMatchingStudentClass } from './utils/classGroups';
 import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
 import { validateExamSchedule } from './utils/scheduleValidator';
@@ -110,6 +121,10 @@ export default function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => 
     loadFromStorage(STORAGE_KEYS.LOGS, INITIAL_AUDIT_LOGS)
   );
+  const [violationLogs, setViolationLogs] = useState<ExamViolationLog[]>([]);
+  const [realtimeStatus, setRealtimeStatus] = useState<string>(
+    isSupabaseConfigured ? 'CONNECTING' : 'POLLING_3S'
+  );
 
   // Auto-sync notification feedback
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('id-ID'));
@@ -120,9 +135,80 @@ export default function App() {
   const lastKnownTimestamp = useRef<number>(0);
   const isSyncingFromServer = useRef<boolean>(false);
 
-  // 1. Initial hydration from server on mount
+  // Authentication State (declared early so refs are always current inside background polling)
+  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState<boolean>(false);
+
+  const sessionsRef = useRef<StudentExamSession[]>(sessions);
+  const currentRoleRef = useRef<UserRole | null>(currentRole);
+  const currentStudentRef = useRef<Student | null>(currentStudent);
+
   useEffect(() => {
-    fetchServerData().then(serverRes => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+
+  useEffect(() => {
+    currentRoleRef.current = currentRole;
+    currentStudentRef.current = currentStudent;
+  }, [currentRole, currentStudent]);
+
+  // Helper to merge authoritative Supabase rows into local sessions list
+  const mergeSupabaseSessionsIntoList = (
+    baseList: StudentExamSession[],
+    supRows: StudentExamSession[]
+  ): StudentExamSession[] => {
+    if (!supRows || supRows.length === 0) return baseList;
+    const map = new Map<string, StudentExamSession>();
+    baseList.forEach(s => map.set(s.id, s));
+    supRows.forEach(remote => {
+      const existing = map.get(remote.id);
+      if (!existing) {
+        map.set(remote.id, remote);
+      } else {
+        const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
+        const existingUpdatedMs = existing.updatedAt ? Date.parse(existing.updatedAt) : existing.lastHeartbeat || 0;
+        const adminNewer = Boolean(remote.adminActionAt && remote.adminActionAt >= (existing.adminActionAt || 0));
+        if (adminNewer || remoteUpdatedMs >= existingUpdatedMs || isSessionCompleted(remote.status)) {
+          map.set(remote.id, remote);
+        }
+      }
+    });
+    return Array.from(map.values());
+  };
+
+  // Explicit refresh from Supabase (used by Operator Rekap Nilai & Monitor Real-Time)
+  const handleRefreshFromSupabase = async () => {
+    const [supSessions, supLogs, serverRes] = await Promise.all([
+      isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
+      isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
+      fetchServerData(),
+    ]);
+
+    let nextList = serverRes?.success && serverRes.data?.sessions ? serverRes.data.sessions : sessionsRef.current;
+    if (supSessions && supSessions.length > 0) {
+      nextList = mergeSupabaseSessionsIntoList(nextList, supSessions);
+    }
+
+    sessionsRef.current = nextList;
+    setSessions(nextList);
+    saveToStorage(STORAGE_KEYS.SESSIONS, nextList);
+
+    if (supLogs) {
+      setViolationLogs(supLogs);
+    }
+    setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+  };
+
+  // 1. Initial hydration from server & Supabase on mount
+  useEffect(() => {
+    Promise.all([
+      fetchServerData(),
+      isSupabaseConfigured ? fetchExamResultsFromSupabase() : Promise.resolve(null),
+      isSupabaseConfigured ? fetchViolationLogsFromSupabase() : Promise.resolve(null),
+    ]).then(([serverRes, supSessions, supLogs]) => {
+      let hydratedSessions = sessionsRef.current;
       if (serverRes && serverRes.success && serverRes.data) {
         isSyncingFromServer.current = true;
         lastKnownVersion.current = serverRes.version;
@@ -135,14 +221,59 @@ export default function App() {
         if (Array.isArray(d.classes)) setClasses(d.classes);
         if (Array.isArray(d.subjects)) setSubjects(d.subjects);
         if (Array.isArray(d.exams)) setExams(d.exams);
-        if (Array.isArray(d.sessions)) setSessions(d.sessions);
+        if (Array.isArray(d.sessions)) {
+          hydratedSessions = d.sessions;
+        }
         if (d.questionBank) setQuestionBank(d.questionBank);
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
-        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
-        setTimeout(() => { isSyncingFromServer.current = false; }, 600);
       }
+
+      if (supSessions && supSessions.length > 0) {
+        hydratedSessions = mergeSupabaseSessionsIntoList(hydratedSessions, supSessions);
+      }
+
+      sessionsRef.current = hydratedSessions;
+      setSessions(hydratedSessions);
+      if (supLogs) setViolationLogs(supLogs);
+      setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+      setTimeout(() => { isSyncingFromServer.current = false; }, 600);
     });
   }, []);
+
+  // 1b. Supabase Realtime Channel Subscription for Operator & Guru Live Monitoring
+  useEffect(() => {
+    if (!isSupabaseConfigured || (currentRole !== 'operator' && currentRole !== 'guru')) {
+      return;
+    }
+
+    // Fetch fresh Supabase snapshot upon entering Operator / Guru dashboard
+    void handleRefreshFromSupabase();
+
+    const unsubscribe = subscribeToExamSessionsRealtime({
+      onSessionUpsert: incomingSession => {
+        setSessions(prev => {
+          const exists = prev.some(s => s.id === incomingSession.id);
+          const next = exists
+            ? prev.map(s => (s.id === incomingSession.id ? incomingSession : s))
+            : [...prev, incomingSession];
+          sessionsRef.current = next;
+          return next;
+        });
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+      },
+      onViolationInsert: newLog => {
+        setViolationLogs(prev => [newLog, ...prev.filter(l => l.id !== newLog.id)].slice(0, 100));
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+      },
+      onStatusChange: status => {
+        setRealtimeStatus(status);
+      },
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentRole]);
 
   // 2. Real-time background sync interval (checks every 3 seconds)
   useEffect(() => {
@@ -169,28 +300,67 @@ export default function App() {
           if (Array.isArray(d.exams)) setExams(d.exams);
           if (Array.isArray(d.sessions)) {
             setSessions(prevSessions => {
-              // Preserve local in-flight student answers if newer than remote, while accepting Operator unlocks/extraTime/forceSubmit
-              return d.sessions.map(remoteSess => {
+              // Operator & Guru views always accept the authoritative server/JSONBin state directly
+              // so phone/laptop clock differences never hide student 3x locks or submitted scores.
+              if (currentRoleRef.current !== 'siswa') {
+                sessionsRef.current = d.sessions;
+                return d.sessions;
+              }
+
+              const activeStudentId = currentStudentRef.current?.id;
+              const merged = d.sessions.map(remoteSess => {
                 const localSess = prevSessions.find(p => p.id === remoteSess.id);
-                if (!localSess) return remoteSess;
+                if (!localSess || localSess.studentId !== activeStudentId) return remoteSess;
+
                 const localAnswerCount = Object.keys(localSess.answers || {}).length;
                 const remoteAnswerCount = Object.keys(remoteSess.answers || {}).length;
-                // Accept unlock, force_submitted, extra time, or session reset from Operator immediately
-                const operatorUnlocked = localSess.isLocked && !remoteSess.isLocked;
-                const operatorForceSubmitted = localSess.status !== 'force_submitted' && remoteSess.status === 'force_submitted';
+
+                // Authoritative Operator / Guru interventions always take effect immediately
+                const adminActionOccurred = Boolean(
+                  remoteSess.adminActionAt && remoteSess.adminActionAt !== localSess.adminActionAt
+                );
+                const operatorReset = localSess.status !== 'not_started' && remoteSess.status === 'not_started';
+                const operatorUnlocked =
+                  (localSess.isLocked || localSess.status === 'locked') &&
+                  !remoteSess.isLocked &&
+                  remoteSess.status !== 'locked';
+                const operatorViolationReset =
+                  localSess.violationsCount > 0 && remoteSess.violationsCount === 0 && !remoteSess.isLocked;
+                const operatorForceSubmitted =
+                  localSess.status !== 'force_submitted' && remoteSess.status === 'force_submitted';
                 const operatorAddedTime = remoteSess.extraTimeMinutes > localSess.extraTimeMinutes;
-                if (operatorUnlocked || operatorForceSubmitted || operatorAddedTime) {
+                const operatorLoginReset =
+                  localSess.isOnline && !remoteSess.isOnline && !remoteSess.deviceSessionId;
+
+                if (
+                  adminActionOccurred ||
+                  operatorReset ||
+                  operatorUnlocked ||
+                  operatorViolationReset ||
+                  operatorForceSubmitted ||
+                  operatorAddedTime ||
+                  operatorLoginReset
+                ) {
+                  if (operatorReset) {
+                    return remoteSess;
+                  }
                   return {
                     ...remoteSess,
                     answers: localAnswerCount > remoteAnswerCount ? localSess.answers : remoteSess.answers,
                   };
                 }
-                // If local session belongs to currently logged in student and has more answers or newer heartbeat, keep newer local progress
-                if (localSess.lastHeartbeat > remoteSess.lastHeartbeat && localAnswerCount >= remoteAnswerCount) {
+
+                // Preserve active student's newer local progress if not yet synced to remote
+                if (
+                  (localAnswerCount > remoteAnswerCount || localSess.violationsCount > remoteSess.violationsCount) &&
+                  localSess.lastHeartbeat >= remoteSess.lastHeartbeat
+                ) {
                   return localSess;
                 }
                 return remoteSess;
               });
+              sessionsRef.current = merged;
+              return merged;
             });
           }
           if (d.questionBank) setQuestionBank(d.questionBank);
@@ -203,12 +373,6 @@ export default function App() {
 
     return () => clearInterval(syncInterval);
   }, []);
-
-  // Authentication State
-  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
-  const [showPasswordChangeModal, setShowPasswordChangeModal] = useState<boolean>(false);
 
   // Navigation: 'overview' | 'operator' | 'guru' | 'siswa' | 'panduan' | 'login'
   const [activeSection, setActiveSection] = useState<string>('login');
@@ -363,11 +527,24 @@ export default function App() {
     triggerSyncNotification('Pengaturan sekolah berhasil diperbarui');
   };
 
+  const syncMetaFromClientPush = () => {
+    const meta = getLatestSyncMeta();
+    lastKnownVersion.current = meta.version;
+    lastKnownTimestamp.current = meta.lastUpdated;
+  };
+
   // Synchronized sessions updater
   const handleUpdateSessions = (newSessions: StudentExamSession[]) => {
+    const prevMap = new Map(sessionsRef.current.map(s => [s.id, s]));
+    const changed = newSessions.filter(s => prevMap.get(s.id) !== s);
+
+    sessionsRef.current = newSessions;
     setSessions(newSessions);
     saveToStorage(STORAGE_KEYS.SESSIONS, newSessions);
-    syncServerUpdates({ sessions: newSessions });
+    syncServerUpdates({ sessions: newSessions }).then(syncMetaFromClientPush);
+    if (isSupabaseConfigured && changed.length > 0) {
+      void syncMultipleSessionsToSupabase(changed);
+    }
   };
 
   // Synchronized question bank updater: auto-updates exams and active questions
@@ -390,87 +567,128 @@ export default function App() {
         };
       });
       saveToStorage(STORAGE_KEYS.EXAMS, updated);
-      syncServerUpdates({ questionBank: newBank, exams: updated });
+      syncServerUpdates({ questionBank: newBank, exams: updated }).then(syncMetaFromClientPush);
       return updated;
     });
 
     triggerSyncNotification(`Bank soal diperbarui (${newBank.questions.length} butir soal aktif). Data otomatis tersinkronisasi ke Cloud & ponsel!`);
   };
 
-  // RESET EXAM RESULTS: Single student
+  // RESET EXAM RESULTS & VIOLATIONS / LOCK: Single student
   const handleResetSingleExamResult = (sessionId: string, reason?: string) => {
     const primaryExam = exams[0] || INITIAL_EXAMS[0];
-    let targetStudentName = '';
-    
-    setSessions(prev => {
-      const updated = prev.map(s => {
-        if (s.id === sessionId) {
-          targetStudentName = s.studentName;
-          return {
-            ...s,
-            status: 'not_started' as const,
-            answers: {},
-            scorePg: 0,
-            scoreEssay: 0,
-            finalScore: 0,
-            isPassed: false,
-            violationsCount: 0,
-            isLocked: false,
-            lockReason: undefined,
-            submittedAt: undefined,
-            timeRemainingSeconds: primaryExam.durationMinutes * 60,
-            extraTimeMinutes: 0,
-            isOnline: false,
-            lastHeartbeat: Date.now()
-          };
-        }
-        return s;
-      });
-      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-      syncServerUpdates({ sessions: updated });
-      return updated;
+    const currentList = sessionsRef.current;
+    const targetSess = currentList.find(s => s.id === sessionId);
+    const targetStudentName = targetSess?.studentName || sessionId;
+    const targetStudentId = targetSess?.studentId;
+    const actionTimestamp = Date.now();
+    const touchedSessions: StudentExamSession[] = [];
+
+    const updated = currentList.map(s => {
+      if (s.id === sessionId) {
+        const sessExam = exams.find(e => e.id === s.examId) || primaryExam;
+        const resetSess: StudentExamSession = {
+          ...s,
+          status: 'not_started' as const,
+          answers: {},
+          scorePg: 0,
+          scoreEssay: 0,
+          finalScore: 0,
+          isPassed: false,
+          violationsCount: 0,
+          isLocked: false,
+          lockReason: undefined,
+          submittedAt: undefined,
+          timeRemainingSeconds: (sessExam?.durationMinutes || 90) * 60,
+          extraTimeMinutes: 0,
+          currentQuestionIndex: 0,
+          isOnline: false,
+          deviceSessionId: undefined,
+          lastHeartbeat: actionTimestamp,
+          adminActionAt: actionTimestamp,
+          updatedAt: new Date(actionTimestamp).toISOString()
+        };
+        touchedSessions.push(resetSess);
+        return resetSess;
+      }
+      // Clear any ghost online/locked device lock if this same student had an untouched/locked entry
+      if (targetStudentId && s.studentId === targetStudentId && s.status === 'not_started') {
+        const clearedSess: StudentExamSession = {
+          ...s,
+          isOnline: false,
+          isLocked: false,
+          violationsCount: 0,
+          deviceSessionId: undefined,
+          adminActionAt: actionTimestamp,
+          updatedAt: new Date(actionTimestamp).toISOString()
+        };
+        touchedSessions.push(clearedSess);
+        return clearedSess;
+      }
+      return s;
     });
 
+    sessionsRef.current = updated;
+    setSessions(updated);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+    syncServerUpdates({ sessions: updated }).then(syncMetaFromClientPush);
+    if (isSupabaseConfigured && touchedSessions.length > 0) {
+      void syncMultipleSessionsToSupabase(touchedSessions);
+    }
+
     handleAddAuditLog(
-      'RESET_HASIL_SISWA', 
-      `Mereset hasil ulangan siswa ${targetStudentName || sessionId}. Alasan: ${reason || 'Ujian remedial / perbaikan'}`
+      'RESET_AKUN_HASIL_SISWA', 
+      `Mereset akun, pelanggaran, dan hasil ulangan siswa ${targetStudentName}. Alasan: ${reason || 'Reset akun / remedial'}`
     );
-    triggerSyncNotification(`Hasil ulangan ${targetStudentName} telah direset. Siswa dapat mengikuti ujian ulang.`);
+    triggerSyncNotification(`Akun & hasil ${targetStudentName} berhasil direset (0 pelanggaran). Siswa dapat login & ujian ulang.`);
   };
 
   // RESET EXAM RESULTS: Batch (all students or per class)
   const handleResetAllExamResults = (targetClassId?: string, reason?: string) => {
     const primaryExam = exams[0] || INITIAL_EXAMS[0];
+    const currentList = sessionsRef.current;
+    const actionTimestamp = Date.now();
     let resetCount = 0;
+    const touchedSessions: StudentExamSession[] = [];
 
-    setSessions(prev => {
-      const updated = prev.map(s => {
-        if (!targetClassId || targetClassId === 'all' || s.classId === targetClassId) {
-          resetCount++;
-          return {
-            ...s,
-            status: 'not_started' as const,
-            answers: {},
-            scorePg: 0,
-            scoreEssay: 0,
-            finalScore: 0,
-            isPassed: false,
-            violationsCount: 0,
-            isLocked: false,
-            lockReason: undefined,
-            submittedAt: undefined,
-            timeRemainingSeconds: primaryExam.durationMinutes * 60,
-            extraTimeMinutes: 0,
-            isOnline: false,
-            lastHeartbeat: Date.now()
-          };
-        }
-        return s;
-      });
-      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-      syncServerUpdates({ sessions: updated });
-      return updated;
+    const updated = currentList.map(s => {
+      if (!targetClassId || targetClassId === 'all' || s.classId === targetClassId) {
+        resetCount++;
+        const sessExam = exams.find(e => e.id === s.examId) || primaryExam;
+        const resetSess: StudentExamSession = {
+          ...s,
+          status: 'not_started' as const,
+          answers: {},
+          scorePg: 0,
+          scoreEssay: 0,
+          finalScore: 0,
+          isPassed: false,
+          violationsCount: 0,
+          isLocked: false,
+          lockReason: undefined,
+          submittedAt: undefined,
+          timeRemainingSeconds: (sessExam?.durationMinutes || 90) * 60,
+          extraTimeMinutes: 0,
+          currentQuestionIndex: 0,
+          isOnline: false,
+          deviceSessionId: undefined,
+          lastHeartbeat: actionTimestamp,
+          adminActionAt: actionTimestamp,
+          updatedAt: new Date(actionTimestamp).toISOString()
+        };
+        touchedSessions.push(resetSess);
+        return resetSess;
+      }
+      return s;
     });
+
+    sessionsRef.current = updated;
+    setSessions(updated);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+    syncServerUpdates({ sessions: updated }).then(syncMetaFromClientPush);
+    if (isSupabaseConfigured && touchedSessions.length > 0) {
+      void syncMultipleSessionsToSupabase(touchedSessions);
+    }
 
     const scopeLabel = !targetClassId || targetClassId === 'all' 
       ? 'seluruh kelas' 
@@ -478,52 +696,64 @@ export default function App() {
 
     handleAddAuditLog(
       'RESET_MASSAL_HASIL', 
-      `Mereset hasil ulangan ${scopeLabel} (${resetCount} siswa). Alasan: ${reason || 'Reset ujian massal'}`
+      `Mereset hasil ulangan & pelanggaran ${scopeLabel} (${resetCount} siswa). Alasan: ${reason || 'Reset ujian massal'}`
     );
-    triggerSyncNotification(`Hasil ulangan untuk ${resetCount} siswa pada ${scopeLabel} berhasil direset.`);
+    triggerSyncNotification(`Hasil ulangan & pelanggaran untuk ${resetCount} siswa pada ${scopeLabel} berhasil direset.`);
   };
 
   // RESET LOGIN / SESI PERANGKAT ONLY (without wiping student's exam answers)
   const handleResetLoginSession = (sessionId: string, studentName: string) => {
+    const actionTimestamp = Date.now();
+    const currentList = sessionsRef.current;
+    const targetStudentId = currentList.find(s => s.id === sessionId)?.studentId;
     let updatedTarget: StudentExamSession | null = null;
-    setSessions(prev => {
-      const updated = prev.map(s => {
-        if (s.id === sessionId) {
-          updatedTarget = {
-            ...s,
-            isOnline: false,
-            deviceSessionId: undefined,
-            deviceInfo: 'Login Direset Operator',
-            lastHeartbeat: Date.now()
-          };
-          return updatedTarget;
-        }
-        return s;
-      });
-      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-      syncServerUpdates({ sessions: updated });
-      return updated;
+
+    const updated = currentList.map(s => {
+      if (s.id === sessionId || (targetStudentId && s.studentId === targetStudentId && s.isOnline)) {
+        const nextSess: StudentExamSession = {
+          ...s,
+          isOnline: false,
+          deviceSessionId: undefined,
+          deviceInfo: 'Login Direset Operator',
+          lastHeartbeat: actionTimestamp,
+          adminActionAt: actionTimestamp,
+          updatedAt: new Date(actionTimestamp).toISOString()
+        };
+        if (s.id === sessionId) updatedTarget = nextSess;
+        return nextSess;
+      }
+      return s;
     });
 
+    sessionsRef.current = updated;
+    setSessions(updated);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+    syncServerUpdates({ sessions: updated }).then(syncMetaFromClientPush);
+
     if (updatedTarget) {
-      syncSingleSession(updatedTarget);
+      syncSingleSession(updatedTarget).then(syncMetaFromClientPush);
+      if (isSupabaseConfigured) {
+        void syncSessionProgressToSupabase(updatedTarget);
+      }
     }
 
     handleAddAuditLog('RESET_LOGIN_SESI', `Mereset sesi login perangkat untuk ${studentName} (jawaban tetap aman)`);
     triggerSyncNotification(`Sesi login ${studentName} telah direset. Siswa dapat masuk kembali dari perangkat baru.`);
   };
 
-  // Restore factory data back to 92 official students & 9 official teachers
+  // Restore factory data back to 93 official students & 9 official teachers
   const handleRestoreFactoryData = () => {
     if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 93 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
       clearCbtStorage();
       resetServerData();
+      const freshSessions = createInitialStudentSessions(INITIAL_STUDENTS);
+      sessionsRef.current = freshSessions;
       setStudents(INITIAL_STUDENTS);
       setTeachers(INITIAL_TEACHERS);
       setClasses(INITIAL_CLASSES);
       setQuestionBank(INITIAL_QUESTION_BANK);
       setExams(INITIAL_EXAMS);
-      setSessions(createInitialStudentSessions(INITIAL_STUDENTS));
+      setSessions(freshSessions);
       setAuditLogs(INITIAL_AUDIT_LOGS);
       setSchoolSetting(INITIAL_SCHOOL_SETTING);
       handleAddAuditLog('PULIHKAN_DATA_PABRIK', 'Mengembalikan database CBT ke data master resmi SMPN 12 Banjarbaru');
@@ -539,6 +769,8 @@ export default function App() {
     setCurrentRole(role);
     setCurrentUser(account);
     setCurrentStudent(student);
+    currentRoleRef.current = role;
+    currentStudentRef.current = student;
 
     if (role === 'operator') {
       if (account?.mustChangePassword) {
@@ -559,62 +791,85 @@ export default function App() {
 
       const deviceSessionId = getStudentSessionDeviceId(student.nis);
       const clientInfo = detectClientDeviceInfo();
+      const currentList = sessionsRef.current;
 
-      // Immediately update and sync student's session so Operator Dashboard reflects Login in real time
-      setSessions(prev => {
-        const existingIdx = prev.findIndex(
-          s => s.studentId === student.id && (s.examId === targetExam?.id || (!s.examId && targetExam))
-        );
-        const fallbackIdx = existingIdx >= 0 ? existingIdx : prev.findIndex(s => s.studentId === student.id);
+      // 1. Exact match for (student.id, targetExam.id)
+      const exactIdx = currentList.findIndex(
+        s => s.studentId === student.id && s.examId === targetExam?.id
+      );
+      // 2. Otherwise repurpose untouched initial placeholder session (so we don't leave ghost Matematika isOnline rows!)
+      const idlePlaceholderIdx = exactIdx >= 0
+        ? -1
+        : currentList.findIndex(
+            s =>
+              s.studentId === student.id &&
+              s.status === 'not_started' &&
+              Object.keys(s.answers || {}).length === 0 &&
+              s.violationsCount === 0 &&
+              !s.isLocked
+          );
 
-        let syncedSession: StudentExamSession;
-        let updatedList: StudentExamSession[];
+      let syncedSession: StudentExamSession;
+      let updatedList: StudentExamSession[];
 
-        if (fallbackIdx >= 0) {
-          const existing = prev[fallbackIdx];
-          syncedSession = {
-            ...existing,
-            examId: existing.examId || targetExam?.id || 'ex-mat-2026',
-            examTitle: existing.examTitle || targetExam?.title || 'Ujian CBT',
-            isOnline: true,
-            deviceSessionId,
-            deviceInfo: clientInfo,
-            lastHeartbeat: Date.now()
-          };
-          updatedList = prev.map((s, idx) => (idx === fallbackIdx ? syncedSession : s));
-        } else {
-          syncedSession = {
-            id: `sess-${student.id}-${targetExam?.id || 'ex-mat-2026'}`,
-            studentId: student.id,
-            studentName: student.name,
-            nis: student.nis,
-            classId: student.classId,
-            className: student.className,
-            examId: targetExam?.id || 'ex-mat-2026',
-            examTitle: targetExam?.title || 'Ujian CBT',
-            status: 'not_started',
-            timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
-            violationsCount: 0,
-            isLocked: false,
-            extraTimeMinutes: 0,
-            deviceInfo: clientInfo,
-            deviceSessionId,
-            currentQuestionIndex: 0,
-            isOnline: true,
-            lastHeartbeat: Date.now(),
-            answers: {},
-            scorePg: 0,
-            scoreEssay: 0,
-            finalScore: 0,
-            isPassed: false
-          };
-          updatedList = [...prev, syncedSession];
-        }
+      if (exactIdx >= 0) {
+        const existing = currentList[exactIdx];
+        syncedSession = {
+          ...existing,
+          examId: targetExam?.id || existing.examId,
+          examTitle: targetExam?.title || existing.examTitle,
+          isOnline: true,
+          deviceSessionId,
+          deviceInfo: clientInfo,
+          lastHeartbeat: Date.now()
+        };
+        updatedList = currentList.map((s, idx) => (idx === exactIdx ? syncedSession : s));
+      } else if (idlePlaceholderIdx >= 0) {
+        const placeholder = currentList[idlePlaceholderIdx];
+        syncedSession = {
+          ...placeholder,
+          examId: targetExam?.id || placeholder.examId,
+          examTitle: targetExam?.title || placeholder.examTitle,
+          timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
+          isOnline: true,
+          deviceSessionId,
+          deviceInfo: clientInfo,
+          lastHeartbeat: Date.now()
+        };
+        updatedList = currentList.map((s, idx) => (idx === idlePlaceholderIdx ? syncedSession : s));
+      } else {
+        syncedSession = {
+          id: `sess-${student.id}-${targetExam?.id || 'ex-mat-2026'}`,
+          studentId: student.id,
+          studentName: student.name,
+          nis: student.nis,
+          classId: student.classId,
+          className: student.className,
+          examId: targetExam?.id || 'ex-mat-2026',
+          examTitle: targetExam?.title || 'Ujian CBT',
+          status: 'not_started',
+          timeRemainingSeconds: (targetExam?.durationMinutes || 90) * 60,
+          violationsCount: 0,
+          isLocked: false,
+          extraTimeMinutes: 0,
+          deviceInfo: clientInfo,
+          deviceSessionId,
+          currentQuestionIndex: 0,
+          isOnline: true,
+          lastHeartbeat: Date.now(),
+          answers: {},
+          scorePg: 0,
+          scoreEssay: 0,
+          finalScore: 0,
+          isPassed: false
+        };
+        updatedList = [...currentList, syncedSession];
+      }
 
-        saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
-        syncSingleSession(syncedSession);
-        return updatedList;
-      });
+      sessionsRef.current = updatedList;
+      setSessions(updatedList);
+      saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
+      syncSingleSession(syncedSession).then(syncMetaFromClientPush);
 
       setActiveSection('siswa');
       handleAddAuditLog('LOGIN_SISWA', `Siswa ${student.name} (NIS ${student.nis}) masuk dari ${clientInfo}`);
@@ -623,28 +878,27 @@ export default function App() {
 
   const handleLogout = () => {
     if (currentRole === 'siswa' && currentStudent) {
-      // Mark offline and clear active device lock on explicit logout, then sync immediately
+      const currentList = sessionsRef.current;
       const modifiedSessions: StudentExamSession[] = [];
-      setSessions(prev => {
-        const updated = prev.map(s => {
-          if (s.studentId === currentStudent.id) {
-            const nextSess: StudentExamSession = {
-              ...s,
-              isOnline: false,
-              deviceSessionId: s.status === 'in_progress' ? s.deviceSessionId : undefined,
-              lastHeartbeat: Date.now()
-            };
-            modifiedSessions.push(nextSess);
-            return nextSess;
-          }
-          return s;
-        });
-        saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-        if (modifiedSessions[0]) {
-          syncSingleSession(modifiedSessions[0]);
+      const updated = currentList.map(s => {
+        if (s.studentId === currentStudent.id && (s.isOnline || s.deviceSessionId)) {
+          const nextSess: StudentExamSession = {
+            ...s,
+            isOnline: false,
+            deviceSessionId: s.status === 'in_progress' || s.isLocked ? s.deviceSessionId : undefined,
+            lastHeartbeat: Date.now()
+          };
+          modifiedSessions.push(nextSess);
+          return nextSess;
         }
-        return updated;
+        return s;
       });
+      sessionsRef.current = updated;
+      setSessions(updated);
+      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+      if (modifiedSessions[0]) {
+        syncSingleSession(modifiedSessions[0]).then(syncMetaFromClientPush);
+      }
     }
 
     // Explicitly guarantee all master data & latest edits remain saved in localStorage
@@ -655,10 +909,12 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SUBJECTS, subjects);
     saveToStorage(STORAGE_KEYS.QUESTIONS, questionBank);
     saveToStorage(STORAGE_KEYS.EXAMS, exams);
-    saveToStorage(STORAGE_KEYS.SESSIONS, sessions);
+    saveToStorage(STORAGE_KEYS.SESSIONS, sessionsRef.current);
     saveToStorage(STORAGE_KEYS.SETTING, schoolSetting);
     saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
 
+    currentRoleRef.current = null;
+    currentStudentRef.current = null;
     setCurrentRole(null);
     setCurrentUser(null);
     setCurrentStudent(null);
@@ -680,6 +936,22 @@ export default function App() {
 
   const handleRecordViolation = (type: ViolationType, details: string) => {
     if (!currentStudent) return;
+    const matchingExam = exams.find(e => e.id === selectedExamId) || exams[0];
+    setViolationLogs(prev => [
+      {
+        id: `v-local-${Date.now()}`,
+        studentId: currentStudent.id,
+        studentName: currentStudent.name,
+        nis: currentStudent.nis,
+        examId: matchingExam?.id || selectedExamId,
+        examTitle: matchingExam?.title || 'Ujian CBT',
+        type,
+        description: details,
+        timestamp: new Date().toISOString(),
+        actionTaken: 'RECORDED',
+      },
+      ...prev,
+    ].slice(0, 100));
     handleAddAuditLog(`PELANGGARAN_${type.toUpperCase()}`, `Siswa ${currentStudent.name}: ${details}`);
   };
 
@@ -725,16 +997,107 @@ export default function App() {
     : sessions[0];
 
   const handleUpdateStudentSession = (updatedSession: StudentExamSession) => {
-    setSessions(prev => {
-      const exists = prev.some(s => s.id === updatedSession.id);
-      const updated = exists
-        ? prev.map(s => s.id === updatedSession.id ? updatedSession : s)
-        : [...prev, updatedSession];
-      saveToStorage(STORAGE_KEYS.SESSIONS, updated);
-      return updated;
-    });
-    // Instant sync to central server for laptop & phone live synchronization
-    syncSingleSession(updatedSession);
+    const currentList = sessionsRef.current;
+    const exists = currentList.some(s => s.id === updatedSession.id);
+    const updated = exists
+      ? currentList.map(s => (s.id === updatedSession.id ? updatedSession : s))
+      : [...currentList, updatedSession];
+    sessionsRef.current = updated;
+    setSessions(updated);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+    // Instant sync to central server & Supabase for laptop & phone live synchronization
+    syncSingleSession(updatedSession).then(syncMetaFromClientPush);
+    if (isSupabaseConfigured) {
+      void syncSessionProgressToSupabase(updatedSession);
+    }
+  };
+
+  const handleStudentSelectExam = (ex: ExamSchedule) => {
+    setSelectedExamId(ex.id);
+    if (!currentStudent) return;
+
+    const currentList = sessionsRef.current;
+    const deviceSessionId = getStudentSessionDeviceId(currentStudent.nis);
+    const clientInfo = detectClientDeviceInfo();
+    const existingTarget = currentList.find(s => s.studentId === currentStudent.id && s.examId === ex.id);
+
+    let activeSess: StudentExamSession;
+    let updatedList: StudentExamSession[];
+
+    if (existingTarget) {
+      activeSess = {
+        ...existingTarget,
+        isOnline: true,
+        deviceSessionId: existingTarget.deviceSessionId || deviceSessionId,
+        deviceInfo: clientInfo,
+        lastHeartbeat: Date.now()
+      };
+      updatedList = currentList.map(s => {
+        if (s.id === existingTarget.id) return activeSess;
+        if (s.studentId === currentStudent.id && s.status === 'not_started' && s.isOnline) {
+          return { ...s, isOnline: false, deviceSessionId: undefined };
+        }
+        return s;
+      });
+    } else {
+      const idlePlaceholder = currentList.find(
+        s =>
+          s.studentId === currentStudent.id &&
+          s.status === 'not_started' &&
+          Object.keys(s.answers || {}).length === 0 &&
+          s.violationsCount === 0 &&
+          !s.isLocked
+      );
+      if (idlePlaceholder) {
+        activeSess = {
+          ...idlePlaceholder,
+          examId: ex.id,
+          examTitle: ex.title,
+          timeRemainingSeconds: ex.durationMinutes * 60,
+          isOnline: true,
+          deviceSessionId,
+          deviceInfo: clientInfo,
+          lastHeartbeat: Date.now()
+        };
+        updatedList = currentList.map(s => (s.id === idlePlaceholder.id ? activeSess : s));
+      } else {
+        activeSess = {
+          id: `sess-${currentStudent.id}-${ex.id}`,
+          studentId: currentStudent.id,
+          studentName: currentStudent.name,
+          nis: currentStudent.nis,
+          classId: currentStudent.classId,
+          className: currentStudent.className,
+          examId: ex.id,
+          examTitle: ex.title,
+          status: 'not_started',
+          timeRemainingSeconds: ex.durationMinutes * 60,
+          violationsCount: 0,
+          isLocked: false,
+          extraTimeMinutes: 0,
+          deviceInfo: clientInfo,
+          deviceSessionId,
+          currentQuestionIndex: 0,
+          isOnline: true,
+          lastHeartbeat: Date.now(),
+          answers: {},
+          scorePg: 0,
+          scoreEssay: 0,
+          finalScore: 0,
+          isPassed: false
+        };
+        updatedList = [...currentList.map(s =>
+          s.studentId === currentStudent.id && s.status === 'not_started' && s.isOnline
+            ? { ...s, isOnline: false, deviceSessionId: undefined }
+            : s
+        ), activeSess];
+      }
+    }
+
+    sessionsRef.current = updatedList;
+    setSessions(updatedList);
+    saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
+    syncSingleSession(activeSess).then(syncMetaFromClientPush);
   };
 
   return (
@@ -852,6 +1215,9 @@ export default function App() {
             onResetLoginSession={handleResetLoginSession}
             onRestoreFactoryData={handleRestoreFactoryData}
             lastSyncTime={lastSyncTime}
+            violationLogs={violationLogs}
+            realtimeStatus={realtimeStatus}
+            onRefreshFromSupabase={handleRefreshFromSupabase}
           />
         )}
 
@@ -881,7 +1247,7 @@ export default function App() {
             student={currentStudent || students[0]}
             exam={currentExam}
             availableExams={studentAvailableExams}
-            onSelectExam={(ex) => setSelectedExamId(ex.id)}
+            onSelectExam={handleStudentSelectExam}
             questionBank={questionBank}
             session={currentStudentSession}
             onUpdateSession={handleUpdateStudentSession}

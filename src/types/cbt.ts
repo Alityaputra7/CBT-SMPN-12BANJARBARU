@@ -6,7 +6,11 @@ export type QuestionType = 'pg' | 'pg_kompleks' | 'benar_salah' | 'isian' | 'ura
 
 export type ExamStatus = 'draft' | 'scheduled' | 'ongoing' | 'finished';
 
-export type StudentExamStatus = 'not_started' | 'in_progress' | 'submitted' | 'force_submitted' | 'locked';
+export type StudentExamStatus = 'not_started' | 'in_progress' | 'submitted' | 'completed' | 'force_submitted' | 'locked';
+
+export function isSessionCompleted(status?: StudentExamStatus): boolean {
+  return status === 'submitted' || status === 'completed' || status === 'force_submitted';
+}
 
 export type ViolationType = 
   | 'tab_switch' 
@@ -172,6 +176,8 @@ export interface StudentExamSession {
   currentQuestionIndex?: number;
   isOnline: boolean;
   lastHeartbeat: number;
+  adminActionAt?: number;
+  updatedAt?: string;
   answers: Record<string, {
     answer: string | string[];
     isDoubtful: boolean; // ragu-ragu

@@ -10,7 +10,7 @@ import {
   User, 
   BookOpen 
 } from 'lucide-react';
-import { StudentExamSession, ClassRoom } from '../../types/cbt';
+import { StudentExamSession, ClassRoom, isSessionCompleted } from '../../types/cbt';
 
 interface ResetExamResultsModalProps {
   isOpen: boolean;
@@ -38,9 +38,14 @@ export const ResetExamResultsModal: React.FC<ResetExamResultsModalProps> = ({
   if (!isOpen) return null;
 
   const isSingle = Boolean(targetSession);
+  const isLockedOrViolated = Boolean(
+    targetSession && (targetSession.isLocked || targetSession.status === 'locked' || targetSession.violationsCount > 0)
+  );
 
   // Single mode state
-  const [singleReason, setSingleReason] = useState<string>('Ujian remedial / perbaikan nilai');
+  const [singleReason, setSingleReason] = useState<string>(
+    isLockedOrViolated ? 'Reset pelanggaran anti-curang / pengawas mengizinkan' : 'Ujian remedial / perbaikan nilai'
+  );
   const [customSingleReason, setCustomSingleReason] = useState<string>('');
 
   // Batch mode state
@@ -56,7 +61,7 @@ export const ResetExamResultsModal: React.FC<ResetExamResultsModalProps> = ({
   });
 
   const completedCount = affectedSessions.filter(
-    s => s.status === 'submitted' || s.status === 'force_submitted' || s.finalScore > 0
+    s => isSessionCompleted(s.status) || s.finalScore > 0
   ).length;
 
   const handleConfirm = () => {
@@ -85,11 +90,17 @@ export const ResetExamResultsModal: React.FC<ResetExamResultsModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-base leading-snug">
-                {isSingle ? 'Reset Hasil Ulangan Siswa' : 'Reset Semua Hasil Ulangan'}
+                {isSingle
+                  ? isLockedOrViolated
+                    ? 'Reset Akun & Pelanggaran Siswa'
+                    : 'Reset Hasil Ulangan Siswa'
+                  : 'Reset Semua Hasil Ulangan'}
               </h3>
               <p className="text-xs text-rose-100">
-                {isSingle 
-                  ? 'Kembalikan status ujian siswa ke awal untuk ujian ulang' 
+                {isSingle
+                  ? isLockedOrViolated
+                    ? 'Hapus status kunci/pelanggaran 3x dan kembalikan akun siswa ke awal'
+                    : 'Kembalikan status ujian siswa ke awal untuk ujian ulang'
                   : 'Mereset lembar jawaban & nilai peserta secara massal'}
               </p>
             </div>
@@ -123,10 +134,18 @@ export const ResetExamResultsModal: React.FC<ResetExamResultsModalProps> = ({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Status Saat Ini:</span>
-                    <span className="font-semibold text-blue-700">
-                      {targetSession.status === 'submitted' || targetSession.status === 'force_submitted' 
-                        ? 'Sudah Mengumpulkan' 
-                        : targetSession.status === 'in_progress' ? 'Sedang Mengerjakan' : 'Belum Selesai'}
+                    <span className={`font-semibold ${
+                      targetSession.isLocked || targetSession.status === 'locked'
+                        ? 'text-rose-700 font-bold'
+                        : 'text-blue-700'
+                    }`}>
+                      {targetSession.isLocked || targetSession.status === 'locked'
+                        ? `Terkunci (Pelanggaran ${targetSession.violationsCount}/3)`
+                        : isSessionCompleted(targetSession.status)
+                          ? 'Sudah Mengumpulkan' 
+                          : targetSession.status === 'in_progress'
+                            ? 'Sedang Mengerjakan'
+                            : 'Belum Selesai'}
                     </span>
                   </div>
                   <div className="flex justify-between border-t border-slate-100 pt-1.5">
@@ -274,7 +293,7 @@ export const ResetExamResultsModal: React.FC<ResetExamResultsModalProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>
-              {isSingle ? 'Ya, Reset Hasil Siswa' : 'Reset Semua Hasil Terpilih'}
+              {isSingle ? (isLockedOrViolated ? 'Ya, Reset Akun Siswa' : 'Ya, Reset Hasil Siswa') : 'Reset Semua Hasil Terpilih'}
             </span>
           </button>
         </div>
