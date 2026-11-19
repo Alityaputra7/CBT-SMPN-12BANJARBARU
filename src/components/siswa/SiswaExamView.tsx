@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Download,
+  WifiOff,
   X
 } from 'lucide-react';
 import { 
@@ -46,7 +47,10 @@ import {
   FetchStudentSessionStatusResult,
   syncSessionProgressWithDetails,
   mergeActiveStudentSessionWithRemote,
-  mergeExamAnswers
+  mergeExamAnswers,
+  FRIENDLY_OFFLINE_SUBMIT_MESSAGE,
+  getPendingSubmissionForExam,
+  flushPendingSubmissionsToSupabase
 } from '../../services/supabaseExamService';
 import {
   loadPersistedStudentSession,
@@ -131,7 +135,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   });
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitRetryStatus, setSubmitRetryStatus] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isQueuedOffline, setIsQueuedOffline] = useState<boolean>(() =>
+    Boolean(getPendingSubmissionForExam(student.nis, exam.id))
+  );
+  const [isAutoSyncingQueue, setIsAutoSyncingQueue] = useState<boolean>(false);
   const [syncErrorBanner, setSyncErrorBanner] = useState<string | null>(null);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(false);
   const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
@@ -1228,11 +1237,81 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     });
   };
 
-  // Submission function (`submitExam`): flushes local essay answers first, computes score, awaits Supabase confirmation
+  // Keep isQueuedOffline synced when switching between exams
+  useEffect(() => {
+    setIsQueuedOffline(Boolean(getPendingSubmissionForExam(student.nis, exam.id)));
+  }, [student.nis, exam.id]);
+
+  // Background auto-sync for queued offline exam submission:
+  // Listens to `window` online event AND runs a 5-second background check until delivered to Supabase
+  useEffect(() => {
+    if (!isQueuedOffline || isSessionCompleted(session.status)) return;
+
+    let cancelled = false;
+    const tryAutoFlushPending = async () => {
+      if (cancelled || isSubmitting) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      const queued = getPendingSubmissionForExam(student.nis, exam.id);
+      if (!queued) {
+        setIsQueuedOffline(false);
+        return;
+      }
+
+      setIsAutoSyncingQueue(true);
+      try {
+        const res = await flushPendingSubmissionsToSupabase({
+          filterNis: student.nis,
+          filterExamId: exam.id,
+        });
+        if (cancelled) return;
+        const synced = res.syncedSessions.find(
+          s => s.nis.trim() === student.nis.trim() && s.examId === exam.id
+        );
+        if (synced) {
+          clearSyncError();
+          clearActiveExamFromPersistedStudentSession();
+          sessionRef.current = synced;
+          setIsQueuedOffline(false);
+          setSubmitError(null);
+          setSubmitRetryStatus(null);
+          setJustCompletedExamId(exam.id);
+          onUpdateSession(synced, { skipSupabaseMirror: true });
+          setShowSubmitConfirm(false);
+          setSaveStatus('saved');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsAutoSyncingQueue(false);
+        }
+      }
+    };
+
+    const handleOnline = () => {
+      void tryAutoFlushPending();
+    };
+
+    window.addEventListener('online', handleOnline);
+    const pollInterval = setInterval(() => {
+      void tryAutoFlushPending();
+    }, 5000);
+
+    // Attempt immediately if signal already came back
+    void tryAutoFlushPending();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
+      clearInterval(pollInterval);
+    };
+  }, [isQueuedOffline, isSubmitting, student.nis, exam.id, session.status]);
+
+  // Submission function (`submitExam`): flushes local essay answers, auto-retries up to 4x with backoff,
+  // and falls back safely to `cbt_pending_submissions` offline queue if connection is down
   const submitExam = async (forcedStatus: 'completed' | 'force_submitted' = 'completed'): Promise<boolean> => {
     if (isSubmitting) return false;
     setIsSubmitting(true);
     setSubmitError(null);
+    setSubmitRetryStatus('Mengirim lembar jawaban ke server... (Percobaan 1/4)');
 
     try {
       // Cancel any pending essay debounce and guarantee the very latest localAnswers are persisted & submitted
@@ -1247,11 +1326,19 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         questions,
         exam,
         forcedStatus,
+        onRetryStatus: (_attempt, _max, statusMsg) => {
+          setSubmitRetryStatus(statusMsg);
+        },
       });
 
       if (!result.success) {
+        if (result.queuedOffline || result.isNetworkError) {
+          setIsQueuedOffline(true);
+          setSubmitError(result.error || FRIENDLY_OFFLINE_SUBMIT_MESSAGE);
+          return false;
+        }
         const errMsg =
-          result.error || 'Gagal menyimpan hasil ujian ke database. Silakan klik "Ya, Kumpulkan" lagi.';
+          result.error || 'Gagal menyimpan hasil ujian ke database. Silakan klik "Coba Kirim Lagi".';
         setSubmitError(errMsg);
         reportSyncError(`Pengumpulan ujian ke Supabase gagal: ${errMsg}`);
         return false;
@@ -1259,6 +1346,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
       // Only transition screen AFTER database persistence is confirmed
       clearSyncError();
+      setIsQueuedOffline(false);
       // Keep student login identity intact; clear ONLY this finished exam's active_exam_id
       clearActiveExamFromPersistedStudentSession();
       sessionRef.current = result.session;
@@ -1268,12 +1356,22 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       setSaveStatus('saved');
       return true;
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Terjadi kesalahan jaringan saat mengirim nilai.';
-      setSubmitError(message);
-      reportSyncError(`Pengumpulan ujian gagal: ${message}`);
+      const rawMsg = err instanceof Error ? err.message : String(err || '');
+      const looksLikeNetwork =
+        rawMsg.toLowerCase().includes('fetch') ||
+        rawMsg.toLowerCase().includes('network') ||
+        (typeof navigator !== 'undefined' && navigator.onLine === false);
+      if (looksLikeNetwork) {
+        setIsQueuedOffline(true);
+        setSubmitError(FRIENDLY_OFFLINE_SUBMIT_MESSAGE);
+      } else {
+        setSubmitError(rawMsg || 'Terjadi kendala saat mengirim jawaban. Silakan coba lagi.');
+        reportSyncError(`Pengumpulan ujian gagal: ${rawMsg}`);
+      }
       return false;
     } finally {
       setIsSubmitting(false);
+      setSubmitRetryStatus(null);
     }
   };
 
@@ -2057,6 +2155,35 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         </div>
       </div>
 
+      {/* Offline Queued Submission Banner (Auto-Syncs When Signal Returns) */}
+      {isQueuedOffline && !showSubmitConfirm && (
+        <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <WifiOff className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold block text-amber-950">
+                Jawaban Aman Tersimpan di HP (Menunggu Sinyal Internet)
+              </span>
+              <span className="text-[11px] text-amber-800 leading-relaxed">
+                {FRIENDLY_OFFLINE_SUBMIT_MESSAGE}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => {
+              setShowSubmitConfirm(true);
+              void handleFinalSubmit();
+            }}
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shrink-0 cursor-pointer disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isAutoSyncingQueue || isSubmitting ? 'animate-spin' : ''}`} />
+            <span>{isAutoSyncingQueue ? 'Mengirim Otomatis...' : 'Coba Kirim Lagi'}</span>
+          </button>
+        </div>
+      )}
+
       {/* Inline Sync Error Banner during Exam */}
       {syncErrorBanner && (
         <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-300 text-xs text-rose-800 flex items-start gap-2.5 shadow-xs">
@@ -2535,24 +2662,74 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       {showSubmitConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
           <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 text-center">
-            <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-              {isSubmitting ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Send className="w-6 h-6" />}
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto ${
+              isQueuedOffline && !isSubmitting
+                ? 'bg-amber-100 text-amber-600'
+                : 'bg-emerald-100 text-emerald-600'
+            }`}>
+              {isSubmitting || isAutoSyncingQueue ? (
+                <RefreshCw className="w-6 h-6 animate-spin" />
+              ) : isQueuedOffline ? (
+                <WifiOff className="w-6 h-6" />
+              ) : (
+                <Send className="w-6 h-6" />
+              )}
             </div>
             <h4 className="font-bold text-slate-900 text-base">
-              {isSubmitting ? 'Mengirim Lembar Jawaban...' : 'Konfirmasi Pengumpulan'}
+              {isSubmitting
+                ? 'Mengirim Lembar Jawaban...'
+                : isQueuedOffline
+                  ? 'Jawaban Aman Tersimpan di HP'
+                  : 'Konfirmasi Pengumpulan'}
             </h4>
             <p className="text-xs text-slate-600 leading-relaxed">
               {isSubmitting
-                ? 'Sedang menghitung skor akhir dan menyimpan jawaban Anda ke database. Mohon jangan tutup halaman ini.'
-                : 'Apakah Anda yakin ingin menyelesaikan dan mengumpulkan lembar jawaban ujian ini? Nilai akan langsung dikirim ke Operator dan Guru.'}
+                ? (submitRetryStatus || 'Menghubungkan ke server... Mohon jangan tutup halaman ini.')
+                : isQueuedOffline
+                  ? 'Sistem sedang memantau koneksi internet Anda secara otomatis setiap 5 detik.'
+                  : 'Apakah Anda yakin ingin menyelesaikan dan mengumpulkan lembar jawaban ujian ini? Nilai akan langsung dikirim ke Operator dan Guru.'}
             </p>
-            {submitError && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-left text-xs text-rose-700 space-y-1">
-                <div className="font-bold flex items-center gap-1.5 text-rose-800">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>Pengiriman Gagal (Detail Error Supabase)</span>
+            {isSubmitting && submitRetryStatus && (
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] font-medium text-blue-800 flex items-center justify-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0 text-blue-600" />
+                <span>{submitRetryStatus}</span>
+              </div>
+            )}
+            {!isSubmitting && submitError && (
+              <div className={`p-3 rounded-xl text-left text-xs space-y-1.5 border ${
+                isQueuedOffline
+                  ? 'bg-amber-50 border-amber-300 text-amber-900'
+                  : 'bg-rose-50 border-rose-200 text-rose-700'
+              }`}>
+                <div className={`font-bold flex items-center gap-1.5 ${
+                  isQueuedOffline ? 'text-amber-900' : 'text-rose-800'
+                }`}>
+                  {isQueuedOffline ? (
+                    <WifiOff className="w-4 h-4 shrink-0 text-amber-600" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  )}
+                  <span>
+                    {isQueuedOffline
+                      ? 'Menunggu Koneksi Internet Kembali'
+                      : 'Pengiriman Gagal (Detail Error Database)'}
+                  </span>
                 </div>
-                <p className="font-mono text-[11px] break-words leading-relaxed">{submitError}</p>
+                <p className={`text-[11px] break-words leading-relaxed ${
+                  isQueuedOffline ? 'font-sans text-amber-900' : 'font-mono text-rose-700'
+                }`}>
+                  {submitError}
+                </p>
+                {isQueuedOffline && (
+                  <div className="pt-1 flex items-center gap-1.5 text-[10px] font-semibold text-amber-700">
+                    <RefreshCw className={`w-3 h-3 ${isAutoSyncingQueue ? 'animate-spin' : ''}`} />
+                    <span>
+                      {isAutoSyncingQueue
+                        ? 'Mencoba mengirim ulang otomatis ke server...'
+                        : 'Antrean lokal aktif — akan terkirim otomatis saat sinyal pulih.'}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
             <div className="flex items-center justify-center gap-2 pt-2">
@@ -2574,7 +2751,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                 className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 rounded-lg shadow-sm cursor-pointer"
               >
                 {isSubmitting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
-                <span>{isSubmitting ? 'Menyimpan...' : submitError ? 'Coba Kirim Lagi' : 'Ya, Kumpulkan'}</span>
+                <span>
+                  {isSubmitting
+                    ? (submitRetryStatus?.includes('Percobaan')
+                        ? submitRetryStatus.slice(submitRetryStatus.indexOf('('))
+                        : 'Mengirim...')
+                    : submitError || isQueuedOffline
+                      ? 'Coba Kirim Lagi'
+                      : 'Ya, Kumpulkan'}
+                </span>
               </button>
             </div>
           </div>

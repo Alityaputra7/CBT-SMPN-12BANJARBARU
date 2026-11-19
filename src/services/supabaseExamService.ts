@@ -68,6 +68,26 @@ export interface SubmitExamResult {
   session: StudentExamSession;
   source: 'supabase' | 'server';
   error?: string;
+  isNetworkError?: boolean;
+  queuedOffline?: boolean;
+  attemptsUsed?: number;
+}
+
+export const PENDING_SUBMISSIONS_STORAGE_KEY = 'cbt_pending_submissions';
+
+export const FRIENDLY_OFFLINE_SUBMIT_MESSAGE =
+  "Koneksi internet terputus. Jawaban Anda sudah aman tersimpan di HP ini. Aktifkan kembali internet/Wi-Fi lalu tekan 'Coba Kirim Lagi', atau sistem akan mengirimnya otomatis begitu sinyal kembali.";
+
+export interface PendingSubmissionRecord {
+  id: string;
+  nis: string;
+  examId: string;
+  totalQuestions: number;
+  session: StudentExamSession;
+  payload: Partial<SupabaseExamSessionRow>;
+  queuedAt: number;
+  attempts: number;
+  lastError?: string;
 }
 
 export interface SessionActionResult {
@@ -290,6 +310,147 @@ function formatSupabaseError(err: {
   return extras ? `${base} (${extras})` : base;
 }
 
+function isNetworkFailureError(err: unknown): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return true;
+  }
+  const msg =
+    typeof err === 'string'
+      ? err
+      : err && typeof err === 'object' && 'message' in err
+        ? String((err as { message?: unknown }).message || '')
+        : String(err || '');
+  const lower = msg.toLowerCase();
+  return (
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror') ||
+    lower.includes('network request failed') ||
+    lower.includes('load failed') ||
+    lower.includes('fetch failed') ||
+    lower.includes('err_internet_disconnected') ||
+    lower.includes('err_network') ||
+    lower.includes('err_connection') ||
+    lower.includes('timeout') ||
+    lower.includes('timed out') ||
+    lower.includes('aborted') ||
+    lower.includes('econnreset') ||
+    lower.includes('socket hang up') ||
+    lower.includes('offline')
+  );
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Strips empty / redundant keys from answers_json so the submission packet
+ * stays tiny and reliably completes even on 1-bar / Edge cellular connections.
+ */
+function buildCompactAnswersJson(
+  answers?: StudentExamSession['answers']
+): StudentExamSession['answers'] {
+  if (!answers || typeof answers !== 'object') return {};
+  const compact: StudentExamSession['answers'] = {};
+  Object.entries(answers).forEach(([qId, entry]) => {
+    if (!entry || typeof entry !== 'object') return;
+    const ans = entry.answer;
+    const hasValue =
+      ans !== undefined &&
+      ans !== null &&
+      ans !== '' &&
+      (!Array.isArray(ans) || ans.length > 0);
+    if (!hasValue && !entry.isDoubtful) return;
+    compact[qId] = {
+      answer: typeof ans === 'string' ? ans : Array.isArray(ans) ? ans : '',
+      isDoubtful: Boolean(entry.isDoubtful),
+      updatedAt: Number(entry.updatedAt || Date.now()),
+    };
+  });
+  return compact;
+}
+
+/**
+ * Builds a minimal, essential-columns-only payload for `cbt_exam_sessions` final submission.
+ * Excludes question bank objects, verbose device strings, and redundant non-essential fields.
+ */
+function buildCompactSubmitRow(
+  session: StudentExamSession,
+  totalQuestions = 0
+): Partial<SupabaseExamSessionRow> {
+  const nowIso = normalizeIsoTimestamp(session.updatedAt) || new Date().toISOString();
+  const submittedIso = normalizeIsoTimestamp(session.submittedAt) || nowIso;
+  const compactAnswers = buildCompactAnswersJson(session.answers);
+  const answeredCount = countAnsweredQuestions(compactAnswers);
+  const resolvedNis = (session.nis || session.studentId || '').trim();
+  const resolvedExamId = (session.examId || 'ex-mat-2026').trim();
+  const deterministicId = buildDeterministicSessionId(resolvedNis, resolvedExamId);
+
+  return {
+    id: deterministicId,
+    student_id: session.studentId || resolvedNis,
+    student_nis: resolvedNis,
+    nis: resolvedNis,
+    student_name: (session.studentName || '').trim(),
+    class_id: session.classId || '',
+    class_name: session.className || '',
+    exam_id: resolvedExamId,
+    exam_title: (session.examTitle || '').slice(0, 120),
+    status: session.status,
+    answered_count: answeredCount,
+    ...(totalQuestions > 0 ? { total_questions: Math.round(totalQuestions) } : {}),
+    score: roundNumericScore(session.finalScore),
+    score_pg: roundNumericScore(session.scorePg),
+    score_essay: roundNumericScore(session.scoreEssay),
+    final_score: roundNumericScore(session.finalScore),
+    is_passed: Boolean(session.isPassed),
+    violation_count: Math.max(0, Math.round(Number(session.violationsCount) || 0)),
+    is_locked: false,
+    lock_reason: null,
+    answers_json: compactAnswers,
+    time_remaining_seconds: 0,
+    is_online: false,
+    device_session_id: null,
+    last_heartbeat: Math.round(Number(session.lastHeartbeat) || Date.now()),
+    started_at: normalizeIsoTimestamp(session.startedAt),
+    submitted_at: submittedIso,
+    updated_at: nowIso,
+  };
+}
+
+/**
+ * Lightweight upsert for final exam submission:
+ * Omits `.select()` response echo so slow Edge connections don't re-download all essay answers.
+ */
+async function upsertCompactSubmitRow(row: Partial<SupabaseExamSessionRow>) {
+  if (!supabase) {
+    return {
+      error: {
+        message:
+          supabaseConfigError ||
+          'Supabase client belum terkonfigurasi. Periksa VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY.',
+      },
+    };
+  }
+
+  let res = await supabase
+    .from('cbt_exam_sessions')
+    .upsert(row, { onConflict: 'nis,exam_id' });
+
+  if (
+    res.error &&
+    (res.error.code === '42P10' ||
+      res.error.code === '23505' ||
+      res.error.message?.includes('ON CONFLICT'))
+  ) {
+    res = await supabase
+      .from('cbt_exam_sessions')
+      .upsert(row, { onConflict: 'id' });
+  }
+
+  return res;
+}
+
 /**
  * Shared upsert helper: prioritizes composite (nis, exam_id) conflict key,
  * and falls back to primary key `id` if DB constraint hasn't been created yet.
@@ -329,21 +490,182 @@ async function upsertSessionRow(row: SupabaseExamSessionRow) {
 }
 
 /**
+ * ============================================================================
+ * OFFLINE SUBMISSION QUEUE (`cbt_pending_submissions` in localStorage)
+ * Safely stores completed exams when student loses cellular/Wi-Fi signal,
+ * and flushes automatically on `window` online event or 5s background check.
+ * ============================================================================
+ */
+export function getPendingSubmissions(): PendingSubmissionRecord[] {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return [];
+    const raw = window.localStorage.getItem(PENDING_SUBMISSIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (item): item is PendingSubmissionRecord =>
+        Boolean(item && typeof item === 'object' && item.id && item.nis && item.examId && item.payload)
+    );
+  } catch {
+    return [];
+  }
+}
+
+function savePendingSubmissionsList(list: PendingSubmissionRecord[]): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    if (list.length === 0) {
+      window.localStorage.removeItem(PENDING_SUBMISSIONS_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(PENDING_SUBMISSIONS_STORAGE_KEY, JSON.stringify(list));
+    }
+  } catch (err) {
+    console.warn('[CBT Queue] Failed writing cbt_pending_submissions:', err);
+  }
+}
+
+export function getPendingSubmissionForExam(
+  nis: string,
+  examId: string
+): PendingSubmissionRecord | null {
+  const cleanNis = (nis || '').trim();
+  const cleanExamId = (examId || '').trim();
+  if (!cleanNis || !cleanExamId) return null;
+  const detId = buildDeterministicSessionId(cleanNis, cleanExamId);
+  return (
+    getPendingSubmissions().find(
+      item => item.id === detId || (item.nis.trim() === cleanNis && item.examId.trim() === cleanExamId)
+    ) || null
+  );
+}
+
+export function enqueuePendingSubmission(
+  session: StudentExamSession,
+  payload: Partial<SupabaseExamSessionRow>,
+  totalQuestions = 0,
+  lastError?: string
+): PendingSubmissionRecord {
+  const cleanNis = (session.nis || session.studentId || '').trim();
+  const cleanExamId = (session.examId || 'ex-mat-2026').trim();
+  const detId = buildDeterministicSessionId(cleanNis, cleanExamId);
+  const existing = getPendingSubmissions();
+  const prev = existing.find(item => item.id === detId);
+  const record: PendingSubmissionRecord = {
+    id: detId,
+    nis: cleanNis,
+    examId: cleanExamId,
+    totalQuestions,
+    session,
+    payload,
+    queuedAt: prev?.queuedAt || Date.now(),
+    attempts: (prev?.attempts || 0) + 1,
+    lastError,
+  };
+  const next = [...existing.filter(item => item.id !== detId), record];
+  savePendingSubmissionsList(next);
+  return record;
+}
+
+export function removePendingSubmission(nis: string, examId: string): void {
+  const cleanNis = (nis || '').trim();
+  const cleanExamId = (examId || '').trim();
+  const detId = buildDeterministicSessionId(cleanNis, cleanExamId);
+  const existing = getPendingSubmissions();
+  const next = existing.filter(
+    item => item.id !== detId && !(item.nis.trim() === cleanNis && item.examId.trim() === cleanExamId)
+  );
+  if (next.length !== existing.length) {
+    savePendingSubmissionsList(next);
+  }
+}
+
+let isFlushingPendingSubmissions = false;
+
+export async function flushPendingSubmissionsToSupabase(options?: {
+  filterNis?: string;
+  filterExamId?: string;
+}): Promise<{
+  syncedSessions: StudentExamSession[];
+  remainingCount: number;
+  errors: string[];
+}> {
+  const allQueued = getPendingSubmissions();
+  if (allQueued.length === 0) {
+    return { syncedSessions: [], remainingCount: 0, errors: [] };
+  }
+  if (!isSupabaseConfigured || !supabase) {
+    return { syncedSessions: [], remainingCount: allQueued.length, errors: [] };
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return { syncedSessions: [], remainingCount: allQueued.length, errors: [] };
+  }
+  if (isFlushingPendingSubmissions) {
+    return { syncedSessions: [], remainingCount: allQueued.length, errors: [] };
+  }
+
+  isFlushingPendingSubmissions = true;
+  const syncedSessions: StudentExamSession[] = [];
+  const errors: string[] = [];
+
+  try {
+    const targets = allQueued.filter(item => {
+      if (options?.filterNis && item.nis.trim() !== options.filterNis.trim()) return false;
+      if (options?.filterExamId && item.examId.trim() !== options.filterExamId.trim()) return false;
+      return true;
+    });
+
+    for (const item of targets) {
+      try {
+        const freshPayload: Partial<SupabaseExamSessionRow> = {
+          ...item.payload,
+          updated_at: new Date().toISOString(),
+        };
+        const { error } = await upsertCompactSubmitRow(freshPayload);
+        if (!error) {
+          removePendingSubmission(item.nis, item.examId);
+          syncedSessions.push(item.session);
+        } else {
+          const msg = formatSupabaseError(error);
+          errors.push(msg);
+          if (!isNetworkFailureError(error)) {
+            console.warn('[CBT Queue] Non-network error flushing queued submission:', msg);
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        errors.push(msg);
+      }
+    }
+  } finally {
+    isFlushingPendingSubmissions = false;
+  }
+
+  return {
+    syncedSessions,
+    remainingCount: getPendingSubmissions().length,
+    errors,
+  };
+}
+
+/**
  * 1. SUBMIT EXAM (Siswa -> Supabase -> Operator/Guru)
- * Explicitly computes final score, answered_count, status='completed', and submitted_at.
- * Writes directly to Supabase via supabaseClient.ts (no /api/ local fallback).
- * Surfaces the exact Supabase error.message on failure.
+ * - Compact payload (only essential columns & non-empty answers) for 1-bar / Edge networks
+ * - Automatic retry up to 4 attempts with exponential backoff (1s, 2s, 4s) on transient network errors
+ * - Automatic offline queue fallback (`cbt_pending_submissions`) if all 4 retries fail
  */
 export async function submitExamToSupabase(params: {
   session: StudentExamSession;
   questions: Question[];
   exam: ExamSchedule;
   forcedStatus?: 'completed' | 'force_submitted';
+  onRetryStatus?: (attempt: number, maxAttempts: number, statusMessage: string) => void;
 }): Promise<SubmitExamResult> {
-  const { session, questions, exam, forcedStatus = 'completed' } = params;
+  const { session, questions, exam, forcedStatus = 'completed', onRetryStatus } = params;
+  const compactAnswers = buildCompactAnswersJson(session.answers || {});
   const { scorePg, finalScore } = calculateProvisionalScore(
     questions,
-    session.answers || {},
+    compactAnswers,
     session.scoreEssay || 0
   );
   const nowIso = new Date().toISOString();
@@ -355,6 +677,9 @@ export async function submitExamToSupabase(params: {
     examId: exam.id,
     examTitle: exam.title,
     status: forcedStatus,
+    answers: compactAnswers,
+    answeredCount: countAnsweredQuestions(compactAnswers),
+    totalQuestions: questions.length,
     submittedAt: nowIso,
     updatedAt: nowIso,
     timeRemainingSeconds: 0,
@@ -379,42 +704,102 @@ export async function submitExamToSupabase(params: {
       session: completedSession,
       source: 'supabase',
       error: errMsg,
+      isNetworkError: false,
+      queuedOffline: false,
+      attemptsUsed: 0,
     };
   }
 
-  try {
-    const row = mapSessionToSupabaseRow(completedSession, questions.length);
-    const { data, error } = await upsertSessionRow(row);
+  const compactRow = buildCompactSubmitRow(completedSession, questions.length);
+  const MAX_ATTEMPTS = 4;
+  const RETRY_DELAYS_MS = [1000, 2000, 4000];
+  let lastRawError = '';
+  let lastWasNetworkError = false;
 
-    if (error) {
-      const exactMessage = formatSupabaseError(error);
-      console.error('[Supabase] submitExam upsert failed:', error);
-      return {
-        success: false,
-        session: completedSession,
-        source: 'supabase',
-        error: exactMessage,
-      };
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    onRetryStatus?.(
+      attempt,
+      MAX_ATTEMPTS,
+      attempt === 1
+        ? 'Mengirim lembar jawaban ke server... (Percobaan 1/4)'
+        : `Menghubungkan ke server... (Percobaan ${attempt}/${MAX_ATTEMPTS})`
+    );
+
+    try {
+      const { error } = await upsertCompactSubmitRow({
+        ...compactRow,
+        updated_at: new Date().toISOString(),
+      });
+
+      if (!error) {
+        removePendingSubmission(completedSession.nis, completedSession.examId);
+        return {
+          success: true,
+          session: completedSession,
+          source: 'supabase',
+          attemptsUsed: attempt,
+        };
+      }
+
+      lastWasNetworkError = isNetworkFailureError(error);
+      lastRawError = formatSupabaseError(error);
+
+      if (!lastWasNetworkError) {
+        // Real database/SQL/RLS error: do not mask or retry blindly; surface exact message
+        console.error('[Supabase] submitExam database error:', error);
+        return {
+          success: false,
+          session: completedSession,
+          source: 'supabase',
+          error: lastRawError,
+          isNetworkError: false,
+          queuedOffline: false,
+          attemptsUsed: attempt,
+        };
+      }
+    } catch (err) {
+      lastWasNetworkError = isNetworkFailureError(err);
+      lastRawError = err instanceof Error ? err.message : String(err);
+
+      if (!lastWasNetworkError) {
+        console.error('[Supabase] submitExam unexpected error:', err);
+        return {
+          success: false,
+          session: completedSession,
+          source: 'supabase',
+          error: lastRawError,
+          isNetworkError: false,
+          queuedOffline: false,
+          attemptsUsed: attempt,
+        };
+      }
     }
 
-    const confirmedSession = data
-      ? mapSupabaseRowToSession(data as SupabaseExamSessionRow)
-      : completedSession;
-    return {
-      success: true,
-      session: confirmedSession,
-      source: 'supabase',
-    };
-  } catch (err) {
-    const exactMessage = err instanceof Error ? err.message : String(err);
-    console.error('[Supabase] submitExam unexpected error:', err);
-    return {
-      success: false,
-      session: completedSession,
-      source: 'supabase',
-      error: exactMessage,
-    };
+    // Transient network error -> wait exponential backoff (1s, 2s, 4s) before next retry
+    if (attempt < MAX_ATTEMPTS) {
+      const delay = RETRY_DELAYS_MS[attempt - 1] ?? 4000;
+      onRetryStatus?.(
+        attempt + 1,
+        MAX_ATTEMPTS,
+        `Sinyal terganggu, mencoba ulang dalam ${Math.round(delay / 1000)} detik... (Percobaan ${attempt + 1}/${MAX_ATTEMPTS})`
+      );
+      await waitMs(delay);
+    }
   }
+
+  // All 4 attempts failed due to network interruption -> save safely to offline queue (`cbt_pending_submissions`)
+  enqueuePendingSubmission(completedSession, compactRow, questions.length, lastRawError);
+  console.warn('[Supabase] submitExam queued offline after 4 network attempts:', lastRawError);
+
+  return {
+    success: false,
+    session: completedSession,
+    source: 'supabase',
+    error: FRIENDLY_OFFLINE_SUBMIT_MESSAGE,
+    isNetworkError: true,
+    queuedOffline: true,
+    attemptsUsed: MAX_ATTEMPTS,
+  };
 }
 
 /**

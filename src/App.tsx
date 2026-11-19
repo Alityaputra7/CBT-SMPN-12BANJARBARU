@@ -63,7 +63,9 @@ import {
   upsertExamScheduleToSupabase,
   upsertMultipleExamSchedulesToSupabase,
   deleteExamScheduleFromSupabase,
-  subscribeToExamSchedulesRealtime
+  subscribeToExamSchedulesRealtime,
+  getPendingSubmissions,
+  flushPendingSubmissionsToSupabase
 } from './services/supabaseExamService';
 import { isExamMatchingStudentClass } from './utils/classGroups';
 import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
@@ -76,7 +78,7 @@ import { OperatorDashboard } from './components/operator/OperatorDashboard';
 import { GuruDashboard } from './components/guru/GuruDashboard';
 import { SiswaExamView } from './components/siswa/SiswaExamView';
 import { SecurityAndDeployGuide } from './components/common/SecurityAndDeployGuide';
-import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, X } from 'lucide-react';
+import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, WifiOff, X } from 'lucide-react';
 
 export default function App() {
   // App State with permanent local storage persistence
@@ -176,6 +178,7 @@ export default function App() {
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('id-ID'));
   const [syncFeedbackMessage, setSyncFeedbackMessage] = useState<string | null>(null);
   const [supabaseSyncError, setSupabaseSyncError] = useState<string | null>(null);
+  const [pendingSubmissionsCount, setPendingSubmissionsCount] = useState<number>(() => getPendingSubmissions().length);
 
   // Cross-device sync tracking (ensures mobile phones and laptops stay 100% in sync)
   const lastKnownVersion = useRef<number>(1);
@@ -621,6 +624,73 @@ export default function App() {
     return () => {
       unsubscribeSchedules();
       clearInterval(schedulePollInterval);
+    };
+  }, []);
+
+  // 1d. Offline Submission Queue Auto-Sync (`cbt_pending_submissions`):
+  // Listens to `window` online event AND polls every 5 seconds to automatically deliver queued exam submissions
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    let cancelled = false;
+    const runPendingQueueFlush = async () => {
+      if (cancelled) return;
+      const queued = getPendingSubmissions();
+      setPendingSubmissionsCount(queued.length);
+      if (queued.length === 0) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
+      const res = await flushPendingSubmissionsToSupabase();
+      if (cancelled) return;
+      setPendingSubmissionsCount(res.remainingCount);
+
+      if (res.syncedSessions.length > 0) {
+        const merged = reconcileSessionsWithStudents(
+          studentsRef.current,
+          res.syncedSessions,
+          examsRef.current[0] || INITIAL_EXAMS[0],
+          sessionsRef.current
+        );
+        sessionsRef.current = merged;
+        setSessions(merged);
+        saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+
+        // If the currently logged-in student's active exam was just delivered, clear active_exam_id
+        const activeStudent = currentStudentRef.current;
+        if (activeStudent) {
+          const matchedActive = res.syncedSessions.some(
+            s =>
+              (s.nis.trim() === activeStudent.nis.trim() || s.studentId === activeStudent.id) &&
+              s.examId === selectedExamIdRef.current
+          );
+          if (matchedActive) {
+            clearActiveExamFromPersistedStudentSession();
+          }
+        }
+
+        clearSupabaseErrorNotification();
+        triggerSyncNotification(
+          `Koneksi pulih! ${res.syncedSessions.length} lembar jawaban tertunda berhasil dikirim otomatis ke server.`
+        );
+      }
+    };
+
+    const handleWindowOnline = () => {
+      void runPendingQueueFlush();
+    };
+
+    window.addEventListener('online', handleWindowOnline);
+    const queuePollInterval = setInterval(() => {
+      void runPendingQueueFlush();
+    }, 5000);
+
+    // Run once on mount in case student reopened browser after offline submit
+    void runPendingQueueFlush();
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleWindowOnline);
+      clearInterval(queuePollInterval);
     };
   }, []);
 
@@ -1885,6 +1955,22 @@ export default function App() {
           >
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {/* Offline Pending Submissions Queue Banner (Global) */}
+      {pendingSubmissionsCount > 0 && activeSection !== 'siswa' && (
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 sm:max-w-md z-50 bg-amber-950 text-amber-50 px-4 py-3 rounded-xl shadow-2xl border border-amber-500 flex items-center gap-3">
+          <WifiOff className="w-5 h-5 text-amber-400 shrink-0" />
+          <div className="text-xs flex-1">
+            <span className="font-bold text-white block">
+              {pendingSubmissionsCount} Jawaban Tersimpan di Antrean Lokal
+            </span>
+            <span className="text-[11px] text-amber-200">
+              Akan dikirim otomatis ke server begitu koneksi internet pulih.
+            </span>
+          </div>
+          <RefreshCw className="w-4 h-4 text-amber-300 animate-spin shrink-0" />
         </div>
       )}
 
