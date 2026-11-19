@@ -67,6 +67,7 @@ interface SiswaExamViewProps {
   onExitExam: () => void;
   onSupabaseError?: (message: string) => void;
   onSupabaseSuccess?: () => void;
+  onRefreshSchedules?: () => Promise<void>;
 }
 
 export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
@@ -81,7 +82,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   schoolSetting,
   onExitExam,
   onSupabaseError,
-  onSupabaseSuccess
+  onSupabaseSuccess,
+  onRefreshSchedules
 }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(session.currentQuestionIndex || 0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -92,6 +94,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [syncErrorBanner, setSyncErrorBanner] = useState<string | null>(null);
   const [isCheckingUnlock, setIsCheckingUnlock] = useState(false);
+  const [isRefreshingSchedule, setIsRefreshingSchedule] = useState(false);
   const [unlockCheckNotice, setUnlockCheckNotice] = useState<{
     type: 'info' | 'warning' | 'error';
     message: string;
@@ -153,6 +156,24 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }, 1000);
     return () => clearInterval(clockTimer);
   }, []);
+
+  // Always pull fresh exam schedules from Supabase when student views the readiness / schedule screen
+  useEffect(() => {
+    if (!hasStarted && onRefreshSchedules) {
+      void onRefreshSchedules();
+    }
+  }, [hasStarted, student.nis]);
+
+  const handleManualRefreshSchedule = async () => {
+    if (!onRefreshSchedules) return;
+    setIsRefreshingSchedule(true);
+    try {
+      await onRefreshSchedules();
+      setNowTime(new Date());
+    } finally {
+      setIsRefreshingSchedule(false);
+    }
+  };
 
   // Real-time schedule validation (strict time window enforcement)
   const scheduleCheck = validateExamSchedule(exam, nowTime);
@@ -862,6 +883,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {studentEligibleExams.map(ex => {
                   const isSelected = ex.id === exam.id;
+                  const exCheck = validateExamSchedule(ex, nowTime);
                   const count = questionBank.questions.filter(q => 
                     q.subjectId === ex.subjectId && isQuestionMatchingClass(q.classId, q.grade, student.classId)
                   ).length;
@@ -879,15 +901,23 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                           : 'border-slate-200 bg-white hover:bg-slate-50'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-slate-900">{ex.subjectName}</span>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold ${
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="text-xs font-bold text-slate-900 truncate">{ex.subjectName}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold shrink-0 ${
                           isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
                         }`}>
                           {count} Soal
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{ex.title}</p>
+                      <div className="flex items-center justify-between gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">
+                        <span className="text-[10px] font-mono text-slate-500">
+                          {ex.date} · {ex.startTime}-{ex.endTime}
+                        </span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${exCheck.badgeClass}`}>
+                          {exCheck.canStart ? 'AKTIF' : exCheck.statusBadge}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
@@ -896,7 +926,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           );
         })()}
 
-        {/* 1. Schedule Timing Verification Card (Strict Schedule Window) */}
+        {/* 1. Schedule Timing Verification Card (Strict Schedule Window — Live from Supabase) */}
         <div className={`rounded-xl p-4 border transition-all text-xs space-y-3 ${
           scheduleCheck.canStart 
             ? 'bg-emerald-50/70 border-emerald-200' 
@@ -904,14 +934,28 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               ? 'bg-amber-50/80 border-amber-200' 
               : 'bg-rose-50/80 border-rose-200'
         }`}>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 font-bold">
               <Calendar className="w-4 h-4 text-slate-700" />
               <span className="text-slate-900">Jadwal Pelaksanaan Ujian</span>
             </div>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs ${scheduleCheck.badgeClass}`}>
-              {scheduleCheck.statusBadge}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {onRefreshSchedules && (
+                <button
+                  type="button"
+                  onClick={() => void handleManualRefreshSchedule()}
+                  disabled={isRefreshingSchedule}
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white hover:bg-slate-50 text-blue-700 border border-blue-200 shadow-2xs transition-colors cursor-pointer disabled:opacity-60"
+                  title="Ambil jadwal terbaru langsung dari Supabase"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRefreshingSchedule ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingSchedule ? 'Memuat...' : 'Refresh Jadwal'}</span>
+                </button>
+              )}
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shadow-2xs ${scheduleCheck.badgeClass}`}>
+                {scheduleCheck.statusBadge}
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">

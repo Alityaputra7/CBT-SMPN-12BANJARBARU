@@ -61,10 +61,13 @@ export const validateExamSchedule = (
   const currentTimeStr = `${currentHour}:${currentMinute}`;
   const currentTimeString = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-  // Fallback defaults if not set on exam
-  const examDate = exam.date || currentDateStr;
-  const startTime = exam.startTime || '07:30';
-  const endTime = exam.endTime || '12:00';
+  // Normalize date (YYYY-MM-DD) and time (HH:MM) from Supabase or form inputs
+  const rawDate = (exam.date || currentDateStr).trim();
+  const examDate = rawDate.length >= 10 ? rawDate.slice(0, 10) : currentDateStr;
+  const rawStart = (exam.startTime || '07:30').trim();
+  const startTime = rawStart.length >= 5 ? rawStart.slice(0, 5) : '07:30';
+  const rawEnd = (exam.endTime || '12:00').trim();
+  const endTime = rawEnd.length >= 5 ? rawEnd.slice(0, 5) : '12:00';
 
   const isToday = examDate === currentDateStr;
   const formattedSchedule = `${formatDateIndo(examDate)} · Pukul ${startTime} - ${endTime} WITA`;
@@ -87,15 +90,18 @@ export const validateExamSchedule = (
     };
   }
 
-  // 2. Check explicit status 'draft'
-  if (exam.status === 'draft') {
+  // 2. Check explicit inactive flag or status 'draft'
+  if (exam.isActive === false || exam.status === 'draft') {
     return {
       canStart: false,
       status: 'cancelled',
-      statusBadge: 'DRAF / BELUM DIRILIS',
+      statusBadge: exam.isActive === false ? 'NONAKTIF' : 'DRAF / BELUM DIRILIS',
       badgeClass: 'bg-rose-100 text-rose-700 border-rose-300',
-      title: 'Jadwal Ujian Masih Draf',
-      message: 'Jadwal pelaksanaan ujian ini masih dalam status draf dan belum dirilis oleh operator.',
+      title: exam.isActive === false ? 'Jadwal Ujian Dinonaktifkan' : 'Jadwal Ujian Masih Draf',
+      message:
+        exam.isActive === false
+          ? 'Jadwal ujian ini sedang dinonaktifkan oleh Operator. Tunggu hingga Operator mengaktifkannya kembali.'
+          : 'Jadwal pelaksanaan ujian ini masih dalam status draf dan belum dirilis oleh operator.',
       formattedSchedule,
       currentTimeString,
       currentDateString: formatDateIndo(currentDateStr),

@@ -1032,3 +1032,372 @@ export function subscribeToStudentSessionLockRealtime(
     client.removeChannel(channel);
   };
 }
+
+/**
+ * ============================================================================
+ * 8. EXAM SCHEDULES (public.cbt_exam_schedules) — SUPABASE SSoT & REALTIME
+ * ============================================================================
+ */
+export interface SupabaseExamScheduleRow {
+  id: string;
+  exam_title: string;
+  subject_id: string;
+  subject_name: string;
+  class_ids?: string[] | string | null;
+  class_names?: string[] | string | null;
+  scheduled_date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  kkm?: number | null;
+  token?: string | null;
+  token_required?: boolean | null;
+  is_active?: boolean | null;
+  status?: string | null;
+  randomize_questions?: boolean | null;
+  randomize_options?: boolean | null;
+  question_bank_id?: string | null;
+  total_questions?: number | null;
+  updated_at?: string | null;
+}
+
+export interface FetchExamSchedulesResult {
+  schedules: ExamSchedule[] | null;
+  error?: string;
+}
+
+export interface ExamScheduleMutationResult {
+  success: boolean;
+  schedule?: ExamSchedule;
+  error?: string;
+  skipped?: boolean;
+}
+
+const CLASS_NAME_TO_ID_MAP: Record<string, string> = {
+  'VII': 'cls-1',
+  '7': 'cls-1',
+  'VIII-A': 'cls-8a',
+  '8A': 'cls-8a',
+  '8-A': 'cls-8a',
+  'VIII-B': 'cls-8b',
+  '8B': 'cls-8b',
+  '8-B': 'cls-8b',
+  'IX': 'cls-9',
+  '9': 'cls-9',
+};
+
+const CLASS_ID_TO_NAME_MAP: Record<string, string> = {
+  'cls-1': 'VII',
+  'cls-8a': 'VIII-A',
+  'cls-8b': 'VIII-B',
+  'cls-9': 'IX',
+};
+
+function parseStringArrayField(raw?: string[] | string | null): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.map(v => String(v || '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.map(v => String(v || '').trim()).filter(Boolean);
+        }
+      } catch {
+        // fallback to comma split
+      }
+    }
+    return trimmed
+      .replace(/^\{|\}$/g, '')
+      .split(',')
+      .map(v => v.replace(/^"|"$/g, '').trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeDateYmd(raw?: string | null): string {
+  if (!raw) return '';
+  const trimmed = String(raw).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    return trimmed.slice(0, 10);
+  }
+  const parsedMs = Date.parse(trimmed);
+  if (!Number.isNaN(parsedMs)) {
+    const d = new Date(parsedMs);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+  return trimmed;
+}
+
+function normalizeTimeHm(raw?: string | null, fallback = '07:30'): string {
+  if (!raw) return fallback;
+  const trimmed = String(raw).trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})/);
+  if (match) {
+    return `${match[1].padStart(2, '0')}:${match[2]}`;
+  }
+  return fallback;
+}
+
+function normalizeExamStatus(rawStatus?: string | null, isActive?: boolean | null): ExamSchedule['status'] {
+  const s = (rawStatus || '').toLowerCase().trim();
+  if (s === 'finished' || s === 'selesai') return 'finished';
+  if (isActive === false) return 'draft';
+  if (s === 'draft') return 'draft';
+  if (s === 'scheduled' || s === 'terjadwal') return 'scheduled';
+  return 'ongoing';
+}
+
+export function mapExamScheduleToSupabaseRow(exam: ExamSchedule): SupabaseExamScheduleRow {
+  const isActive =
+    typeof exam.isActive === 'boolean'
+      ? exam.isActive
+      : exam.status !== 'draft' && exam.status !== 'finished';
+
+  const classIds =
+    Array.isArray(exam.targetClassIds) && exam.targetClassIds.length > 0
+      ? exam.targetClassIds
+      : ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'];
+
+  const classNames =
+    Array.isArray(exam.targetClassNames) && exam.targetClassNames.length > 0
+      ? exam.targetClassNames
+      : classIds.map(id => CLASS_ID_TO_NAME_MAP[id] || id);
+
+  return {
+    id: (exam.id || `ex-${Date.now()}`).trim(),
+    exam_title: (exam.title || '').trim(),
+    subject_id: (exam.subjectId || '').trim(),
+    subject_name: (exam.subjectName || '').trim(),
+    class_ids: classIds,
+    class_names: classNames,
+    scheduled_date: normalizeDateYmd(exam.date),
+    start_time: normalizeTimeHm(exam.startTime, '07:30'),
+    end_time: normalizeTimeHm(exam.endTime, '09:30'),
+    duration_minutes: Math.max(5, Math.round(Number(exam.durationMinutes) || 90)),
+    kkm: Math.max(0, Math.min(100, Math.round(Number(exam.kkm) || 75))),
+    token: exam.token || '',
+    token_required: exam.tokenRequired !== false,
+    is_active: isActive,
+    status: exam.status || (isActive ? 'ongoing' : 'draft'),
+    randomize_questions: exam.randomizeQuestions !== false,
+    randomize_options: exam.randomizeOptions !== false,
+    question_bank_id: exam.questionBankId || `qbank-${exam.subjectId || 'mat'}`,
+    total_questions: Math.max(0, Math.round(Number(exam.totalQuestions) || 0)),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function mapSupabaseRowToExamSchedule(row: SupabaseExamScheduleRow): ExamSchedule {
+  const parsedClassNames = parseStringArrayField(row.class_names);
+  const parsedClassIds = parseStringArrayField(row.class_ids);
+
+  const targetClassIds =
+    parsedClassIds.length > 0
+      ? parsedClassIds
+      : parsedClassNames.length > 0
+        ? parsedClassNames.map(name => CLASS_NAME_TO_ID_MAP[name.toUpperCase()] || name)
+        : ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'];
+
+  const targetClassNames =
+    parsedClassNames.length > 0
+      ? parsedClassNames
+      : targetClassIds.map(id => CLASS_ID_TO_NAME_MAP[id] || id);
+
+  const normalizedStatus = normalizeExamStatus(row.status, row.is_active);
+  const resolvedIsActive =
+    typeof row.is_active === 'boolean'
+      ? row.is_active
+      : normalizedStatus !== 'draft' && normalizedStatus !== 'finished';
+
+  return {
+    id: row.id,
+    title: row.exam_title || `Ujian - ${row.subject_name || 'CBT'}`,
+    subjectId: row.subject_id || '',
+    subjectName: row.subject_name || 'Umum',
+    targetClassIds,
+    targetClassNames,
+    date: normalizeDateYmd(row.scheduled_date),
+    startTime: normalizeTimeHm(row.start_time, '07:30'),
+    endTime: normalizeTimeHm(row.end_time, '09:30'),
+    durationMinutes: Number(row.duration_minutes) || 90,
+    kkm: Number(row.kkm) || 75,
+    randomizeQuestions: row.randomize_questions !== false,
+    randomizeOptions: row.randomize_options !== false,
+    questionBankId: row.question_bank_id || `qbank-${row.subject_id || 'mat'}`,
+    totalQuestions: typeof row.total_questions === 'number' ? row.total_questions : undefined,
+    status: normalizedStatus,
+    tokenRequired: row.token_required !== false,
+    token: row.token || undefined,
+    isActive: resolvedIsActive,
+    updatedAt: row.updated_at || undefined,
+  };
+}
+
+export async function fetchExamSchedulesFromSupabase(): Promise<FetchExamSchedulesResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      schedules: null,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  try {
+    const { data, error } = await supabase
+      .from('cbt_exam_schedules')
+      .select('*')
+      .order('scheduled_date', { ascending: true })
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] fetchExamSchedules failed:', exactMessage);
+      return { schedules: null, error: exactMessage };
+    }
+
+    return {
+      schedules: (data || []).map(row =>
+        mapSupabaseRowToExamSchedule(row as SupabaseExamScheduleRow)
+      ),
+    };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] fetchExamSchedules network error:', exactMessage);
+    return { schedules: null, error: exactMessage };
+  }
+}
+
+export async function upsertExamScheduleToSupabase(
+  exam: ExamSchedule
+): Promise<ExamScheduleMutationResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      success: false,
+      skipped: true,
+      schedule: exam,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  try {
+    const row = mapExamScheduleToSupabaseRow(exam);
+    const { data, error } = await supabase
+      .from('cbt_exam_schedules')
+      .upsert(row, { onConflict: 'id' })
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      const exactMessage = formatSupabaseError(error);
+      console.error('[Supabase] upsertExamSchedule failed:', exactMessage);
+      return { success: false, schedule: exam, error: exactMessage };
+    }
+
+    return {
+      success: true,
+      schedule: data
+        ? mapSupabaseRowToExamSchedule(data as SupabaseExamScheduleRow)
+        : exam,
+    };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] upsertExamSchedule network error:', exactMessage);
+    return { success: false, schedule: exam, error: exactMessage };
+  }
+}
+
+export async function upsertMultipleExamSchedulesToSupabase(
+  exams: ExamSchedule[]
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  if (!isSupabaseConfigured || !supabase || exams.length === 0) {
+    return {
+      success: false,
+      skipped: true,
+      error: exams.length === 0 ? undefined : (supabaseConfigError || 'Supabase belum dikonfigurasi.'),
+    };
+  }
+  try {
+    const rows = exams.map(mapExamScheduleToSupabaseRow);
+    const { error } = await supabase
+      .from('cbt_exam_schedules')
+      .upsert(rows, { onConflict: 'id' });
+
+    if (error) {
+      const exactMessage = formatSupabaseError(error);
+      console.error('[Supabase] batch upsertExamSchedules failed:', exactMessage);
+      return { success: false, error: exactMessage };
+    }
+    return { success: true };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] batch upsertExamSchedules network error:', exactMessage);
+    return { success: false, error: exactMessage };
+  }
+}
+
+export async function deleteExamScheduleFromSupabase(
+  examId: string
+): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      success: false,
+      skipped: true,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  try {
+    const { error } = await supabase
+      .from('cbt_exam_schedules')
+      .delete()
+      .eq('id', examId);
+
+    if (error) {
+      const exactMessage = formatSupabaseError(error);
+      console.error('[Supabase] deleteExamSchedule failed:', exactMessage);
+      return { success: false, error: exactMessage };
+    }
+    return { success: true };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] deleteExamSchedule network error:', exactMessage);
+    return { success: false, error: exactMessage };
+  }
+}
+
+export function subscribeToExamSchedulesRealtime(callbacks: {
+  onChange: () => void;
+  onStatusChange?: (status: string) => void;
+}): () => void {
+  if (!isSupabaseConfigured || !supabase) {
+    return () => {};
+  }
+
+  const client = supabase;
+  const channel = client
+    .channel(`cbt-exam-schedules-realtime-${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'cbt_exam_schedules',
+      },
+      () => {
+        callbacks.onChange();
+      }
+    )
+    .subscribe(status => {
+      callbacks.onStatusChange?.(status);
+    });
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+

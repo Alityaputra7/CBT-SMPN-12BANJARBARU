@@ -65,6 +65,7 @@ import {
   getQuestionClassLabel 
 } from '../../utils/classGroups';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
+import { formatDateIndo, validateExamSchedule } from '../../utils/scheduleValidator';
 import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
 import { unlockStudentSessionInSupabase } from '../../services/supabaseExamService';
 
@@ -78,6 +79,9 @@ interface OperatorDashboardProps {
   onUpdateSubjects: (subjects: Subject[]) => void;
   exams: ExamSchedule[];
   onUpdateExams: (exams: ExamSchedule[]) => void;
+  onSaveExamSchedule?: (exam: ExamSchedule) => Promise<{ success: boolean; error?: string }>;
+  onDeleteExamSchedule?: (examId: string, title: string) => Promise<{ success: boolean; error?: string }>;
+  onRefreshSchedulesFromSupabase?: () => Promise<void>;
   sessions: StudentExamSession[];
   onUpdateSessions: (sessions: StudentExamSession[]) => void;
   schoolSetting: SchoolSetting;
@@ -107,6 +111,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   onUpdateSubjects,
   exams,
   onUpdateExams,
+  onSaveExamSchedule,
+  onDeleteExamSchedule,
+  onRefreshSchedulesFromSupabase,
   sessions,
   onUpdateSessions,
   schoolSetting,
@@ -128,6 +135,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'monitoring' | 'students' | 'teachers' | 'subjects' | 'questions' | 'schedules' | 'results' | 'cards' | 'logs' | 'settings'>('overview');
   const [isUnlockingId, setIsUnlockingId] = useState<string | null>(null);
   const [isRefreshingSupabase, setIsRefreshingSupabase] = useState<boolean>(false);
+  const [isRefreshingSchedules, setIsRefreshingSchedules] = useState<boolean>(false);
+  const [busyScheduleId, setBusyScheduleId] = useState<string | null>(null);
 
   // Reset Exam Results Modal States
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
@@ -278,6 +287,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     if ((activeTab === 'results' || activeTab === 'monitoring') && onRefreshFromSupabase) {
       void onRefreshFromSupabase();
     }
+    if (activeTab === 'schedules' && onRefreshSchedulesFromSupabase) {
+      void onRefreshSchedulesFromSupabase();
+    }
   }, [activeTab]);
 
   const handleManualRefreshSupabase = async () => {
@@ -287,6 +299,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
       await onRefreshFromSupabase();
     } finally {
       setIsRefreshingSupabase(false);
+    }
+  };
+
+  const handleManualRefreshSchedules = async () => {
+    if (!onRefreshSchedulesFromSupabase) return;
+    setIsRefreshingSchedules(true);
+    try {
+      await onRefreshSchedulesFromSupabase();
+    } finally {
+      setIsRefreshingSchedules(false);
     }
   };
 
@@ -484,26 +506,75 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
   };
 
-  // Exam Schedules CRUD
-  const handleSaveExamSchedule = (savedExam: ExamSchedule) => {
-    const exists = exams.some(e => e.id === savedExam.id);
-    let updatedExams: ExamSchedule[];
-    if (exists) {
-      updatedExams = exams.map(e => e.id === savedExam.id ? savedExam : e);
-    } else {
-      updatedExams = [...exams, savedExam];
+  // Exam Schedules CRUD (directly persisted to Supabase cbt_exam_schedules)
+  const handleSaveExamSchedule = async (savedExam: ExamSchedule): Promise<{ success: boolean; error?: string }> => {
+    if (onSaveExamSchedule) {
+      const res = await onSaveExamSchedule(savedExam);
+      if (res.success) {
+        onAddAuditLog(
+          'SIMPAN_JADWAL_UJIAN',
+          `Menyimpan jadwal ujian ke Supabase: ${savedExam.title} (${savedExam.date} ${savedExam.startTime}-${savedExam.endTime})`
+        );
+        setShowExamScheduleModal(false);
+        setEditingExamSchedule(null);
+      }
+      return res;
     }
+
+    const exists = exams.some(e => e.id === savedExam.id);
+    const updatedExams = exists
+      ? exams.map(e => (e.id === savedExam.id ? savedExam : e))
+      : [...exams, savedExam];
     onUpdateExams(updatedExams);
     onAddAuditLog('SIMPAN_JADWAL_UJIAN', `Menyimpan jadwal ujian: ${savedExam.title}`);
     setShowExamScheduleModal(false);
     setEditingExamSchedule(null);
-    alert(`Jadwal ujian "${savedExam.title}" berhasil disimpan.`);
+    return { success: true };
   };
 
-  const handleDeleteExam = (exId: string, title: string) => {
-    if (confirm(`Hapus jadwal ujian ${title}?`)) {
-      onUpdateExams(exams.filter(e => e.id !== exId));
-      onAddAuditLog('HAPUS_JADWAL_UJIAN', `Menghapus jadwal ujian: ${title}`);
+  const handleToggleExamActive = async (ex: ExamSchedule) => {
+    const currentlyActive = ex.isActive !== false && ex.status !== 'draft' && ex.status !== 'finished';
+    const nextIsActive = !currentlyActive;
+    const updatedExam: ExamSchedule = {
+      ...ex,
+      isActive: nextIsActive,
+      status: nextIsActive ? 'ongoing' : 'draft',
+      updatedAt: new Date().toISOString()
+    };
+
+    setBusyScheduleId(ex.id);
+    try {
+      if (onSaveExamSchedule) {
+        const res = await onSaveExamSchedule(updatedExam);
+        if (res.success) {
+          onAddAuditLog(
+            nextIsActive ? 'AKTIFKAN_JADWAL_UJIAN' : 'NONAKTIFKAN_JADWAL_UJIAN',
+            `${nextIsActive ? 'Mengaktifkan' : 'Menonaktifkan'} jadwal ujian: ${ex.title}`
+          );
+        }
+      } else {
+        onUpdateExams(exams.map(item => (item.id === ex.id ? updatedExam : item)));
+      }
+    } finally {
+      setBusyScheduleId(null);
+    }
+  };
+
+  const handleDeleteExam = async (exId: string, title: string) => {
+    if (!confirm(`Hapus jadwal ujian "${title}" secara permanen dari Supabase?`)) return;
+    setBusyScheduleId(exId);
+    try {
+      if (onDeleteExamSchedule) {
+        const res = await onDeleteExamSchedule(exId, title);
+        if (res.success) {
+          onAddAuditLog('HAPUS_JADWAL_UJIAN', `Menghapus jadwal ujian dari Supabase: ${title}`);
+        }
+      } else {
+        onUpdateExams(exams.filter(e => e.id !== exId));
+        onAddAuditLog('HAPUS_JADWAL_UJIAN', `Menghapus jadwal ujian: ${title}`);
+      }
+    } finally {
+      setBusyScheduleId(null);
     }
   };
 
@@ -1879,29 +1950,69 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         </div>
       )}
 
-      {/* TAB 5: JADWAL UJIAN (ALL SUBJECTS) */}
+      {/* TAB 5: JADWAL UJIAN (ALL SUBJECTS — SUPABASE REALTIME SSoT) */}
       {activeTab === 'schedules' && (
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
             <div>
-              <h3 className="text-base font-bold text-slate-900">
-                Jadwal Ujian Semua Mata Pelajaran
-              </h3>
-              <p className="text-xs text-slate-500">
-                Buat dan kelola jadwal ujian untuk semua mata pelajaran sekolah bagi kelas 7, 8A, 8B, dan 9.
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-bold text-slate-900">
+                  Jadwal Ujian Semua Mata Pelajaran
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border text-emerald-700 bg-emerald-50 border-emerald-200">
+                  <Radio className="w-3 h-3 animate-pulse" />
+                  {isSupabaseConfigured ? 'Supabase Realtime Sync' : 'Mode Lokal'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Perubahan tanggal, jam, atau status aktif langsung tersimpan ke Supabase dan memperbarui perangkat HP siswa secara otomatis.
               </p>
             </div>
-            <button
-              onClick={() => {
-                setEditingExamSchedule(null);
-                setShowExamScheduleModal(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              + Input Pelajaran yang Diujikan
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              {onRefreshSchedulesFromSupabase && (
+                <button
+                  type="button"
+                  onClick={() => void handleManualRefreshSchedules()}
+                  disabled={isRefreshingSchedules}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isRefreshingSchedules ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshingSchedules ? 'Memuat...' : 'Refresh Jadwal'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingExamSchedule(null);
+                  setShowExamScheduleModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                + Input Pelajaran yang Diujikan
+              </button>
+            </div>
           </div>
+
+          {!isSupabaseConfigured && supabaseConfigError && (
+            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Konfigurasi Supabase Belum Aktif:</span>
+                <span className="font-mono text-[11px] break-words">{supabaseConfigError}</span>
+              </div>
+            </div>
+          )}
+
+          {supabaseError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-900 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Gagal Sinkronisasi Jadwal dengan Supabase:</span>
+                <span className="font-mono text-[11px] break-words">{supabaseError}</span>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {exams.length === 0 ? (
@@ -1911,61 +2022,85 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 <p className="text-xs text-slate-400 mt-1">Klik tombol "+ Input Pelajaran yang Diujikan" di atas untuk menambahkan jadwal ujian baru.</p>
               </div>
             ) : (
-              exams.map(ex => (
-              <div key={ex.id} className="p-4 border border-slate-200 rounded-xl space-y-3 bg-slate-50/40">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
-                      {ex.subjectName}
-                    </span>
-                    <h4 className="text-sm font-bold text-slate-900">{ex.title}</h4>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      {ex.status}
-                    </span>
-                    <button
-                      onClick={() => {
-                        setEditingExamSchedule(ex);
-                        setShowExamScheduleModal(true);
-                      }}
-                      className="p-1 text-slate-500 hover:text-blue-700 rounded"
-                      title="Edit Jadwal"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteExam(ex.id, ex.title)}
-                      className="p-1 text-slate-400 hover:text-rose-600 rounded"
-                      title="Hapus Jadwal"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
+              exams.map(ex => {
+                const liveCheck = validateExamSchedule(ex);
+                const isExamActive = ex.isActive !== false && ex.status !== 'draft' && ex.status !== 'finished';
+                const isBusy = busyScheduleId === ex.id;
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
-                  <div>
-                    <span className="text-slate-400 block">Kelas Target:</span>
-                    <span className="font-medium text-slate-800">{ex.targetClassNames.join(', ')}</span>
+                return (
+                  <div key={ex.id} className={`p-4 border rounded-xl space-y-3 transition-colors ${isExamActive ? 'border-slate-200 bg-slate-50/40' : 'border-slate-200 bg-slate-100/70 opacity-85'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                          {ex.subjectName}
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-900 leading-snug">{ex.title}</h4>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${liveCheck.badgeClass}`}>
+                          {liveCheck.statusBadge}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleToggleExamActive(ex)}
+                          className={`px-2 py-1 text-[10px] font-semibold rounded border transition-colors cursor-pointer disabled:opacity-50 ${
+                            isExamActive
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                          }`}
+                          title={isExamActive ? 'Nonaktifkan jadwal ini' : 'Aktifkan jadwal ini'}
+                        >
+                          {isBusy ? '...' : isExamActive ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => {
+                            setEditingExamSchedule(ex);
+                            setShowExamScheduleModal(true);
+                          }}
+                          className="p-1 text-slate-500 hover:text-blue-700 rounded cursor-pointer"
+                          title="Edit Jadwal"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => void handleDeleteExam(ex.id, ex.title)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer"
+                          title="Hapus Jadwal"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                      <div>
+                        <span className="text-slate-400 block">Tanggal Pelaksanaan:</span>
+                        <span className="font-semibold text-slate-900">{formatDateIndo(ex.date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Waktu & Durasi:</span>
+                        <span className="font-mono font-semibold text-blue-700">{ex.startTime} - {ex.endTime} WITA ({ex.durationMinutes}m)</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Kelas Target:</span>
+                        <span className="font-medium text-slate-800">{ex.targetClassNames.join(', ')}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">KKM & Pengacakan:</span>
+                        <span className="font-medium text-slate-800">
+                          KKM {ex.kkm} · {ex.randomizeQuestions ? 'Soal ON' : 'Soal OFF'} · {ex.randomizeOptions ? 'Opsi ON' : 'Opsi OFF'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-slate-400 block">Waktu & Durasi:</span>
-                    <span className="font-medium text-slate-800">{ex.startTime} - {ex.endTime} ({ex.durationMinutes}m)</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">KKM Kelulusan:</span>
-                    <span className="font-medium text-slate-800">{ex.kkm}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">Pengacakan:</span>
-                    <span className="font-medium text-slate-800">
-                      {ex.randomizeQuestions ? 'Soal (ON)' : 'Soal (OFF)'} · {ex.randomizeOptions ? 'Opsi (ON)' : 'Opsi (OFF)'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )))}
+                );
+              })
+            )}
           </div>
         </div>
       )}

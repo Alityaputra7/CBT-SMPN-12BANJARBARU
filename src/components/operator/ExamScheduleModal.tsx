@@ -5,7 +5,7 @@ import { ExamSchedule, Subject, ClassRoom } from '../../types/cbt';
 interface ExamScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSaveExam: (exam: ExamSchedule) => void;
+  onSaveExam: (exam: ExamSchedule) => void | Promise<{ success: boolean; error?: string }>;
   subjects: Subject[];
   classes: ClassRoom[];
   initialExam?: ExamSchedule | null;
@@ -31,7 +31,11 @@ export const ExamScheduleModal: React.FC<ExamScheduleModalProps> = ({
   const [kkm, setKkm] = useState<number>(initialExam?.kkm || 75);
   const [randomizeQuestions, setRandomizeQuestions] = useState<boolean>(initialExam?.randomizeQuestions ?? true);
   const [randomizeOptions, setRandomizeOptions] = useState<boolean>(initialExam?.randomizeOptions ?? true);
-  const [status, setStatus] = useState<ExamSchedule['status']>(initialExam?.status || 'ongoing');
+  const [status, setStatus] = useState<ExamSchedule['status']>(
+    initialExam?.isActive === false ? 'draft' : (initialExam?.status || 'ongoing')
+  );
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSubjectChange = (newSubId: string) => {
     setSubjectId(newSubId);
@@ -51,12 +55,17 @@ export const ExamScheduleModal: React.FC<ExamScheduleModalProps> = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving) return;
+    setSaveError(null);
+
     const sub = subjects.find(s => s.id === subjectId);
     const targetClassNames = targetClassIds
       .map(id => classes.find(c => c.id === id)?.name)
       .filter(Boolean) as string[];
+
+    const isActive = status !== 'draft' && status !== 'finished';
 
     const newOrUpdated: ExamSchedule = {
       id: initialExam?.id || `ex-${Date.now()}`,
@@ -72,13 +81,28 @@ export const ExamScheduleModal: React.FC<ExamScheduleModalProps> = ({
       kkm: Number(kkm),
       randomizeQuestions,
       randomizeOptions,
-      questionBankId: initialExam?.questionBankId || 'qbank-mat-7',
+      questionBankId: initialExam?.questionBankId || `qbank-${subjectId || 'mat'}`,
+      totalQuestions: initialExam?.totalQuestions,
       status,
-      tokenRequired: true
+      tokenRequired: true,
+      token: initialExam?.token,
+      isActive,
+      updatedAt: new Date().toISOString()
     };
 
-    onSaveExam(newOrUpdated);
-    onClose();
+    setIsSaving(true);
+    try {
+      const result = await onSaveExam(newOrUpdated);
+      if (result && result.success === false) {
+        setSaveError(result.error || 'Gagal menyimpan jadwal ujian ke Supabase.');
+        return;
+      }
+      onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Terjadi kesalahan saat menyimpan jadwal.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -266,19 +290,28 @@ export const ExamScheduleModal: React.FC<ExamScheduleModalProps> = ({
             </label>
           </div>
 
+          {saveError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-[11px] font-mono break-words">
+              <strong className="font-sans block text-rose-900 mb-0.5">Gagal Menyimpan ke Supabase:</strong>
+              {saveError}
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
+              disabled={isSaving}
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-50 cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm"
+              disabled={isSaving}
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg shadow-sm cursor-pointer"
             >
-              Simpan Jadwal Ujian
+              {isSaving ? 'Menyimpan ke Supabase...' : 'Simpan Jadwal Ujian'}
             </button>
           </div>
         </form>

@@ -143,6 +143,9 @@ export interface ExamSchedule {
   totalQuestions?: number;
   status: ExamStatus;
   tokenRequired: boolean;
+  token?: string;
+  isActive?: boolean;
+  updatedAt?: string;
 }
 
 export interface DynamicToken {

@@ -52,7 +52,12 @@ import {
   syncSessionProgressWithDetails,
   syncMultipleSessionsWithDetails,
   reconcileSessionsWithStudents,
-  buildDeterministicSessionId
+  buildDeterministicSessionId,
+  fetchExamSchedulesFromSupabase,
+  upsertExamScheduleToSupabase,
+  upsertMultipleExamSchedulesToSupabase,
+  deleteExamScheduleFromSupabase,
+  subscribeToExamSchedulesRealtime
 } from './services/supabaseExamService';
 import { isExamMatchingStudentClass } from './utils/classGroups';
 import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
@@ -122,6 +127,7 @@ export default function App() {
     }
     return INITIAL_EXAMS;
   });
+  const [selectedExamId, setSelectedExamId] = useState<string>(() => exams[0]?.id || 'ex-mat-2026');
   const [sessions, setSessions] = useState<StudentExamSession[]>(() => {
     const savedSessions = loadFromStorage<StudentExamSession[] | null>(STORAGE_KEYS.SESSIONS, null);
     const loadedStudents = loadFromStorage<Student[]>(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
@@ -168,6 +174,7 @@ export default function App() {
 
   const studentsRef = useRef<Student[]>(students);
   const examsRef = useRef<ExamSchedule[]>(exams);
+  const hasRemoteSchedulesRef = useRef<boolean>(false);
 
   useEffect(() => {
     studentsRef.current = students;
@@ -177,13 +184,96 @@ export default function App() {
     examsRef.current = exams;
   }, [exams]);
 
+  // Apply authoritative schedules fetched from Supabase (overriding stale localStorage)
+  const applyRemoteSchedules = (remoteSchedules: ExamSchedule[], preferredStudent?: Student | null) => {
+    examsRef.current = remoteSchedules;
+    setExams(remoteSchedules);
+    saveToStorage(STORAGE_KEYS.EXAMS, remoteSchedules);
+
+    const activeStudent = preferredStudent ?? currentStudentRef.current;
+    setSelectedExamId(prevId => {
+      if (remoteSchedules.length === 0) return '';
+      if (activeStudent) {
+        const eligible = remoteSchedules.filter(ex =>
+          isExamMatchingStudentClass(ex, activeStudent.classId, activeStudent.className)
+        );
+        const existingEligible = eligible.find(e => e.id === prevId);
+        // On student login or if previously selected exam is inactive/missing, auto-pick an active exam
+        if (preferredStudent) {
+          if (existingEligible && validateExamSchedule(existingEligible).canStart) {
+            return existingEligible.id;
+          }
+          const activeEligible = eligible.find(ex => validateExamSchedule(ex).canStart);
+          if (activeEligible) return activeEligible.id;
+          if (existingEligible) return existingEligible.id;
+          if (eligible[0]) return eligible[0].id;
+        } else {
+          if (existingEligible) return existingEligible.id;
+          const activeEligible = eligible.find(ex => validateExamSchedule(ex).canStart);
+          if (activeEligible) return activeEligible.id;
+          if (eligible[0]) return eligible[0].id;
+        }
+      }
+      if (remoteSchedules.some(e => e.id === prevId)) return prevId;
+      return remoteSchedules[0]?.id || '';
+    });
+  };
+
+  // Explicit refresh of Exam Schedules directly from Supabase (public.cbt_exam_schedules)
+  const handleRefreshSchedulesFromSupabase = async (options?: {
+    silent?: boolean;
+    forStudent?: Student | null;
+  }): Promise<ExamSchedule[] | null> => {
+    if (!isSupabaseConfigured) return null;
+
+    const res = await fetchExamSchedulesFromSupabase();
+    if (res.error) {
+      if (!options?.silent) {
+        setSupabaseSyncError(`Gagal memuat jadwal ujian dari Supabase: ${res.error}`);
+      }
+      return null;
+    }
+
+    if (res.schedules) {
+      if (res.schedules.length > 0) {
+        hasRemoteSchedulesRef.current = true;
+        applyRemoteSchedules(res.schedules, options?.forStudent);
+        if (!options?.silent) {
+          setSupabaseSyncError(null);
+        }
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+        return res.schedules;
+      }
+      if (hasRemoteSchedulesRef.current) {
+        applyRemoteSchedules([], options?.forStudent);
+        if (!options?.silent) {
+          setSupabaseSyncError(null);
+        }
+        setLastSyncTime(new Date().toLocaleTimeString('id-ID'));
+        return [];
+      }
+    }
+
+    return res.schedules;
+  };
+
   // Explicit refresh from Supabase (used by Operator Monitor Real-Time, Auto-Sync 3s & Rekap Nilai)
   const handleRefreshFromSupabase = async () => {
-    const [supSessionsRes, supLogsRes, serverRes] = await Promise.all([
+    const [supSessionsRes, supLogsRes, supSchedulesRes, serverRes] = await Promise.all([
       isSupabaseConfigured ? fetchExamResultsWithStatusFromSupabase() : Promise.resolve({ sessions: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? fetchViolationLogsWithStatusFromSupabase() : Promise.resolve({ logs: null, error: undefined as string | undefined }),
+      isSupabaseConfigured ? fetchExamSchedulesFromSupabase() : Promise.resolve({ schedules: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? Promise.resolve(null) : fetchServerData(),
     ]);
+
+    if (isSupabaseConfigured && supSchedulesRes.schedules) {
+      if (supSchedulesRes.schedules.length > 0) {
+        hasRemoteSchedulesRef.current = true;
+        applyRemoteSchedules(supSchedulesRes.schedules);
+      } else if (hasRemoteSchedulesRef.current) {
+        applyRemoteSchedules([]);
+      }
+    }
 
     const currentStudents = studentsRef.current;
     const defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
@@ -225,10 +315,21 @@ export default function App() {
       fetchServerData(),
       isSupabaseConfigured ? fetchExamResultsWithStatusFromSupabase() : Promise.resolve({ sessions: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? fetchViolationLogsWithStatusFromSupabase() : Promise.resolve({ logs: null, error: undefined as string | undefined }),
-    ]).then(([serverRes, supSessionsRes, supLogsRes]) => {
+      isSupabaseConfigured ? fetchExamSchedulesFromSupabase() : Promise.resolve({ schedules: null, error: undefined as string | undefined }),
+    ]).then(([serverRes, supSessionsRes, supLogsRes, supSchedulesRes]) => {
       let currentStudentsList = studentsRef.current;
       let defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
       let baseSessions = sessionsRef.current;
+
+      const hasSupabaseSchedules = Boolean(
+        isSupabaseConfigured && supSchedulesRes.schedules && supSchedulesRes.schedules.length > 0
+      );
+
+      if (hasSupabaseSchedules && supSchedulesRes.schedules) {
+        hasRemoteSchedulesRef.current = true;
+        applyRemoteSchedules(supSchedulesRes.schedules);
+        defaultExam = supSchedulesRes.schedules[0];
+      }
 
       if (serverRes && serverRes.success && serverRes.data) {
         isSyncingFromServer.current = true;
@@ -248,7 +349,8 @@ export default function App() {
           setSubjects(reconciled.subjects);
         }
         if (Array.isArray(d.classes)) setClasses(d.classes);
-        if (Array.isArray(d.exams) && d.exams.length > 0) {
+        // Never let local server fallback overwrite schedules fetched from Supabase
+        if (!hasSupabaseSchedules && Array.isArray(d.exams) && d.exams.length > 0) {
           setExams(d.exams);
           examsRef.current = d.exams;
           defaultExam = d.exams[0];
@@ -262,7 +364,9 @@ export default function App() {
 
       if (isSupabaseConfigured && supSessionsRes.error) {
         setSupabaseSyncError(`Gagal memuat data Supabase: ${supSessionsRes.error}`);
-      } else if (supSessionsRes.sessions) {
+      } else if (isSupabaseConfigured && supSchedulesRes.error) {
+        setSupabaseSyncError(`Gagal memuat jadwal ujian Supabase: ${supSchedulesRes.error}`);
+      } else if (supSessionsRes.sessions || hasSupabaseSchedules) {
         setSupabaseSyncError(null);
       }
 
@@ -314,6 +418,26 @@ export default function App() {
       unsubscribe();
     };
   }, [currentRole]);
+
+  // 1c. Global Supabase Realtime + 7s backup polling for Exam Schedules (Operator <-> Siswa live sync)
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+
+    const unsubscribeSchedules = subscribeToExamSchedulesRealtime({
+      onChange: () => {
+        void handleRefreshSchedulesFromSupabase({ silent: true });
+      },
+    });
+
+    const schedulePollInterval = setInterval(() => {
+      void handleRefreshSchedulesFromSupabase({ silent: true });
+    }, 7000);
+
+    return () => {
+      unsubscribeSchedules();
+      clearInterval(schedulePollInterval);
+    };
+  }, []);
 
   // 2. Real-time Auto-Sync 3 Detik (Langsung dari Supabase SSoT saat aktif, fallback ke server lokal jika env belum diset)
   useEffect(() => {
@@ -518,7 +642,8 @@ export default function App() {
   };
 
   // Synchronized exams updater
-  const handleUpdateExams = (newExams: ExamSchedule[]) => {
+  const handleUpdateExams = (newExams: ExamSchedule[], options?: { silentToast?: boolean }) => {
+    examsRef.current = newExams;
     setExams(newExams);
     saveToStorage(STORAGE_KEYS.EXAMS, newExams);
     syncServerUpdates({ exams: newExams });
@@ -575,7 +700,68 @@ export default function App() {
       });
     }
 
-    triggerSyncNotification(`Jadwal ujian diperbarui (${newExams.length} jadwal aktif)`);
+    if (!options?.silentToast) {
+      triggerSyncNotification(`Jadwal ujian diperbarui (${newExams.length} jadwal aktif)`);
+    }
+  };
+
+  // Persist add / edit / toggle-active exam schedule directly to Supabase (cbt_exam_schedules)
+  const handleSaveExamSchedule = async (
+    savedExam: ExamSchedule
+  ): Promise<{ success: boolean; error?: string }> => {
+    const currentList = examsRef.current;
+    const exists = currentList.some(e => e.id === savedExam.id);
+    const updatedExams = exists
+      ? currentList.map(e => (e.id === savedExam.id ? savedExam : e))
+      : [savedExam, ...currentList];
+
+    if (isSupabaseConfigured) {
+      const writeRes = !hasRemoteSchedulesRef.current
+        ? await upsertMultipleExamSchedulesToSupabase(updatedExams)
+        : await upsertExamScheduleToSupabase(savedExam);
+
+      if (!writeRes.success && !writeRes.skipped) {
+        const errMsg = writeRes.error || 'Gagal menyimpan jadwal ujian ke Supabase.';
+        triggerSupabaseErrorNotification(`Gagal menyimpan jadwal ujian ke Supabase: ${errMsg}`);
+        return { success: false, error: errMsg };
+      }
+      hasRemoteSchedulesRef.current = true;
+      clearSupabaseErrorNotification();
+    }
+
+    handleUpdateExams(updatedExams, { silentToast: true });
+    triggerSyncNotification(
+      isSupabaseConfigured
+        ? `Jadwal "${savedExam.title}" tersimpan permanen di Supabase & tersinkron ke perangkat siswa.`
+        : `Jadwal "${savedExam.title}" berhasil diperbarui.`
+    );
+    return { success: true };
+  };
+
+  // Delete exam schedule directly from Supabase (cbt_exam_schedules)
+  const handleDeleteExamSchedule = async (
+    examId: string,
+    title: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    if (isSupabaseConfigured) {
+      const delRes = await deleteExamScheduleFromSupabase(examId);
+      if (!delRes.success && !delRes.skipped) {
+        const errMsg = delRes.error || 'Gagal menghapus jadwal ujian di Supabase.';
+        triggerSupabaseErrorNotification(`Gagal menghapus jadwal ujian di Supabase: ${errMsg}`);
+        return { success: false, error: errMsg };
+      }
+      hasRemoteSchedulesRef.current = true;
+      clearSupabaseErrorNotification();
+    }
+
+    const updatedExams = examsRef.current.filter(e => e.id !== examId);
+    handleUpdateExams(updatedExams, { silentToast: true });
+    triggerSyncNotification(
+      isSupabaseConfigured
+        ? `Jadwal "${title}" berhasil dihapus dari Supabase.`
+        : `Jadwal "${title}" berhasil dihapus.`
+    );
+    return { success: true };
   };
 
   // Synchronized setting updater
@@ -633,6 +819,9 @@ export default function App() {
       });
       saveToStorage(STORAGE_KEYS.EXAMS, updated);
       syncServerUpdates({ questionBank: newBank, exams: updated }).then(syncMetaFromClientPush);
+      if (isSupabaseConfigured && hasRemoteSchedulesRef.current) {
+        void upsertMultipleExamSchedulesToSupabase(updated);
+      }
       return updated;
     });
 
@@ -860,9 +1049,14 @@ export default function App() {
       setActiveSection('guru');
       handleAddAuditLog('LOGIN_GURU', `Guru ${account?.name} berhasil login`);
     } else if (role === 'siswa' && student) {
+      // Immediately fetch fresh exam schedules from Supabase to override any stale phone localStorage
+      if (isSupabaseConfigured) {
+        void handleRefreshSchedulesFromSupabase({ silent: true, forStudent: student });
+      }
+
       // Pick the currently scheduled ongoing exam for this student's class (or first eligible exam)
-      const eligible = exams.filter(ex => isExamMatchingStudentClass(ex, student.classId, student.className));
-      const targetExam = eligible.find(ex => validateExamSchedule(ex).canStart) || eligible[0] || exams[0] || INITIAL_EXAMS[0];
+      const eligible = examsRef.current.filter(ex => isExamMatchingStudentClass(ex, student.classId, student.className));
+      const targetExam = eligible.find(ex => validateExamSchedule(ex).canStart) || eligible[0] || examsRef.current[0] || INITIAL_EXAMS[0];
       if (targetExam) {
         setSelectedExamId(targetExam.id);
       }
@@ -1137,8 +1331,6 @@ export default function App() {
   const studentAvailableExams = currentStudent
     ? exams.filter(ex => isExamMatchingStudentClass(ex, currentStudent.classId, currentStudent.className))
     : exams;
-
-  const [selectedExamId, setSelectedExamId] = useState<string>(() => exams[0]?.id || 'ex-mat-2026');
 
   // Keep currentExam consistent with student's class
   const currentExam = currentStudent
@@ -1496,6 +1688,11 @@ export default function App() {
             onUpdateSubjects={handleUpdateSubjects}
             exams={exams}
             onUpdateExams={handleUpdateExams}
+            onSaveExamSchedule={handleSaveExamSchedule}
+            onDeleteExamSchedule={handleDeleteExamSchedule}
+            onRefreshSchedulesFromSupabase={async () => {
+              await handleRefreshSchedulesFromSupabase();
+            }}
             sessions={sessions}
             onUpdateSessions={handleUpdateSessions}
             schoolSetting={schoolSetting}
@@ -1551,6 +1748,9 @@ export default function App() {
             onExitExam={handleLogout}
             onSupabaseError={triggerSupabaseErrorNotification}
             onSupabaseSuccess={clearSupabaseErrorNotification}
+            onRefreshSchedules={async () => {
+              await handleRefreshSchedulesFromSupabase();
+            }}
           />
         )}
 
