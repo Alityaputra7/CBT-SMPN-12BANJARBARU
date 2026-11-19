@@ -6,6 +6,7 @@ import {
   StudentExamSession,
   StudentExamStatus,
   ViolationType,
+  isSessionCompleted,
 } from '../types/cbt';
 import { supabase, isSupabaseConfigured, supabaseConfigError } from '../lib/supabaseClient';
 import { calculateProvisionalScore } from '../utils/sessionDevice';
@@ -824,6 +825,200 @@ export async function fetchViolationLogsWithStatusFromSupabase(
 export async function fetchViolationLogsFromSupabase(limitCount = 50): Promise<ExamViolationLog[] | null> {
   const res = await fetchViolationLogsWithStatusFromSupabase(limitCount);
   return res.logs;
+}
+
+/**
+ * Merges student answers from Supabase and localStorage backup per question ID,
+ * keeping the union of all answered questions and selecting the newer `updatedAt`
+ * entry when both contain the same question.
+ */
+export function mergeExamAnswers(
+  remoteAnswers?: StudentExamSession['answers'],
+  localAnswers?: StudentExamSession['answers']
+): StudentExamSession['answers'] {
+  const merged: StudentExamSession['answers'] = { ...(remoteAnswers || {}) };
+  if (!localAnswers || typeof localAnswers !== 'object') {
+    return merged;
+  }
+
+  Object.entries(localAnswers).forEach(([qId, localAns]) => {
+    if (!localAns) return;
+    const remoteAns = merged[qId];
+    if (!remoteAns) {
+      merged[qId] = localAns;
+      return;
+    }
+    const localTs = Number(localAns.updatedAt || 0);
+    const remoteTs = Number(remoteAns.updatedAt || 0);
+    const localHasValue =
+      localAns.answer !== '' &&
+      localAns.answer !== undefined &&
+      (!Array.isArray(localAns.answer) || localAns.answer.length > 0);
+    const remoteHasValue =
+      remoteAns.answer !== '' &&
+      remoteAns.answer !== undefined &&
+      (!Array.isArray(remoteAns.answer) || remoteAns.answer.length > 0);
+
+    if (localTs > remoteTs || (localHasValue && !remoteHasValue)) {
+      merged[qId] = localAns;
+    }
+  });
+
+  return merged;
+}
+
+export interface MergedActiveStudentSessionResult {
+  session: StudentExamSession;
+  unlockedOrReset: boolean;
+  isRemoteReset: boolean;
+  isRemoteDone: boolean;
+  needsRemoteBackfill: boolean;
+}
+
+/**
+ * Authoritatively reconciles an active student's session between Supabase (SSoT)
+ * and localStorage backup (especially after browser refresh):
+ * - Operator actions (Reset, Buka Kunci, Paksa Kumpul, Tambah Waktu) ALWAYS win.
+ * - Completed / submitted status in Supabase ALWAYS wins.
+ * - During active/locked exams without Operator unlock, preserves all answers
+ *   (per-question union), current_question_index, tighter remaining timer,
+ *   and max(violation_count) so refresh NEVER resets violations or drops answers.
+ */
+export function mergeActiveStudentSessionWithRemote(params: {
+  local: StudentExamSession;
+  remote: StudentExamSession;
+  defaultDurationSec: number;
+}): MergedActiveStudentSessionResult {
+  const { local, remote, defaultDurationSec } = params;
+
+  const isLocalLocked = Boolean(local.isLocked || local.status === 'locked');
+  const isRemoteUnlocked = !remote.isLocked && remote.status !== 'locked';
+  const isRemoteReset = remote.status === 'not_started' && !remote.isLocked;
+  const isRemoteDone = isSessionCompleted(remote.status);
+  const isAdminIntervention = Boolean(
+    remote.adminActionAt && remote.adminActionAt !== local.adminActionAt
+  );
+
+  const unlockedOrReset =
+    (isLocalLocked && isRemoteUnlocked) ||
+    (local.status !== 'not_started' && isRemoteReset) ||
+    (local.violationsCount > 0 && remote.violationsCount === 0 && isRemoteUnlocked && Boolean(remote.adminActionAt)) ||
+    isAdminIntervention;
+
+  // 1. Operator reset exam -> clean state
+  if (isRemoteReset) {
+    return {
+      session: {
+        ...remote,
+        isLocked: false,
+        lockReason: undefined,
+        violationsCount: 0,
+        answers: remote.answers || {},
+        currentQuestionIndex: 0,
+        timeRemainingSeconds: remote.timeRemainingSeconds || defaultDurationSec,
+      },
+      unlockedOrReset: true,
+      isRemoteReset: true,
+      isRemoteDone: false,
+      needsRemoteBackfill: false,
+    };
+  }
+
+  // 2. Exam already completed / force-submitted in Supabase -> authoritative done state
+  if (isRemoteDone) {
+    return {
+      session: remote,
+      unlockedOrReset,
+      isRemoteReset: false,
+      isRemoteDone: true,
+      needsRemoteBackfill: false,
+    };
+  }
+
+  const mergedAnswers = mergeExamAnswers(remote.answers, local.answers);
+  const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
+  const localUpdatedMs = local.updatedAt ? Date.parse(local.updatedAt) : local.lastHeartbeat || 0;
+  const localIsNewer = localUpdatedMs > remoteUpdatedMs;
+
+  const mergedQuestionIndex = localIsNewer
+    ? Math.max(0, local.currentQuestionIndex ?? remote.currentQuestionIndex ?? 0)
+    : Math.max(0, remote.currentQuestionIndex ?? local.currentQuestionIndex ?? 0);
+
+  const operatorAddedTime = (remote.extraTimeMinutes || 0) > (local.extraTimeMinutes || 0);
+  let mergedTimeRemaining: number;
+  if (operatorAddedTime) {
+    mergedTimeRemaining = remote.timeRemainingSeconds || defaultDurationSec;
+  } else if (remote.timeRemainingSeconds > 0 && local.timeRemainingSeconds > 0) {
+    mergedTimeRemaining = Math.min(remote.timeRemainingSeconds, local.timeRemainingSeconds);
+  } else {
+    mergedTimeRemaining = remote.timeRemainingSeconds || local.timeRemainingSeconds || defaultDurationSec;
+  }
+
+  // 3. Operator explicitly unlocked / cleared violations -> Supabase lock & violation state wins
+  if (unlockedOrReset) {
+    const unlockedSession: StudentExamSession = {
+      ...remote,
+      isLocked: Boolean(remote.isLocked),
+      lockReason: remote.isLocked ? remote.lockReason : undefined,
+      violationsCount: remote.violationsCount || 0,
+      status: remote.isLocked ? 'locked' : remote.status,
+      answers: mergedAnswers,
+      currentQuestionIndex: mergedQuestionIndex,
+      timeRemainingSeconds: mergedTimeRemaining,
+    };
+    const needsBackfill = countAnsweredQuestions(mergedAnswers) > countAnsweredQuestions(remote.answers);
+    return {
+      session: unlockedSession,
+      unlockedOrReset: true,
+      isRemoteReset: false,
+      isRemoteDone: false,
+      needsRemoteBackfill: needsBackfill,
+    };
+  }
+
+  // 4. Normal refresh / active session reconciliation -> never reset violations or lose answers
+  const mergedViolations = Math.max(remote.violationsCount || 0, local.violationsCount || 0);
+  const mergedLocked = Boolean(
+    remote.isLocked || remote.status === 'locked' || local.isLocked || local.status === 'locked'
+  );
+  const mergedStatus: StudentExamStatus = mergedLocked
+    ? 'locked'
+    : remote.status === 'in_progress' || local.status === 'in_progress'
+      ? 'in_progress'
+      : remote.status;
+
+  const mergedSession: StudentExamSession = {
+    ...remote,
+    status: mergedStatus,
+    isLocked: mergedLocked,
+    lockReason: mergedLocked ? (remote.lockReason || local.lockReason) : undefined,
+    violationsCount: mergedViolations,
+    answers: mergedAnswers,
+    currentQuestionIndex: mergedQuestionIndex,
+    timeRemainingSeconds: mergedTimeRemaining,
+    scorePg: localIsNewer && local.scorePg > remote.scorePg ? local.scorePg : remote.scorePg,
+    finalScore: localIsNewer && local.finalScore > remote.finalScore ? local.finalScore : remote.finalScore,
+    isPassed: localIsNewer && local.finalScore > remote.finalScore ? local.isPassed : remote.isPassed,
+    startedAt: remote.startedAt || local.startedAt,
+    isOnline: !mergedLocked,
+    lastHeartbeat: Math.max(remote.lastHeartbeat || 0, local.lastHeartbeat || 0, Date.now()),
+  };
+
+  const needsRemoteBackfill =
+    countAnsweredQuestions(mergedAnswers) > countAnsweredQuestions(remote.answers) ||
+    mergedViolations > (remote.violationsCount || 0) ||
+    mergedLocked !== Boolean(remote.isLocked) ||
+    mergedStatus !== remote.status ||
+    mergedQuestionIndex !== (remote.currentQuestionIndex || 0) ||
+    mergedTimeRemaining < (remote.timeRemainingSeconds || 0);
+
+  return {
+    session: mergedSession,
+    unlockedOrReset: false,
+    isRemoteReset: false,
+    isRemoteDone: false,
+    needsRemoteBackfill,
+  };
 }
 
 /**

@@ -44,8 +44,15 @@ import {
   subscribeToStudentSessionLockRealtime,
   fetchStudentSessionStatusFromSupabase,
   FetchStudentSessionStatusResult,
-  syncSessionProgressWithDetails
+  syncSessionProgressWithDetails,
+  mergeActiveStudentSessionWithRemote
 } from '../../services/supabaseExamService';
+import {
+  loadPersistedStudentSession,
+  savePersistedStudentSession,
+  clearPersistedStudentSession,
+  flushSingleSessionToLocalStorage
+} from '../../utils/dataSync';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 import { 
@@ -85,10 +92,36 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   onSupabaseSuccess,
   onRefreshSchedules
 }) => {
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(session.currentQuestionIndex || 0);
+  const persistedForExam = (() => {
+    const p = loadPersistedStudentSession();
+    if (!p) return null;
+    if (p.student_nis.trim() !== student.nis.trim()) return null;
+    if (p.active_exam_id && p.active_exam_id !== exam.id) return null;
+    return p;
+  })();
+
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() =>
+    Math.max(0, session.currentQuestionIndex ?? persistedForExam?.current_question_index ?? 0)
+  );
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [hasStarted, setHasStarted] = useState(session.status === 'in_progress' || session.isLocked);
-  const [timeRemaining, setTimeRemaining] = useState(session.timeRemainingSeconds || 5400);
+  const [hasStarted, setHasStarted] = useState<boolean>(() =>
+    session.status === 'in_progress' ||
+    session.isLocked ||
+    session.status === 'locked' ||
+    isSessionCompleted(session.status) ||
+    Boolean(persistedForExam?.has_started)
+  );
+  const [timeRemaining, setTimeRemaining] = useState<number>(() => {
+    const defaultSec = (exam.durationMinutes || 90) * 60;
+    const sessTime = session.timeRemainingSeconds;
+    const persistedTime = persistedForExam?.time_remaining_seconds;
+    if (typeof sessTime === 'number' && sessTime > 0 && typeof persistedTime === 'number' && persistedTime > 0) {
+      return Math.min(sessTime, persistedTime);
+    }
+    return (typeof sessTime === 'number' && sessTime > 0 ? sessTime : null) ??
+      (typeof persistedTime === 'number' && persistedTime > 0 ? persistedTime : null) ??
+      defaultSec;
+  });
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -122,6 +155,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<StudentExamSession>(session);
   const timeRemainingRef = useRef<number>(timeRemaining);
+  const currentQuestionIndexRef = useRef<number>(currentQuestionIndex);
+  const hasStartedRef = useRef<boolean>(hasStarted);
+  const isPageUnloadingRef = useRef<boolean>(false);
   const lastViolationAtRef = useRef<number>(0);
 
   useEffect(() => {
@@ -132,7 +168,86 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     timeRemainingRef.current = timeRemaining;
   }, [timeRemaining]);
 
-  // Keep local exam screen synchronized with Operator actions (Reset Akun, Buka Kunci, Paksa Kumpul)
+  useEffect(() => {
+    currentQuestionIndexRef.current = currentQuestionIndex;
+  }, [currentQuestionIndex]);
+
+  useEffect(() => {
+    hasStartedRef.current = hasStarted;
+  }, [hasStarted]);
+
+  // Synchronously persist active student exam snapshot to localStorage (survives page refresh)
+  const persistExamSnapshotLocally = (
+    targetSession: StudentExamSession,
+    startedOverride?: boolean
+  ) => {
+    flushSingleSessionToLocalStorage(targetSession);
+    if (isSessionCompleted(targetSession.status)) {
+      clearPersistedStudentSession();
+      return;
+    }
+    const isStartedNow =
+      typeof startedOverride === 'boolean'
+        ? startedOverride
+        : Boolean(
+            hasStartedRef.current ||
+              targetSession.status === 'in_progress' ||
+              targetSession.isLocked ||
+              targetSession.status === 'locked'
+          );
+    savePersistedStudentSession({
+      role: 'siswa',
+      student_id: student.id,
+      student_nis: student.nis,
+      student_name: student.name,
+      class_id: student.classId,
+      class_name: student.className,
+      active_exam_id: exam.id,
+      active_session_id: targetSession.id,
+      has_started: isStartedNow,
+      current_question_index: targetSession.currentQuestionIndex ?? currentQuestionIndexRef.current,
+      time_remaining_seconds: targetSession.timeRemainingSeconds ?? timeRemainingRef.current,
+      violations_count: targetSession.violationsCount ?? 0,
+      is_locked: Boolean(targetSession.isLocked || targetSession.status === 'locked'),
+      saved_at: Date.now()
+    });
+  };
+
+  // Flush exact timer, current question index, answers, and violation state before browser reload
+  useEffect(() => {
+    const flushBeforeUnload = () => {
+      isPageUnloadingRef.current = true;
+      const latest = sessionRef.current;
+      if (isSessionCompleted(latest.status)) {
+        clearPersistedStudentSession();
+        return;
+      }
+      const snapshot: StudentExamSession = {
+        ...latest,
+        currentQuestionIndex: currentQuestionIndexRef.current,
+        timeRemainingSeconds: timeRemainingRef.current,
+        lastHeartbeat: Date.now(),
+        updatedAt: new Date().toISOString()
+      };
+      persistExamSnapshotLocally(snapshot, hasStartedRef.current);
+    };
+
+    const onPageShow = () => {
+      isPageUnloadingRef.current = false;
+    };
+
+    window.addEventListener('beforeunload', flushBeforeUnload);
+    window.addEventListener('pagehide', flushBeforeUnload);
+    window.addEventListener('pageshow', onPageShow);
+
+    return () => {
+      window.removeEventListener('beforeunload', flushBeforeUnload);
+      window.removeEventListener('pagehide', flushBeforeUnload);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, [student.id, student.nis, student.name, student.classId, student.className, exam.id]);
+
+  // Keep local exam screen synchronized with Operator actions & restored session state
   useEffect(() => {
     if (session.status === 'not_started' && !session.isLocked) {
       setHasStarted(false);
@@ -140,7 +255,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       setShowSubmitConfirm(false);
       setCurrentQuestionIndex(0);
       setTimeRemaining(session.timeRemainingSeconds || exam.durationMinutes * 60);
+    } else if (isSessionCompleted(session.status)) {
+      setHasStarted(true);
+      setViolationAlert(null);
+      clearPersistedStudentSession();
     } else if (session.isLocked || session.status === 'locked') {
+      setHasStarted(true);
       setViolationAlert(null);
     } else if (!session.isLocked && session.status === 'in_progress') {
       setHasStarted(true);
@@ -188,7 +308,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   const currentQ = questions[currentQuestionIndex] || questions[0];
 
-  // Authoritative reconciler: Supabase ALWAYS overrides stale localStorage lock/violation/reset state
+  // Authoritative reconciler: merges Supabase SSoT with localStorage backup on refresh/poll/realtime
+  // Preserves answers, question index, timer, and violations on refresh while honoring Operator unlock/reset
   const applyAuthoritativeRemoteState = (
     res: FetchStudentSessionStatusResult,
     source: 'mount' | 'realtime' | 'poll' | 'manual'
@@ -200,8 +321,31 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const localLatest = sessionRef.current;
     const defaultDurationSec = (exam.durationMinutes || 90) * 60;
 
-    // 1. Row was reset/deleted in Supabase -> clear any stale localStorage lock immediately
+    // 1. No row in Supabase
     if (!res.found || !res.session) {
+      // If student refreshed right after starting while offline / before initial upsert landed, preserve & backfill
+      if (source === 'mount' && localLatest.status === 'in_progress' && !localLatest.isLocked) {
+        setHasStarted(true);
+        if (typeof localLatest.currentQuestionIndex === 'number') {
+          const clampedIdx =
+            questions.length > 0
+              ? Math.max(0, Math.min(questions.length - 1, localLatest.currentQuestionIndex))
+              : Math.max(0, localLatest.currentQuestionIndex);
+          setCurrentQuestionIndex(clampedIdx);
+        }
+        if (localLatest.timeRemainingSeconds > 0) {
+          setTimeRemaining(localLatest.timeRemainingSeconds);
+        }
+        persistExamSnapshotLocally(localLatest, true);
+        if (isSupabaseConfigured) {
+          void syncSessionProgressWithDetails(
+            { ...localLatest, isOnline: true, lastHeartbeat: Date.now() },
+            questions.length
+          );
+        }
+        return { unlocked: false };
+      }
+
       if (
         localLatest.isLocked ||
         localLatest.status !== 'not_started' ||
@@ -227,6 +371,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         };
         sessionRef.current = cleanResetSession;
         onUpdateSession(cleanResetSession, { skipSupabaseMirror: true });
+        persistExamSnapshotLocally(cleanResetSession, false);
         setHasStarted(false);
         setViolationAlert(null);
         setShowSubmitConfirm(false);
@@ -239,19 +384,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
 
     const remote = res.session;
-    const isLocalLocked = localLatest.isLocked || localLatest.status === 'locked';
-    const isRemoteUnlocked = !remote.isLocked && remote.status !== 'locked';
-    const isRemoteReset = remote.status === 'not_started' && !remote.isLocked;
-    const isRemoteDone = isSessionCompleted(remote.status);
-    const isAdminIntervention = Boolean(
-      remote.adminActionAt && remote.adminActionAt !== localLatest.adminActionAt
-    );
-
-    const unlockedOrReset =
-      (isLocalLocked && isRemoteUnlocked) ||
-      (localLatest.status !== 'not_started' && isRemoteReset) ||
-      (localLatest.violationsCount > 0 && remote.violationsCount === 0 && isRemoteUnlocked) ||
-      isAdminIntervention;
+    const mergedResult = mergeActiveStudentSessionWithRemote({
+      local: localLatest,
+      remote,
+      defaultDurationSec,
+    });
+    const {
+      session: nextSess,
+      unlockedOrReset,
+      isRemoteReset,
+      isRemoteDone,
+      needsRemoteBackfill,
+    } = mergedResult;
 
     const remoteUpdatedMs = remote.updatedAt ? Date.parse(remote.updatedAt) : remote.lastHeartbeat || 0;
     const localUpdatedMs = localLatest.updatedAt ? Date.parse(localLatest.updatedAt) : localLatest.lastHeartbeat || 0;
@@ -259,35 +403,19 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const shouldApplyRemote =
       unlockedOrReset ||
       source === 'mount' ||
-      remote.isLocked !== localLatest.isLocked ||
-      remote.status !== localLatest.status ||
-      remote.violationsCount !== localLatest.violationsCount ||
+      nextSess.isLocked !== localLatest.isLocked ||
+      nextSess.status !== localLatest.status ||
+      nextSess.violationsCount !== localLatest.violationsCount ||
+      Object.keys(nextSess.answers || {}).length !== Object.keys(localLatest.answers || {}).length ||
       isRemoteDone ||
       remoteUpdatedMs > localUpdatedMs;
 
     if (shouldApplyRemote) {
-      const nextSess: StudentExamSession = isRemoteReset
-        ? {
-            ...remote,
-            isLocked: false,
-            lockReason: undefined,
-            violationsCount: 0,
-            answers: remote.answers || {},
-            timeRemainingSeconds: remote.timeRemainingSeconds || defaultDurationSec,
-          }
-        : {
-            ...remote,
-            answers:
-              !isRemoteDone &&
-              Object.keys(localLatest.answers || {}).length > Object.keys(remote.answers || {}).length
-                ? localLatest.answers
-                : remote.answers,
-          };
-
       sessionRef.current = nextSess;
       onUpdateSession(nextSess, { skipSupabaseMirror: true });
 
       if (isRemoteReset) {
+        persistExamSnapshotLocally(nextSess, false);
         setHasStarted(false);
         setViolationAlert(null);
         setShowSubmitConfirm(false);
@@ -298,34 +426,59 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       }
 
       if (isRemoteDone) {
+        clearPersistedStudentSession();
         setHasStarted(true);
         setViolationAlert(null);
         setUnlockCheckNotice(null);
         return { unlocked: true, statusText: 'Ujian sudah berstatus selesai di Supabase.' };
       }
 
+      const restoredQuestionIdx =
+        questions.length > 0
+          ? Math.max(0, Math.min(questions.length - 1, nextSess.currentQuestionIndex || 0))
+          : Math.max(0, nextSess.currentQuestionIndex || 0);
+
+      if (source === 'mount' || unlockedOrReset) {
+        setCurrentQuestionIndex(restoredQuestionIdx);
+      }
+      if (nextSess.timeRemainingSeconds > 0) {
+        setTimeRemaining(nextSess.timeRemainingSeconds);
+      }
+
       if (!nextSess.isLocked && nextSess.status !== 'locked') {
-        if (nextSess.status === 'in_progress') {
+        const startedNow = nextSess.status === 'in_progress';
+        if (startedNow) {
           setHasStarted(true);
         }
+        persistExamSnapshotLocally(nextSess, startedNow);
         setViolationAlert(null);
         setUnlockCheckNotice(null);
-        if (nextSess.timeRemainingSeconds > 0) {
-          setTimeRemaining(nextSess.timeRemainingSeconds);
+
+        // If refresh merged newer local answers / tighter timer / online status, sync back to Supabase
+        if (source === 'mount' && isSupabaseConfigured && (needsRemoteBackfill || startedNow)) {
+          void syncSessionProgressWithDetails(
+            { ...nextSess, isOnline: true, lastHeartbeat: Date.now() },
+            questions.length
+          );
         }
+
         if (unlockedOrReset) {
           return { unlocked: true, statusText: 'Kunci ujian telah dibuka oleh Operator!' };
         }
       } else {
+        persistExamSnapshotLocally(nextSess, true);
         setHasStarted(true);
         setViolationAlert(null);
+        if (source === 'mount' && isSupabaseConfigured && needsRemoteBackfill) {
+          void syncSessionProgressWithDetails(nextSess, questions.length);
+        }
       }
     }
 
-    if (remote.isLocked || remote.status === 'locked') {
+    if (nextSess.isLocked || nextSess.status === 'locked') {
       return {
         unlocked: false,
-        statusText: `Status di Supabase masih TERKUNCI (${remote.violationsCount}/${schoolSetting.maxViolations || 3} pelanggaran). Pastikan Operator sudah menekan tombol "Buka Kunci" di Dashboard Operator.`,
+        statusText: `Status di Supabase masih TERKUNCI (${nextSess.violationsCount}/${schoolSetting.maxViolations || 3} pelanggaran). Pastikan Operator sudah menekan tombol "Buka Kunci" di Dashboard Operator.`,
       };
     }
 
@@ -475,6 +628,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       updatedAt: new Date().toISOString()
     };
     updateSessionWithSync(startSession, false);
+    persistExamSnapshotLocally(startSession, true);
     if (isSupabaseConfigured) {
       const syncRes = await syncSessionProgressWithDetails(startSession, questions.length);
       if (!syncRes.success && !syncRes.skipped && syncRes.error) {
@@ -485,7 +639,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
   };
 
-  // Timer countdown
+  // Timer countdown (with lightweight 5-second localStorage timer checkpoint)
   useEffect(() => {
     if (!hasStarted || isSessionCompleted(session.status) || session.isLocked || session.status === 'locked') return;
 
@@ -496,7 +650,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           void handleAutoSubmit('Waktu ujian telah habis');
           return 0;
         }
-        return prev - 1;
+        const nextVal = prev - 1;
+        if (nextVal % 5 === 0) {
+          persistExamSnapshotLocally(
+            {
+              ...sessionRef.current,
+              currentQuestionIndex: currentQuestionIndexRef.current,
+              timeRemainingSeconds: nextVal
+            },
+            true
+          );
+        }
+        return nextVal;
       });
     }, 1000);
 
@@ -529,6 +694,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const maxViolations = schoolSetting.maxViolations || 3;
 
     const handleViolation = (type: ViolationType, details: string) => {
+      if (isPageUnloadingRef.current) return;
       const latestSession = sessionRef.current;
       if (latestSession.isLocked || latestSession.status !== 'in_progress') return;
 
@@ -550,13 +716,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         lockReason: isNowLocked
           ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
           : undefined,
+        currentQuestionIndex: currentQuestionIndexRef.current,
         timeRemainingSeconds: timeRemainingRef.current,
         lastHeartbeat: Date.now(),
         updatedAt: new Date().toISOString()
       };
 
-      // Update local state immediately WITHOUT racing syncSessionProgress, then persist authoritatively via recordViolationToSupabase
+      // Update local state & localStorage immediately WITHOUT racing syncSessionProgress, then persist authoritatively via recordViolationToSupabase
       updateSessionWithSync(updatedSession, false);
+      persistExamSnapshotLocally(updatedSession, true);
       void recordViolationToSupabase({
         session: latestSession,
         violationType: type,
@@ -784,6 +952,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
       // Only transition screen AFTER database persistence is confirmed
       clearSyncError();
+      clearPersistedStudentSession();
       sessionRef.current = result.session;
       onUpdateSession(result.session, { skipSupabaseMirror: true });
       setShowSubmitConfirm(false);

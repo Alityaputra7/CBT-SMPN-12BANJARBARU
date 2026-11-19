@@ -33,7 +33,10 @@ import {
   STORAGE_KEYS, 
   syncStudentSessions, 
   syncClassRoomCounts, 
-  clearCbtStorage 
+  clearCbtStorage,
+  loadPersistedStudentSession,
+  savePersistedStudentSession,
+  clearPersistedStudentSession
 } from './utils/dataSync';
 import { 
   fetchServerData, 
@@ -52,6 +55,7 @@ import {
   syncSessionProgressWithDetails,
   syncMultipleSessionsWithDetails,
   reconcileSessionsWithStudents,
+  mergeActiveStudentSessionWithRemote,
   buildDeterministicSessionId,
   fetchExamSchedulesFromSupabase,
   upsertExamScheduleToSupabase,
@@ -127,7 +131,30 @@ export default function App() {
     }
     return INITIAL_EXAMS;
   });
-  const [selectedExamId, setSelectedExamId] = useState<string>(() => exams[0]?.id || 'ex-mat-2026');
+  // Read persisted active student session once for seamless auto-restore on page refresh
+  const initialPersistedStudentRef = useRef(loadPersistedStudentSession());
+  const resolvedInitialStudent: Student | null = (() => {
+    const persisted = initialPersistedStudentRef.current;
+    if (!persisted) return null;
+    const matched = students.find(
+      s => s.id === persisted.student_id || s.nis.trim() === persisted.student_nis.trim()
+    );
+    if (matched) return matched;
+    return {
+      id: persisted.student_id,
+      nis: persisted.student_nis,
+      name: persisted.student_name || persisted.student_nis,
+      classId: persisted.class_id || 'cls-1',
+      className: persisted.class_name || 'VII',
+      gender: 'L'
+    };
+  })();
+
+  const [selectedExamId, setSelectedExamId] = useState<string>(() => {
+    const persistedExamId = initialPersistedStudentRef.current?.active_exam_id;
+    if (persistedExamId) return persistedExamId;
+    return exams[0]?.id || 'ex-mat-2026';
+  });
   const [sessions, setSessions] = useState<StudentExamSession[]>(() => {
     const savedSessions = loadFromStorage<StudentExamSession[] | null>(STORAGE_KEYS.SESSIONS, null);
     const loadedStudents = loadFromStorage<Student[]>(STORAGE_KEYS.STUDENTS, INITIAL_STUDENTS);
@@ -153,15 +180,18 @@ export default function App() {
   const lastKnownTimestamp = useRef<number>(0);
   const isSyncingFromServer = useRef<boolean>(false);
 
-  // Authentication State (declared early so refs are always current inside background polling)
-  const [currentRole, setCurrentRole] = useState<UserRole | null>(null);
+  // Authentication State (auto-restored from localStorage if student refreshed during active session)
+  const [currentRole, setCurrentRole] = useState<UserRole | null>(() =>
+    resolvedInitialStudent ? 'siswa' : null
+  );
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
-  const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
+  const [currentStudent, setCurrentStudent] = useState<Student | null>(() => resolvedInitialStudent);
   const [showPasswordChangeModal, setShowPasswordChangeModal] = useState<boolean>(false);
 
   const sessionsRef = useRef<StudentExamSession[]>(sessions);
   const currentRoleRef = useRef<UserRole | null>(currentRole);
   const currentStudentRef = useRef<Student | null>(currentStudent);
+  const selectedExamIdRef = useRef<string>(selectedExamId);
 
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -172,9 +202,46 @@ export default function App() {
     currentStudentRef.current = currentStudent;
   }, [currentRole, currentStudent]);
 
+  useEffect(() => {
+    selectedExamIdRef.current = selectedExamId;
+  }, [selectedExamId]);
+
   const studentsRef = useRef<Student[]>(students);
   const examsRef = useRef<ExamSchedule[]>(exams);
   const hasRemoteSchedulesRef = useRef<boolean>(false);
+
+  // Helper to persist or clear active student session in localStorage
+  const persistStudentAuthState = (
+    student: Student,
+    examId: string,
+    session?: StudentExamSession | null
+  ) => {
+    if (session && isSessionCompleted(session.status)) {
+      clearPersistedStudentSession();
+      return;
+    }
+    const resolvedExamId = examId || session?.examId || selectedExamIdRef.current || '';
+    const resolvedSessionId =
+      session?.id || buildDeterministicSessionId(student.nis, resolvedExamId || 'ex-mat-2026');
+    savePersistedStudentSession({
+      role: 'siswa',
+      student_id: student.id,
+      student_nis: student.nis,
+      student_name: student.name,
+      class_id: student.classId,
+      class_name: student.className,
+      active_exam_id: resolvedExamId,
+      active_session_id: resolvedSessionId,
+      has_started: Boolean(
+        session && (session.status === 'in_progress' || session.isLocked || session.status === 'locked')
+      ),
+      current_question_index: session?.currentQuestionIndex ?? 0,
+      time_remaining_seconds: session?.timeRemainingSeconds,
+      violations_count: session?.violationsCount ?? 0,
+      is_locked: Boolean(session?.isLocked || session?.status === 'locked'),
+      saved_at: Date.now(),
+    });
+  };
 
   useEffect(() => {
     studentsRef.current = students;
@@ -370,9 +437,54 @@ export default function App() {
         setSupabaseSyncError(null);
       }
 
-      const hydratedSessions = supSessionsRes.sessions
+      let hydratedSessions = supSessionsRes.sessions
         ? reconcileSessionsWithStudents(currentStudentsList, supSessionsRes.sessions, defaultExam, baseSessions, { isFullSnapshot: true })
         : reconcileSessionsWithStudents(currentStudentsList, baseSessions, defaultExam, []);
+
+      // If a student just refreshed mid-exam, merge their active local backup safely with Supabase
+      // so unsaved answers/timer/violations aren't clobbered while still honoring Operator unlock/reset/completion.
+      const activeStudentOnMount = currentStudentRef.current;
+      if (currentRoleRef.current === 'siswa' && activeStudentOnMount) {
+        const activeExamId = selectedExamIdRef.current || defaultExam.id;
+        const activeExamObj = examsRef.current.find(e => e.id === activeExamId) || defaultExam;
+        const defaultDurationSec = (activeExamObj?.durationMinutes || 90) * 60;
+        const localActive = baseSessions.find(
+          s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+        );
+        const remoteActive = supSessionsRes.sessions?.find(
+          s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+        );
+
+        if (localActive && remoteActive) {
+          const mergedResult = mergeActiveStudentSessionWithRemote({
+            local: localActive,
+            remote: remoteActive,
+            defaultDurationSec,
+          });
+          hydratedSessions = hydratedSessions.map(s =>
+            (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+              ? mergedResult.session
+              : s
+          );
+          if (mergedResult.isRemoteDone) {
+            clearPersistedStudentSession();
+          } else {
+            persistStudentAuthState(activeStudentOnMount, activeExamId, mergedResult.session);
+          }
+        } else if (localActive && !remoteActive && (localActive.status === 'in_progress' || localActive.isLocked)) {
+          const existsInHydrated = hydratedSessions.some(
+            s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+          );
+          hydratedSessions = existsInHydrated
+            ? hydratedSessions.map(s =>
+                (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+                  ? localActive
+                  : s
+              )
+            : [...hydratedSessions, localActive];
+          persistStudentAuthState(activeStudentOnMount, activeExamId, localActive);
+        }
+      }
 
       sessionsRef.current = hydratedSessions;
       setSessions(hydratedSessions);
@@ -550,7 +662,10 @@ export default function App() {
   }, []);
 
   // Navigation: 'overview' | 'operator' | 'guru' | 'siswa' | 'panduan' | 'login'
-  const [activeSection, setActiveSection] = useState<string>('login');
+  // Auto-restore directly into 'siswa' exam view if an active student session is persisted
+  const [activeSection, setActiveSection] = useState<string>(() =>
+    resolvedInitialStudent ? 'siswa' : 'login'
+  );
 
   // Persistence to localStorage: ensures ALL data remains saved across logout & page reload
   useEffect(() => {
@@ -1011,6 +1126,7 @@ export default function App() {
   const handleRestoreFactoryData = () => {
     if (confirm('Pulihkan seluruh basis data ke kondisi awal pabrik resmi SMP Negeri 12 Banjarbaru? Seluruh data 93 siswa resmi dan 9 guru resmi akan dimuat kembali.')) {
       clearCbtStorage();
+      clearPersistedStudentSession();
       resetServerData();
       const freshSessions = createInitialStudentSessions(INITIAL_STUDENTS);
       sessionsRef.current = freshSessions;
@@ -1145,6 +1261,7 @@ export default function App() {
       sessionsRef.current = updatedList;
       setSessions(updatedList);
       saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
+      persistStudentAuthState(student, targetExamId, syncedSession);
       syncSingleSession(syncedSession).then(syncMetaFromClientPush);
 
       if (isSupabaseConfigured) {
@@ -1192,6 +1309,7 @@ export default function App() {
             sessionsRef.current = merged;
             setSessions(merged);
             saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+            persistStudentAuthState(student, targetExamId, hydrated);
             if (!hydrated.isLocked && !isRemoteDone) {
               const writeRes = await syncSessionProgressWithDetails(hydrated);
               if (!writeRes.success && !writeRes.skipped && writeRes.error) {
@@ -1284,6 +1402,9 @@ export default function App() {
     saveToStorage(STORAGE_KEYS.SESSIONS, sessionsRef.current);
     saveToStorage(STORAGE_KEYS.SETTING, schoolSetting);
     saveToStorage(STORAGE_KEYS.LOGS, auditLogs);
+
+    // Clear persisted student auth/exam session ONLY on explicit Logout
+    clearPersistedStudentSession();
 
     currentRoleRef.current = null;
     currentStudentRef.current = null;
@@ -1387,6 +1508,9 @@ export default function App() {
     sessionsRef.current = updated;
     setSessions(updated);
     saveToStorage(STORAGE_KEYS.SESSIONS, updated);
+    if (currentRoleRef.current === 'siswa' && currentStudentRef.current) {
+      persistStudentAuthState(currentStudentRef.current, updatedSession.examId, updatedSession);
+    }
     syncSingleSession(updatedSession).then(syncMetaFromClientPush);
     if (isSupabaseConfigured && !options?.skipSupabaseMirror) {
       void syncSessionProgressWithDetails(updatedSession).then(res => {
@@ -1401,6 +1525,7 @@ export default function App() {
 
   const handleStudentSelectExam = (ex: ExamSchedule) => {
     setSelectedExamId(ex.id);
+    selectedExamIdRef.current = ex.id;
     if (!currentStudent) return;
 
     const deterministicId = buildDeterministicSessionId(currentStudent.nis, ex.id);
@@ -1489,6 +1614,7 @@ export default function App() {
     sessionsRef.current = updatedList;
     setSessions(updatedList);
     saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
+    persistStudentAuthState(currentStudent, ex.id, activeSess);
     syncSingleSession(activeSess).then(syncMetaFromClientPush);
 
     if (isSupabaseConfigured) {
@@ -1520,6 +1646,7 @@ export default function App() {
           sessionsRef.current = merged;
           setSessions(merged);
           saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+          persistStudentAuthState(currentStudent, ex.id, hydrated);
           if (!hydrated.isLocked && !isRemoteDone) {
             const writeRes = await syncSessionProgressWithDetails(hydrated);
             if (!writeRes.success && !writeRes.skipped && writeRes.error) {

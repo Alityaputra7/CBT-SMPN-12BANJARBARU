@@ -12,8 +12,26 @@ export const STORAGE_KEYS = {
   EXAMS: `${STORAGE_KEY_PREFIX}EXAMS`,
   SESSIONS: `${STORAGE_KEY_PREFIX}SESSIONS`,
   SETTING: `${STORAGE_KEY_PREFIX}SETTING`,
-  LOGS: `${STORAGE_KEY_PREFIX}LOGS`
+  LOGS: `${STORAGE_KEY_PREFIX}LOGS`,
+  ACTIVE_STUDENT_AUTH: `${STORAGE_KEY_PREFIX}ACTIVE_STUDENT_AUTH`
 };
+
+export interface PersistedStudentSession {
+  role: 'siswa';
+  student_id: string;
+  student_nis: string;
+  student_name: string;
+  class_id: string;
+  class_name: string;
+  active_exam_id: string;
+  active_session_id: string;
+  has_started: boolean;
+  current_question_index?: number;
+  time_remaining_seconds?: number;
+  violations_count?: number;
+  is_locked?: boolean;
+  saved_at: number;
+}
 
 /**
  * Safely load from localStorage with fallback
@@ -41,11 +59,104 @@ export function saveToStorage(key: string, data: unknown): void {
 }
 
 /**
+ * Load persisted active student login + exam state (survives browser refresh)
+ */
+export function loadPersistedStudentSession(): PersistedStudentSession | null {
+  try {
+    const raw =
+      localStorage.getItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH) ||
+      sessionStorage.getItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedStudentSession>;
+    if (
+      parsed &&
+      parsed.role === 'siswa' &&
+      typeof parsed.student_nis === 'string' &&
+      parsed.student_nis.trim().length > 0 &&
+      typeof parsed.student_id === 'string' &&
+      parsed.student_id.trim().length > 0
+    ) {
+      return {
+        role: 'siswa',
+        student_id: parsed.student_id,
+        student_nis: parsed.student_nis,
+        student_name: parsed.student_name || '',
+        class_id: parsed.class_id || '',
+        class_name: parsed.class_name || '',
+        active_exam_id: parsed.active_exam_id || '',
+        active_session_id: parsed.active_session_id || '',
+        has_started: Boolean(parsed.has_started),
+        current_question_index:
+          typeof parsed.current_question_index === 'number' ? parsed.current_question_index : undefined,
+        time_remaining_seconds:
+          typeof parsed.time_remaining_seconds === 'number' ? parsed.time_remaining_seconds : undefined,
+        violations_count:
+          typeof parsed.violations_count === 'number' ? parsed.violations_count : undefined,
+        is_locked: typeof parsed.is_locked === 'boolean' ? parsed.is_locked : undefined,
+        saved_at: typeof parsed.saved_at === 'number' ? parsed.saved_at : Date.now()
+      };
+    }
+    return null;
+  } catch (e) {
+    console.warn('Gagal membaca sesi aktif siswa:', e);
+    return null;
+  }
+}
+
+/**
+ * Save active student login + exam state to localStorage & sessionStorage
+ */
+export function savePersistedStudentSession(session: PersistedStudentSession): void {
+  try {
+    const serialized = JSON.stringify(session);
+    localStorage.setItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH, serialized);
+    sessionStorage.setItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH, serialized);
+  } catch (e) {
+    console.warn('Gagal menyimpan sesi aktif siswa:', e);
+  }
+}
+
+/**
+ * Clear active student login + exam state (called ONLY on explicit Logout or Exam Completed)
+ */
+export function clearPersistedStudentSession(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH);
+    sessionStorage.removeItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH);
+  } catch (e) {
+    console.warn('Gagal menghapus sesi aktif siswa:', e);
+  }
+}
+
+/**
+ * Synchronously flush a single student's latest exam session into STORAGE_KEYS.SESSIONS
+ * (used on beforeunload / pagehide so browser refresh never loses answers, index, or timer)
+ */
+export function flushSingleSessionToLocalStorage(session: StudentExamSession): void {
+  try {
+    const existing = loadFromStorage<StudentExamSession[]>(STORAGE_KEYS.SESSIONS, []);
+    const idx = existing.findIndex(
+      s =>
+        s.id === session.id ||
+        ((s.nis === session.nis || s.studentId === session.studentId) && s.examId === session.examId)
+    );
+    const updated =
+      idx >= 0
+        ? existing.map((s, i) => (i === idx ? session : s))
+        : [...existing, session];
+    localStorage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Gagal menyimpan backup sesi ujian ke localStorage:', e);
+  }
+}
+
+/**
  * Clear all persisted CBT storage keys
  */
 export function clearCbtStorage(): void {
   try {
     Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+    sessionStorage.removeItem(STORAGE_KEYS.ACTIVE_STUDENT_AUTH);
   } catch (e) {
     console.warn('Gagal membersihkan localStorage:', e);
   }
@@ -59,27 +170,32 @@ export function syncStudentSessions(
   currentSessions: StudentExamSession[],
   primaryExam: ExamSchedule
 ): StudentExamSession[] {
-  const sessionMap = new Map<string, StudentExamSession>();
+  const sessionsByStudent = new Map<string, StudentExamSession[]>();
   currentSessions.forEach(s => {
-    sessionMap.set(s.studentId, s);
+    const list = sessionsByStudent.get(s.studentId) || [];
+    list.push(s);
+    sessionsByStudent.set(s.studentId, list);
   });
 
-  const updatedSessions: StudentExamSession[] = students.map((std, idx) => {
-    const existing = sessionMap.get(std.id);
-    if (existing) {
-      // Sync student details if updated
-      return {
-        ...existing,
-        studentName: std.name,
-        nis: std.nis,
-        classId: std.classId,
-        className: std.className
-      };
+  const updatedSessions: StudentExamSession[] = [];
+  students.forEach(std => {
+    const existingList = sessionsByStudent.get(std.id);
+    if (existingList && existingList.length > 0) {
+      existingList.forEach(existing => {
+        updatedSessions.push({
+          ...existing,
+          studentName: std.name,
+          nis: std.nis,
+          classId: std.classId,
+          className: std.className
+        });
+      });
+      return;
     }
 
     // New student session auto-created
-    return {
-      id: `sess-${std.id}`,
+    updatedSessions.push({
+      id: `sess-${std.nis}-${primaryExam.id}`,
       studentId: std.id,
       studentName: std.name,
       nis: std.nis,
@@ -100,7 +216,7 @@ export function syncStudentSessions(
       scoreEssay: 0,
       finalScore: 0,
       isPassed: false
-    };
+    });
   });
 
   return updatedSessions;
