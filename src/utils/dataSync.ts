@@ -117,7 +117,32 @@ export function savePersistedStudentSession(session: PersistedStudentSession): v
 }
 
 /**
- * Clear active student login + exam state (called ONLY on explicit Logout or Exam Completed)
+ * Clear ONLY the active exam pointer from the persisted student session while keeping
+ * the student's login identity (`student_id`, `student_nis`, `student_name`, `class_name`)
+ * intact so the student returns cleanly to the Exam Schedule List for session 2 without re-logging in.
+ */
+export function clearActiveExamFromPersistedStudentSession(): void {
+  try {
+    const existing = loadPersistedStudentSession();
+    if (!existing) return;
+    savePersistedStudentSession({
+      ...existing,
+      active_exam_id: '',
+      active_session_id: '',
+      has_started: false,
+      current_question_index: 0,
+      time_remaining_seconds: undefined,
+      violations_count: 0,
+      is_locked: false,
+      saved_at: Date.now(),
+    });
+  } catch (e) {
+    console.warn('Gagal menghapus active_exam_id dari sesi siswa:', e);
+  }
+}
+
+/**
+ * Clear full student login + exam state (called ONLY on explicit Logout / Reset Pabrik)
  */
 export function clearPersistedStudentSession(): void {
   try {
@@ -130,15 +155,16 @@ export function clearPersistedStudentSession(): void {
 
 /**
  * Synchronously flush a single student's latest exam session into STORAGE_KEYS.SESSIONS
- * (used on beforeunload / pagehide so browser refresh never loses answers, index, or timer)
+ * keyed strictly by `(student_nis / studentId, examId)` so multiple exams never collide.
  */
 export function flushSingleSessionToLocalStorage(session: StudentExamSession): void {
   try {
     const existing = loadFromStorage<StudentExamSession[]>(STORAGE_KEYS.SESSIONS, []);
+    const cleanNis = (session.nis || '').trim();
     const idx = existing.findIndex(
       s =>
-        s.id === session.id ||
-        ((s.nis === session.nis || s.studentId === session.studentId) && s.examId === session.examId)
+        ((cleanNis && (s.nis || '').trim() === cleanNis) || s.studentId === session.studentId) &&
+        s.examId === session.examId
     );
     const updated =
       idx >= 0
@@ -164,6 +190,7 @@ export function clearCbtStorage(): void {
 
 /**
  * Synchronize student sessions: ensures each active student has a corresponding session record
+ * while preserving every distinct `(student_nis, exam_id)` session across multi-exam schedules.
  */
 export function syncStudentSessions(
   students: Student[],
@@ -181,7 +208,11 @@ export function syncStudentSessions(
   students.forEach(std => {
     const existingList = sessionsByStudent.get(std.id);
     if (existingList && existingList.length > 0) {
+      // Deduplicate strictly by examId so multiple exams per student are preserved cleanly
+      const seenExamIds = new Set<string>();
       existingList.forEach(existing => {
+        if (seenExamIds.has(existing.examId)) return;
+        seenExamIds.add(existing.examId);
         updatedSessions.push({
           ...existing,
           studentName: std.name,
@@ -193,9 +224,9 @@ export function syncStudentSessions(
       return;
     }
 
-    // New student session auto-created
+    // New student session auto-created with composite `${nis}_${examId}` ID
     updatedSessions.push({
-      id: `sess-${std.nis}-${primaryExam.id}`,
+      id: `${std.nis.trim()}_${primaryExam.id.trim()}`,
       studentId: std.id,
       studentName: std.name,
       nis: std.nis,

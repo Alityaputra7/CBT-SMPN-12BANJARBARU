@@ -214,6 +214,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [monitorSearch, setMonitorSearch] = useState('');
   const [monitorClassFilter, setMonitorClassFilter] = useState<string>('all');
+  const [monitorExamFilter, setMonitorExamFilter] = useState<string>('all');
   const [monitorStatusFilter, setMonitorStatusFilter] = useState<string>('all');
   const [selectedStudentForCard, setSelectedStudentForCard] = useState<Student | null>(null);
   const [selectedCardClassFilter, setSelectedCardClassFilter] = useState<string>('all');
@@ -936,10 +937,12 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         const filteredMonitoringSessions = sessions
           .filter(s => {
             const matchClass = monitorClassFilter === 'all' || s.classId === monitorClassFilter;
+            const matchExam = monitorExamFilter === 'all' || s.examId === monitorExamFilter;
             const matchSearch =
               !monitorSearch.trim() ||
               s.studentName.toLowerCase().includes(monitorSearch.toLowerCase()) ||
-              s.nis.includes(monitorSearch.trim());
+              s.nis.includes(monitorSearch.trim()) ||
+              (s.examTitle || '').toLowerCase().includes(monitorSearch.toLowerCase());
             const isLockedFlag = s.isLocked || s.status === 'locked';
             const effectiveStatus = isLockedFlag
               ? 'locked'
@@ -954,7 +957,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 : monitorStatusFilter === 'violations'
                   ? isLockedFlag || s.violationsCount > 0
                   : effectiveStatus === monitorStatusFilter;
-            return matchClass && matchSearch && matchStatus;
+            return matchClass && matchExam && matchSearch && matchStatus;
           })
           .sort((a, b) => {
             const pDiff = getMonitorPriority(a) - getMonitorPriority(b);
@@ -1056,12 +1059,12 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                       const isUnlocking = isUnlockingId === ls.id;
                       return (
                         <div
-                          key={ls.id}
+                          key={`${ls.nis}_${ls.examId}_${ls.id}`}
                           className="flex items-center gap-2 bg-white border border-rose-300 rounded-lg px-2.5 py-1.5 text-xs shadow-2xs"
                         >
                           <div>
                             <span className="font-bold text-slate-900">{ls.studentName}</span>
-                            <span className="text-slate-500 ml-1">({ls.className}{lsExam ? ` · ${lsExam.subjectName}` : ''})</span>
+                            <span className="text-slate-500 ml-1">({ls.className}{(lsExam?.subjectName || ls.examTitle) ? ` · ${lsExam?.subjectName || ls.examTitle}` : ''})</span>
                             <span className="ml-1.5 font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">
                               {ls.violationsCount}/{maxViolationsAllowed}
                             </span>
@@ -1104,9 +1107,21 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 onChange={e => setMonitorClassFilter(e.target.value)}
                 className="w-full sm:w-auto px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-xs outline-none"
               >
-                <option value="all">Semua Kelas ({sessions.length})</option>
+                <option value="all">Semua Kelas ({sessions.length} Sesi)</option>
                 {classes.map(c => (
                   <option key={c.id} value={c.id}>Kelas {c.name}</option>
+                ))}
+              </select>
+              <select
+                value={monitorExamFilter}
+                onChange={e => setMonitorExamFilter(e.target.value)}
+                className="w-full sm:w-auto max-w-full sm:max-w-[230px] px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-xs outline-none"
+              >
+                <option value="all">Semua Jadwal / Mapel ({exams.length})</option>
+                {exams.map(ex => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.subjectName} — {ex.title}
+                  </option>
                 ))}
               </select>
               <select
@@ -1151,7 +1166,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                       ).length;
                       const answeredCount = Math.max(answeredFromMap, s.answeredCount || 0);
 
-                      const matchingExam = exams.find(e => e.id === s.examId) || exams[0];
+                      const matchingExam = exams.find(e => e.id === s.examId);
+                      const examLabel = matchingExam?.subjectName || s.examTitle || 'Ujian CBT';
+                      const examTitleSub = matchingExam?.title && matchingExam.title !== examLabel ? matchingExam.title : (s.examTitle && s.examTitle !== examLabel ? s.examTitle : '');
                       const examQuestionsCount = matchingExam
                         ? questionBank.questions.filter(q => {
                             const matchSubject =
@@ -1177,7 +1194,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                         Boolean(s.deviceSessionId);
 
                       return (
-                        <tr key={s.id} className={`hover:bg-slate-50/60 ${isSessionLocked ? 'bg-rose-50/50' : ''}`}>
+                        <tr key={`${s.nis}_${s.examId}_${s.id}`} className={`hover:bg-slate-50/60 ${isSessionLocked ? 'bg-rose-50/50' : ''}`}>
                           <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">{s.nis}</td>
                           <td className="py-2.5 px-3 font-medium text-slate-900">
                             <div className="flex items-center gap-2">
@@ -1193,9 +1210,15 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               <div>
                                 <span className="block leading-tight">{s.studentName}</span>
                                 <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                                  {matchingExam && (
-                                    <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded">
-                                      {matchingExam.subjectName}
+                                  <span
+                                    title={examTitleSub || examLabel}
+                                    className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded"
+                                  >
+                                    {examLabel}
+                                  </span>
+                                  {examTitleSub && (
+                                    <span className="text-[10px] text-slate-500 font-normal truncate max-w-[180px]" title={examTitleSub}>
+                                      {examTitleSub}
                                     </span>
                                   )}
                                   {s.isOnline && s.deviceInfo && s.deviceInfo !== '-' && (
@@ -2118,7 +2141,12 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         const isMatchingSubject = (s: StudentExamSession) => {
           if (resultsSubjectFilter === 'all') return true;
           const ex = exams.find(e => e.id === s.examId);
-          return ex?.subjectId === resultsSubjectFilter;
+          if (ex) return ex.subjectId === resultsSubjectFilter;
+          const targetSubj = subjects.find(sub => sub.id === resultsSubjectFilter);
+          if (targetSubj && s.examTitle) {
+            return s.examTitle.toLowerCase().includes(targetSubj.name.toLowerCase());
+          }
+          return false;
         };
 
         const getResultPriority = (s: StudentExamSession) => {
@@ -2308,16 +2336,26 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                       const kkm = ex?.kkm || 75;
                       const isDone = isSessionCompleted(s.status);
                       const isLockedFlag = s.isLocked || s.status === 'locked';
+                      const subjectDisplay = ex?.subjectName || s.examTitle || 'Umum';
+                      const examSubTitle = ex?.title && ex.title !== subjectDisplay ? ex.title : '';
 
                       return (
-                        <tr key={s.id} className={`hover:bg-slate-50/60 ${isDone ? 'bg-emerald-50/20' : isLockedFlag ? 'bg-rose-50/30' : ''}`}>
+                        <tr key={`${s.nis}_${s.examId}_${s.id}`} className={`hover:bg-slate-50/60 ${isDone ? 'bg-emerald-50/20' : isLockedFlag ? 'bg-rose-50/30' : ''}`}>
                           <td className="py-2 px-3 font-mono text-slate-700">{s.nis}</td>
                           <td className="py-2 px-3 font-medium text-slate-900">{s.studentName}</td>
                           <td className="py-2 px-3 text-slate-600">{s.className}</td>
                           <td className="py-2 px-3 text-slate-700">
-                            <span className="text-[11px] font-medium bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded">
-                              {ex?.subjectName || 'Umum'}
+                            <span
+                              title={examSubTitle || subjectDisplay}
+                              className="inline-block text-[11px] font-medium bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded"
+                            >
+                              {subjectDisplay}
                             </span>
+                            {examSubTitle && (
+                              <span className="block text-[10px] text-slate-400 mt-0.5 truncate max-w-[190px]" title={examSubTitle}>
+                                {examSubTitle}
+                              </span>
+                            )}
                           </td>
                           <td className="py-2 px-3">
                             {isDone ? (

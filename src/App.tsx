@@ -36,6 +36,7 @@ import {
   clearCbtStorage,
   loadPersistedStudentSession,
   savePersistedStudentSession,
+  clearActiveExamFromPersistedStudentSession,
   clearPersistedStudentSession
 } from './utils/dataSync';
 import { 
@@ -51,6 +52,7 @@ import {
   fetchExamResultsWithStatusFromSupabase,
   fetchViolationLogsWithStatusFromSupabase,
   fetchStudentSessionStatusFromSupabase,
+  fetchAllStudentSessionsFromSupabase,
   subscribeToExamSessionsRealtime,
   syncSessionProgressWithDetails,
   syncMultipleSessionsWithDetails,
@@ -210,19 +212,70 @@ export default function App() {
   const examsRef = useRef<ExamSchedule[]>(exams);
   const hasRemoteSchedulesRef = useRef<boolean>(false);
 
-  // Helper to persist or clear active student session in localStorage
+  // Pick the most appropriate exam for a student:
+  // 1) Ongoing in-progress exam -> 2) Active uncompleted & unlocked exam -> 3) Any uncompleted exam -> 4) Fallback
+  const pickBestExamForStudent = (
+    student: Student,
+    availableExamsList: ExamSchedule[],
+    allSessionsList: StudentExamSession[]
+  ): ExamSchedule | undefined => {
+    const eligible = availableExamsList.filter(ex =>
+      isExamMatchingStudentClass(ex, student.classId, student.className)
+    );
+    const pool = eligible.length > 0 ? eligible : availableExamsList;
+    if (pool.length === 0) return INITIAL_EXAMS[0];
+
+    const findSess = (examId: string) =>
+      allSessionsList.find(
+        s =>
+          ((s.nis && s.nis.trim() === student.nis.trim()) || s.studentId === student.id) &&
+          s.examId === examId
+      );
+
+    // 1. Resume an active in-progress exam first
+    const inProgress = pool.find(ex => {
+      const s = findSess(ex.id);
+      return s && s.status === 'in_progress' && !s.isLocked;
+    });
+    if (inProgress) return inProgress;
+
+    // 2. Pick an active schedule today that has NOT been completed and is NOT locked (e.g. Session 2 after Session 1 finishes)
+    const activeUncompleted = pool.find(ex => {
+      const s = findSess(ex.id);
+      const isDone = s ? isSessionCompleted(s.status) : false;
+      const isLocked = s ? Boolean(s.isLocked || s.status === 'locked') : false;
+      return validateExamSchedule(ex).canStart && !isDone && !isLocked;
+    });
+    if (activeUncompleted) return activeUncompleted;
+
+    // 3. Pick any uncompleted, unlocked schedule
+    const anyUncompleted = pool.find(ex => {
+      const s = findSess(ex.id);
+      const isDone = s ? isSessionCompleted(s.status) : false;
+      const isLocked = s ? Boolean(s.isLocked || s.status === 'locked') : false;
+      return !isDone && !isLocked;
+    });
+    if (anyUncompleted) return anyUncompleted;
+
+    return pool[0];
+  };
+
+  // Helper to persist or clear active exam pointer in localStorage:
+  // When an exam is completed, ONLY clear `active_exam_id` while preserving student login identity
+  // so the student can immediately proceed to Session 2 without re-logging in.
   const persistStudentAuthState = (
     student: Student,
     examId: string,
     session?: StudentExamSession | null
   ) => {
     if (session && isSessionCompleted(session.status)) {
-      clearPersistedStudentSession();
+      clearActiveExamFromPersistedStudentSession();
       return;
     }
     const resolvedExamId = examId || session?.examId || selectedExamIdRef.current || '';
-    const resolvedSessionId =
-      session?.id || buildDeterministicSessionId(student.nis, resolvedExamId || 'ex-mat-2026');
+    const resolvedSessionId = resolvedExamId
+      ? session?.id || buildDeterministicSessionId(student.nis, resolvedExamId)
+      : '';
     savePersistedStudentSession({
       role: 'siswa',
       student_id: student.id,
@@ -233,7 +286,9 @@ export default function App() {
       active_exam_id: resolvedExamId,
       active_session_id: resolvedSessionId,
       has_started: Boolean(
-        session && (session.status === 'in_progress' || session.isLocked || session.status === 'locked')
+        resolvedExamId &&
+          session &&
+          (session.status === 'in_progress' || session.isLocked || session.status === 'locked')
       ),
       current_question_index: session?.currentQuestionIndex ?? 0,
       time_remaining_seconds: session?.timeRemainingSeconds,
@@ -265,20 +320,26 @@ export default function App() {
           isExamMatchingStudentClass(ex, activeStudent.classId, activeStudent.className)
         );
         const existingEligible = eligible.find(e => e.id === prevId);
-        // On student login or if previously selected exam is inactive/missing, auto-pick an active exam
+        const existingSess = existingEligible
+          ? sessionsRef.current.find(
+              s =>
+                ((s.nis && s.nis.trim() === activeStudent.nis.trim()) || s.studentId === activeStudent.id) &&
+                s.examId === existingEligible.id
+            )
+          : undefined;
+        const isExistingDone = existingSess ? isSessionCompleted(existingSess.status) : false;
+
+        // On student login, always favor an uncompleted active schedule (e.g. Session 2 if Session 1 is already completed)
         if (preferredStudent) {
-          if (existingEligible && validateExamSchedule(existingEligible).canStart) {
+          if (existingEligible && !isExistingDone && validateExamSchedule(existingEligible).canStart) {
             return existingEligible.id;
           }
-          const activeEligible = eligible.find(ex => validateExamSchedule(ex).canStart);
-          if (activeEligible) return activeEligible.id;
-          if (existingEligible) return existingEligible.id;
-          if (eligible[0]) return eligible[0].id;
+          const best = pickBestExamForStudent(activeStudent, remoteSchedules, sessionsRef.current);
+          if (best) return best.id;
         } else {
           if (existingEligible) return existingEligible.id;
-          const activeEligible = eligible.find(ex => validateExamSchedule(ex).canStart);
-          if (activeEligible) return activeEligible.id;
-          if (eligible[0]) return eligible[0].id;
+          const best = pickBestExamForStudent(activeStudent, remoteSchedules, sessionsRef.current);
+          if (best) return best.id;
         }
       }
       if (remoteSchedules.some(e => e.id === prevId)) return prevId;
@@ -441,48 +502,60 @@ export default function App() {
         ? reconcileSessionsWithStudents(currentStudentsList, supSessionsRes.sessions, defaultExam, baseSessions, { isFullSnapshot: true })
         : reconcileSessionsWithStudents(currentStudentsList, baseSessions, defaultExam, []);
 
-      // If a student just refreshed mid-exam, merge their active local backup safely with Supabase
-      // so unsaved answers/timer/violations aren't clobbered while still honoring Operator unlock/reset/completion.
+      // If a student just refreshed mid-exam (or on the schedule list after Session 1 finished),
+      // reconcile strictly for their active `(student_nis, active_exam_id)` without mixing exams.
       const activeStudentOnMount = currentStudentRef.current;
       if (currentRoleRef.current === 'siswa' && activeStudentOnMount) {
-        const activeExamId = selectedExamIdRef.current || defaultExam.id;
-        const activeExamObj = examsRef.current.find(e => e.id === activeExamId) || defaultExam;
-        const defaultDurationSec = (activeExamObj?.durationMinutes || 90) * 60;
-        const localActive = baseSessions.find(
-          s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
-        );
-        const remoteActive = supSessionsRes.sessions?.find(
-          s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
-        );
+        const persistedOnMount = loadPersistedStudentSession();
+        const persistedActiveExamId = persistedOnMount?.active_exam_id || '';
 
-        if (localActive && remoteActive) {
-          const mergedResult = mergeActiveStudentSessionWithRemote({
-            local: localActive,
-            remote: remoteActive,
-            defaultDurationSec,
-          });
-          hydratedSessions = hydratedSessions.map(s =>
-            (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
-              ? mergedResult.session
-              : s
-          );
-          if (mergedResult.isRemoteDone) {
-            clearPersistedStudentSession();
-          } else {
-            persistStudentAuthState(activeStudentOnMount, activeExamId, mergedResult.session);
+        if (!persistedActiveExamId) {
+          // Student finished previous session & is on the Schedule List -> highlight next available exam
+          const nextBest = pickBestExamForStudent(activeStudentOnMount, examsRef.current, hydratedSessions);
+          if (nextBest) {
+            setSelectedExamId(nextBest.id);
+            selectedExamIdRef.current = nextBest.id;
           }
-        } else if (localActive && !remoteActive && (localActive.status === 'in_progress' || localActive.isLocked)) {
-          const existsInHydrated = hydratedSessions.some(
+        } else {
+          const activeExamId = persistedActiveExamId;
+          const activeExamObj = examsRef.current.find(e => e.id === activeExamId) || defaultExam;
+          const defaultDurationSec = (activeExamObj?.durationMinutes || 90) * 60;
+          const localActive = baseSessions.find(
             s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
           );
-          hydratedSessions = existsInHydrated
-            ? hydratedSessions.map(s =>
-                (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
-                  ? localActive
-                  : s
-              )
-            : [...hydratedSessions, localActive];
-          persistStudentAuthState(activeStudentOnMount, activeExamId, localActive);
+          const remoteActive = supSessionsRes.sessions?.find(
+            s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+          );
+
+          if (localActive && remoteActive) {
+            const mergedResult = mergeActiveStudentSessionWithRemote({
+              local: localActive,
+              remote: remoteActive,
+              defaultDurationSec,
+            });
+            hydratedSessions = hydratedSessions.map(s =>
+              (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+                ? mergedResult.session
+                : s
+            );
+            if (mergedResult.isRemoteDone) {
+              clearActiveExamFromPersistedStudentSession();
+            } else {
+              persistStudentAuthState(activeStudentOnMount, activeExamId, mergedResult.session);
+            }
+          } else if (localActive && !remoteActive && (localActive.status === 'in_progress' || localActive.isLocked)) {
+            const existsInHydrated = hydratedSessions.some(
+              s => (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+            );
+            hydratedSessions = existsInHydrated
+              ? hydratedSessions.map(s =>
+                  (s.nis === activeStudentOnMount.nis || s.studentId === activeStudentOnMount.id) && s.examId === activeExamId
+                    ? localActive
+                    : s
+                )
+              : [...hydratedSessions, localActive];
+            persistStudentAuthState(activeStudentOnMount, activeExamId, localActive);
+          }
         }
       }
 
@@ -1165,29 +1238,25 @@ export default function App() {
       setActiveSection('guru');
       handleAddAuditLog('LOGIN_GURU', `Guru ${account?.name} berhasil login`);
     } else if (role === 'siswa' && student) {
-      // Immediately fetch fresh exam schedules from Supabase to override any stale phone localStorage
-      if (isSupabaseConfigured) {
-        void handleRefreshSchedulesFromSupabase({ silent: true, forStudent: student });
-      }
-
-      // Pick the currently scheduled ongoing exam for this student's class (or first eligible exam)
-      const eligible = examsRef.current.filter(ex => isExamMatchingStudentClass(ex, student.classId, student.className));
-      const targetExam = eligible.find(ex => validateExamSchedule(ex).canStart) || eligible[0] || examsRef.current[0] || INITIAL_EXAMS[0];
-      if (targetExam) {
-        setSelectedExamId(targetExam.id);
-      }
-
+      // Pick the best uncompleted/active exam for this student's class (never trapping on an already completed exam)
+      const targetExam =
+        pickBestExamForStudent(student, examsRef.current, sessionsRef.current) ||
+        examsRef.current[0] ||
+        INITIAL_EXAMS[0];
       const targetExamId = targetExam?.id || 'ex-mat-2026';
+      setSelectedExamId(targetExamId);
+      selectedExamIdRef.current = targetExamId;
+
       const deterministicId = buildDeterministicSessionId(student.nis, targetExamId);
       const deviceSessionId = getStudentSessionDeviceId(student.nis);
       const clientInfo = detectClientDeviceInfo();
       const currentList = sessionsRef.current;
 
-      // 1. Exact match by (NIS / student.id, targetExamId)
+      // 1. Exact match strictly by (NIS / student.id, targetExamId)
       const exactIdx = currentList.findIndex(
         s => (s.nis === student.nis || s.studentId === student.id) && s.examId === targetExamId
       );
-      // 2. Otherwise repurpose untouched initial placeholder session
+      // 2. Otherwise repurpose ONLY an untouched not_started placeholder (never touch a completed or locked exam!)
       const idlePlaceholderIdx = exactIdx >= 0
         ? -1
         : currentList.findIndex(
@@ -1204,16 +1273,19 @@ export default function App() {
 
       if (exactIdx >= 0) {
         const existing = currentList[exactIdx];
-        syncedSession = {
-          ...existing,
-          id: deterministicId,
-          examId: targetExamId,
-          examTitle: targetExam?.title || existing.examTitle,
-          isOnline: true,
-          deviceSessionId,
-          deviceInfo: clientInfo,
-          lastHeartbeat: Date.now()
-        };
+        const isExistingDone = isSessionCompleted(existing.status);
+        syncedSession = isExistingDone
+          ? existing
+          : {
+              ...existing,
+              id: deterministicId,
+              examId: targetExamId,
+              examTitle: targetExam?.title || existing.examTitle,
+              isOnline: true,
+              deviceSessionId,
+              deviceInfo: clientInfo,
+              lastHeartbeat: Date.now()
+            };
         updatedList = currentList.map((s, idx) => (idx === exactIdx ? syncedSession : s));
       } else if (idlePlaceholderIdx >= 0) {
         const placeholder = currentList[idlePlaceholderIdx];
@@ -1261,98 +1333,143 @@ export default function App() {
       sessionsRef.current = updatedList;
       setSessions(updatedList);
       saveToStorage(STORAGE_KEYS.SESSIONS, updatedList);
-      persistStudentAuthState(student, targetExamId, syncedSession);
-      syncSingleSession(syncedSession).then(syncMetaFromClientPush);
+      // Persist student login identity + active exam pointer (clears active_exam_id if completed)
+      if (isSessionCompleted(syncedSession.status)) {
+        savePersistedStudentSession({
+          role: 'siswa',
+          student_id: student.id,
+          student_nis: student.nis,
+          student_name: student.name,
+          class_id: student.classId,
+          class_name: student.className,
+          active_exam_id: '',
+          active_session_id: '',
+          has_started: false,
+          saved_at: Date.now(),
+        });
+      } else {
+        persistStudentAuthState(student, targetExamId, syncedSession);
+      }
+      if (!isSessionCompleted(syncedSession.status)) {
+        syncSingleSession(syncedSession).then(syncMetaFromClientPush);
+      }
 
       if (isSupabaseConfigured) {
-        void fetchStudentSessionStatusFromSupabase(student.nis, targetExamId).then(async res => {
-          const defaultDurationSec = (targetExam?.durationMinutes || 90) * 60;
+        // Fetch fresh schedules + ALL existing sessions for this student NIS across all exam_ids
+        void Promise.all([
+          handleRefreshSchedulesFromSupabase({ silent: true, forStudent: student }),
+          fetchAllStudentSessionsFromSupabase(student.nis),
+        ]).then(async ([latestSchedules, allRemoteRes]) => {
+          const effectiveSchedules =
+            latestSchedules && latestSchedules.length > 0 ? latestSchedules : examsRef.current;
 
-          if (res.error) {
+          if (allRemoteRes.error) {
             triggerSupabaseErrorNotification(
-              `Gagal sinkronisasi status login ke Supabase: ${res.error}`
+              `Gagal sinkronisasi status login ke Supabase: ${allRemoteRes.error}`
             );
-            // Still attempt direct upsert so write failure (e.g. RLS / schema / column error) surfaces immediately
-            const fallbackWrite = await syncSessionProgressWithDetails(syncedSession);
-            if (!fallbackWrite.success && !fallbackWrite.skipped && fallbackWrite.error) {
-              triggerSupabaseErrorNotification(
-                `Gagal menyimpan sesi login siswa ke Supabase: ${fallbackWrite.error}`
-              );
-            }
             return;
           }
 
-          if (res.found && res.session) {
-            const remote = res.session;
-            const isRemoteDone = isSessionCompleted(remote.status);
-            const isRemoteReset = remote.status === 'not_started' && !remote.isLocked;
-            const hydrated: StudentExamSession = {
-              ...remote,
-              isOnline: !isRemoteDone,
-              deviceSessionId: isRemoteDone ? undefined : deviceSessionId,
-              deviceInfo: clientInfo,
-              lastHeartbeat: Date.now(),
-              answers: isRemoteReset
-                ? (remote.answers || {})
-                : Object.keys(syncedSession.answers || {}).length > Object.keys(remote.answers || {}).length &&
-                    !remote.adminActionAt &&
-                    remote.status === 'in_progress'
-                  ? syncedSession.answers
-                  : remote.answers,
-            };
-            const merged = reconcileSessionsWithStudents(
+          let latestSessions = sessionsRef.current;
+          if (allRemoteRes.sessions && allRemoteRes.sessions.length > 0) {
+            latestSessions = reconcileSessionsWithStudents(
               studentsRef.current,
-              [hydrated],
-              examsRef.current[0] || INITIAL_EXAMS[0],
+              allRemoteRes.sessions,
+              effectiveSchedules[0] || INITIAL_EXAMS[0],
               sessionsRef.current
             );
-            sessionsRef.current = merged;
-            setSessions(merged);
-            saveToStorage(STORAGE_KEYS.SESSIONS, merged);
-            persistStudentAuthState(student, targetExamId, hydrated);
-            if (!hydrated.isLocked && !isRemoteDone) {
-              const writeRes = await syncSessionProgressWithDetails(hydrated);
-              if (!writeRes.success && !writeRes.skipped && writeRes.error) {
-                triggerSupabaseErrorNotification(
-                  `Gagal memperbarui status login di Supabase: ${writeRes.error}`
-                );
-              } else if (writeRes.success) {
-                clearSupabaseErrorNotification();
+            sessionsRef.current = latestSessions;
+            setSessions(latestSessions);
+            saveToStorage(STORAGE_KEYS.SESSIONS, latestSessions);
+          }
+
+          // Re-evaluate best exam now that we know which exams are already completed in Supabase
+          const bestExam =
+            pickBestExamForStudent(student, effectiveSchedules, latestSessions) || targetExam;
+          const bestExamId = bestExam?.id || targetExamId;
+          setSelectedExamId(bestExamId);
+          selectedExamIdRef.current = bestExamId;
+
+          const existingBest = latestSessions.find(
+            s =>
+              ((s.nis && s.nis.trim() === student.nis.trim()) || s.studentId === student.id) &&
+              s.examId === bestExamId
+          );
+          const isBestDone = existingBest ? isSessionCompleted(existingBest.status) : false;
+
+          if (isBestDone) {
+            // All eligible exams are completed — keep student identity on schedule list
+            savePersistedStudentSession({
+              role: 'siswa',
+              student_id: student.id,
+              student_nis: student.nis,
+              student_name: student.name,
+              class_id: student.classId,
+              class_name: student.className,
+              active_exam_id: '',
+              active_session_id: '',
+              has_started: false,
+              saved_at: Date.now(),
+            });
+            clearSupabaseErrorNotification();
+            return;
+          }
+
+          const bestDetId = buildDeterministicSessionId(student.nis, bestExamId);
+          const defaultDurationSec = (bestExam?.durationMinutes || 90) * 60;
+          const hydratedBest: StudentExamSession = existingBest
+            ? {
+                ...existingBest,
+                id: bestDetId,
+                examId: bestExamId,
+                examTitle: bestExam?.title || existingBest.examTitle,
+                isOnline: !existingBest.isLocked,
+                deviceSessionId: existingBest.isLocked ? undefined : deviceSessionId,
+                deviceInfo: clientInfo,
+                lastHeartbeat: Date.now(),
               }
-            }
-          } else {
-            // No row in Supabase: never preserve a stale local lock or old violation state
-            const cleanSession: StudentExamSession =
-              syncedSession.isLocked || syncedSession.violationsCount > 0 || syncedSession.status !== 'not_started'
-                ? {
-                    ...syncedSession,
-                    status: 'not_started',
-                    isLocked: false,
-                    lockReason: undefined,
-                    violationsCount: 0,
-                    answers: {},
-                    scorePg: 0,
-                    scoreEssay: 0,
-                    finalScore: 0,
-                    isPassed: false,
-                    submittedAt: undefined,
-                    timeRemainingSeconds: defaultDurationSec,
-                    currentQuestionIndex: 0,
-                  }
-                : syncedSession;
-            const merged = reconcileSessionsWithStudents(
-              studentsRef.current,
-              [cleanSession],
-              examsRef.current[0] || INITIAL_EXAMS[0],
-              sessionsRef.current
-            );
-            sessionsRef.current = merged;
-            setSessions(merged);
-            saveToStorage(STORAGE_KEYS.SESSIONS, merged);
-            const writeRes = await syncSessionProgressWithDetails(cleanSession);
+            : {
+                id: bestDetId,
+                studentId: student.id,
+                studentName: student.name,
+                nis: student.nis,
+                classId: student.classId,
+                className: student.className,
+                examId: bestExamId,
+                examTitle: bestExam?.title || 'Ujian CBT',
+                status: 'not_started',
+                timeRemainingSeconds: defaultDurationSec,
+                violationsCount: 0,
+                isLocked: false,
+                extraTimeMinutes: 0,
+                deviceInfo: clientInfo,
+                deviceSessionId,
+                currentQuestionIndex: 0,
+                isOnline: true,
+                lastHeartbeat: Date.now(),
+                answers: {},
+                scorePg: 0,
+                scoreEssay: 0,
+                finalScore: 0,
+                isPassed: false,
+              };
+
+          const merged = reconcileSessionsWithStudents(
+            studentsRef.current,
+            [hydratedBest],
+            effectiveSchedules[0] || INITIAL_EXAMS[0],
+            sessionsRef.current
+          );
+          sessionsRef.current = merged;
+          setSessions(merged);
+          saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+          persistStudentAuthState(student, bestExamId, hydratedBest);
+
+          if (!hydratedBest.isLocked) {
+            const writeRes = await syncSessionProgressWithDetails(hydratedBest);
             if (!writeRes.success && !writeRes.skipped && writeRes.error) {
               triggerSupabaseErrorNotification(
-                `Gagal mencatat sesi login siswa ke Supabase: ${writeRes.error}`
+                `Gagal memperbarui status login di Supabase: ${writeRes.error}`
               );
             } else if (writeRes.success) {
               clearSupabaseErrorNotification();
@@ -1458,9 +1575,18 @@ export default function App() {
     ? (studentAvailableExams.find(e => e.id === selectedExamId) || studentAvailableExams[0] || exams[0] || INITIAL_EXAMS[0])
     : (exams.find(e => e.id === selectedExamId) || exams[0] || INITIAL_EXAMS[0]);
 
-  // Session specific to this student AND this specific exam (prevents mixing exam results)
+  // All sessions belonging to the currently logged-in student across every exam_id
+  const currentStudentAllSessions = currentStudent
+    ? sessions.filter(
+        s =>
+          (s.nis && s.nis.trim() === currentStudent.nis.trim()) ||
+          s.studentId === currentStudent.id
+      )
+    : [];
+
+  // Session strictly specific to this student AND this specific exam_id (never mixes exams)
   const currentStudentSession = currentStudent 
-    ? sessions.find(s => (s.nis === currentStudent.nis || s.studentId === currentStudent.id) && s.examId === currentExam.id) || {
+    ? currentStudentAllSessions.find(s => s.examId === currentExam.id) || {
         id: buildDeterministicSessionId(currentStudent.nis, currentExam.id),
         studentId: currentStudent.id,
         studentName: currentStudent.name,
@@ -1492,18 +1618,15 @@ export default function App() {
     options?: { skipSupabaseMirror?: boolean }
   ) => {
     const currentList = sessionsRef.current;
-    const exists = currentList.some(
-      s =>
-        s.id === updatedSession.id ||
-        ((s.nis === updatedSession.nis || s.studentId === updatedSession.studentId) && s.examId === updatedSession.examId)
-    );
+    const cleanTargetNis = (updatedSession.nis || '').trim();
+    const matchesTarget = (s: StudentExamSession) =>
+      ((cleanTargetNis && (s.nis || '').trim() === cleanTargetNis) ||
+        s.studentId === updatedSession.studentId) &&
+      s.examId === updatedSession.examId;
+
+    const exists = currentList.some(matchesTarget);
     const updated = exists
-      ? currentList.map(s =>
-          s.id === updatedSession.id ||
-          ((s.nis === updatedSession.nis || s.studentId === updatedSession.studentId) && s.examId === updatedSession.examId)
-            ? updatedSession
-            : s
-        )
+      ? currentList.map(s => (matchesTarget(s) ? updatedSession : s))
       : [...currentList, updatedSession];
     sessionsRef.current = updated;
     setSessions(updated);
@@ -1520,6 +1643,49 @@ export default function App() {
           clearSupabaseErrorNotification();
         }
       });
+    }
+  };
+
+  // Return student to the Exam Schedule List (keeps login identity, clears only finished active_exam_id)
+  const handleReturnToScheduleList = async (preferredNextExamId?: string) => {
+    clearActiveExamFromPersistedStudentSession();
+    const student = currentStudentRef.current;
+    if (!student) return;
+
+    let latestSchedules = examsRef.current;
+    let latestSessions = sessionsRef.current;
+
+    if (isSupabaseConfigured) {
+      const [schedRes, allSessRes] = await Promise.all([
+        handleRefreshSchedulesFromSupabase({ silent: true }),
+        fetchAllStudentSessionsFromSupabase(student.nis),
+      ]);
+      if (schedRes && schedRes.length > 0) {
+        latestSchedules = schedRes;
+      }
+      if (allSessRes.sessions && allSessRes.sessions.length > 0) {
+        latestSessions = reconcileSessionsWithStudents(
+          studentsRef.current,
+          allSessRes.sessions,
+          latestSchedules[0] || INITIAL_EXAMS[0],
+          sessionsRef.current
+        );
+        sessionsRef.current = latestSessions;
+        setSessions(latestSessions);
+        saveToStorage(STORAGE_KEYS.SESSIONS, latestSessions);
+      }
+    }
+
+    if (preferredNextExamId && latestSchedules.some(e => e.id === preferredNextExamId)) {
+      setSelectedExamId(preferredNextExamId);
+      selectedExamIdRef.current = preferredNextExamId;
+      return;
+    }
+
+    const nextBest = pickBestExamForStudent(student, latestSchedules, latestSessions);
+    if (nextBest) {
+      setSelectedExamId(nextBest.id);
+      selectedExamIdRef.current = nextBest.id;
     }
   };
 
@@ -1540,6 +1706,9 @@ export default function App() {
     let updatedList: StudentExamSession[];
 
     if (existingTarget) {
+      if (isSessionCompleted(existingTarget.status)) {
+        return;
+      }
       activeSess = {
         ...existingTarget,
         id: deterministicId,
@@ -1866,7 +2035,9 @@ export default function App() {
             student={currentStudent || students[0]}
             exam={currentExam}
             availableExams={studentAvailableExams}
+            studentSessions={currentStudentAllSessions}
             onSelectExam={handleStudentSelectExam}
+            onReturnToScheduleList={handleReturnToScheduleList}
             questionBank={questionBank}
             session={currentStudentSession}
             onUpdateSession={handleUpdateStudentSession}
@@ -1877,6 +2048,20 @@ export default function App() {
             onSupabaseSuccess={clearSupabaseErrorNotification}
             onRefreshSchedules={async () => {
               await handleRefreshSchedulesFromSupabase();
+              if (isSupabaseConfigured && currentStudentRef.current) {
+                const allRes = await fetchAllStudentSessionsFromSupabase(currentStudentRef.current.nis);
+                if (allRes.sessions && allRes.sessions.length > 0) {
+                  const merged = reconcileSessionsWithStudents(
+                    studentsRef.current,
+                    allRes.sessions,
+                    examsRef.current[0] || INITIAL_EXAMS[0],
+                    sessionsRef.current
+                  );
+                  sessionsRef.current = merged;
+                  setSessions(merged);
+                  saveToStorage(STORAGE_KEYS.SESSIONS, merged);
+                }
+              }
             }}
           />
         )}

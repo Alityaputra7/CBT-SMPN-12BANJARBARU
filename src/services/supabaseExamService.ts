@@ -96,7 +96,7 @@ export interface FetchViolationLogsWithStatus {
 export function buildDeterministicSessionId(nis: string, examId: string): string {
   const cleanNis = (nis || 'unknown').trim();
   const cleanExam = (examId || 'ex-mat-2026').trim();
-  return `sess-${cleanNis}-${cleanExam}`;
+  return `${cleanNis}_${cleanExam}`;
 }
 
 export function countAnsweredQuestions(answers?: StudentExamSession['answers']): number {
@@ -723,12 +723,14 @@ export async function fetchStudentSessionStatusFromSupabase(
       };
     }
 
-    // Fallback query by deterministic ID if nis/student_nis wasn't matched
+    // Fallback query by deterministic composite ID (current `${nis}_${examId}` & legacy `sess-${nis}-${examId}`)
     const detId = buildDeterministicSessionId(cleanNis, cleanExamId);
+    const legacyDetId = `sess-${cleanNis}-${cleanExamId}`;
     const byId = await supabase
       .from('cbt_exam_sessions')
       .select('*')
-      .eq('id', detId)
+      .in('id', [detId, legacyDetId])
+      .order('updated_at', { ascending: false })
       .limit(1);
 
     if (byId.error) {
@@ -756,6 +758,43 @@ export async function fetchStudentSessionFromSupabase(
 ): Promise<StudentExamSession | null> {
   const res = await fetchStudentSessionStatusFromSupabase(nis, examId);
   return res.session;
+}
+
+/**
+ * Fetches ALL exam sessions belonging to a specific student NIS across every `exam_id`.
+ * Enables the student's Exam Schedule List to display per-exam status
+ * (`Selesai Dikerjakan`, `Lanjutkan Ujian`, `Terkunci`, `Tersedia / Mulai Ujian`) accurately.
+ */
+export async function fetchAllStudentSessionsFromSupabase(
+  nis: string
+): Promise<FetchExamResultsWithStatus> {
+  const cleanNis = (nis || '').trim();
+  if (!isSupabaseConfigured || !supabase || !cleanNis) {
+    return {
+      sessions: null,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  try {
+    const { data, error } = await supabase
+      .from('cbt_exam_sessions')
+      .select('*')
+      .or(`nis.eq.${cleanNis},student_nis.eq.${cleanNis}`)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      const exactMessage = formatSupabaseError(error);
+      console.warn('[Supabase] fetchAllStudentSessions failed:', exactMessage);
+      return { sessions: null, error: exactMessage };
+    }
+    return {
+      sessions: (data || []).map(row => mapSupabaseRowToSession(row as SupabaseExamSessionRow)),
+    };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.warn('[Supabase] fetchAllStudentSessions network error:', exactMessage);
+    return { sessions: null, error: exactMessage };
+  }
 }
 
 export async function fetchExamResultsWithStatusFromSupabase(): Promise<FetchExamResultsWithStatus> {

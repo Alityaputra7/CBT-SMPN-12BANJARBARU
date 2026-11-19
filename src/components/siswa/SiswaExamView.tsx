@@ -50,7 +50,7 @@ import {
 import {
   loadPersistedStudentSession,
   savePersistedStudentSession,
-  clearPersistedStudentSession,
+  clearActiveExamFromPersistedStudentSession,
   flushSingleSessionToLocalStorage
 } from '../../utils/dataSync';
 import { validateExamSchedule, formatDateIndo } from '../../utils/scheduleValidator';
@@ -65,7 +65,9 @@ interface SiswaExamViewProps {
   student: Student;
   exam: ExamSchedule;
   availableExams?: ExamSchedule[];
+  studentSessions?: StudentExamSession[];
   onSelectExam?: (exam: ExamSchedule) => void;
+  onReturnToScheduleList?: (preferredNextExamId?: string) => Promise<void> | void;
   questionBank: QuestionBank;
   session: StudentExamSession;
   onUpdateSession: (updatedSession: StudentExamSession, options?: { skipSupabaseMirror?: boolean }) => void;
@@ -81,7 +83,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   student,
   exam,
   availableExams = [],
+  studentSessions = [],
   onSelectExam,
+  onReturnToScheduleList,
   questionBank,
   session,
   onUpdateSession,
@@ -96,20 +100,22 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const p = loadPersistedStudentSession();
     if (!p) return null;
     if (p.student_nis.trim() !== student.nis.trim()) return null;
-    if (p.active_exam_id && p.active_exam_id !== exam.id) return null;
+    // Match strictly to the exact active_exam_id so Session 1 never bleeds into Session 2
+    if (!p.active_exam_id || p.active_exam_id !== exam.id) return null;
     return p;
   })();
 
+  const [justCompletedExamId, setJustCompletedExamId] = useState<string | null>(null);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() =>
     Math.max(0, session.currentQuestionIndex ?? persistedForExam?.current_question_index ?? 0)
   );
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasStarted, setHasStarted] = useState<boolean>(() =>
-    session.status === 'in_progress' ||
-    session.isLocked ||
-    session.status === 'locked' ||
-    isSessionCompleted(session.status) ||
-    Boolean(persistedForExam?.has_started)
+    !isSessionCompleted(session.status) &&
+    (session.status === 'in_progress' ||
+      session.isLocked ||
+      session.status === 'locked' ||
+      Boolean(persistedForExam?.has_started))
   );
   const [timeRemaining, setTimeRemaining] = useState<number>(() => {
     const defaultSec = (exam.durationMinutes || 90) * 60;
@@ -183,7 +189,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   ) => {
     flushSingleSessionToLocalStorage(targetSession);
     if (isSessionCompleted(targetSession.status)) {
-      clearPersistedStudentSession();
+      // Keep student login identity intact; clear ONLY the completed active_exam_id
+      clearActiveExamFromPersistedStudentSession();
       return;
     }
     const isStartedNow =
@@ -219,7 +226,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       isPageUnloadingRef.current = true;
       const latest = sessionRef.current;
       if (isSessionCompleted(latest.status)) {
-        clearPersistedStudentSession();
+        clearActiveExamFromPersistedStudentSession();
         return;
       }
       const snapshot: StudentExamSession = {
@@ -247,26 +254,36 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     };
   }, [student.id, student.nis, student.name, student.classId, student.className, exam.id]);
 
-  // Keep local exam screen synchronized with Operator actions & restored session state
+  // Keep local exam screen synchronized strictly with the currently selected `exam.id` & its own session
   useEffect(() => {
+    const defaultSec = (exam.durationMinutes || 90) * 60;
     if (session.status === 'not_started' && !session.isLocked) {
       setHasStarted(false);
       setViolationAlert(null);
       setShowSubmitConfirm(false);
+      setSubmitError(null);
+      setUnlockCheckNotice(null);
       setCurrentQuestionIndex(0);
-      setTimeRemaining(session.timeRemainingSeconds || exam.durationMinutes * 60);
+      setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     } else if (isSessionCompleted(session.status)) {
-      setHasStarted(true);
+      clearActiveExamFromPersistedStudentSession();
       setViolationAlert(null);
-      clearPersistedStudentSession();
+      setShowSubmitConfirm(false);
+      // Only show the completion card if the student JUST submitted this exam; otherwise keep on Schedule List
+      if (justCompletedExamId !== exam.id) {
+        setHasStarted(false);
+      }
     } else if (session.isLocked || session.status === 'locked') {
       setHasStarted(true);
       setViolationAlert(null);
+      setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     } else if (!session.isLocked && session.status === 'in_progress') {
       setHasStarted(true);
       setViolationAlert(null);
+      setCurrentQuestionIndex(Math.max(0, session.currentQuestionIndex || 0));
+      setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     }
-  }, [session.status, session.isLocked, session.id, session.adminActionAt, exam.durationMinutes]);
+  }, [exam.id, session.status, session.isLocked, session.id, session.adminActionAt, exam.durationMinutes, justCompletedExamId]);
 
   // Live Clock to track exam schedule timing in real-time
   const [nowTime, setNowTime] = useState<Date>(() => new Date());
@@ -426,8 +443,10 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       }
 
       if (isRemoteDone) {
-        clearPersistedStudentSession();
-        setHasStarted(true);
+        clearActiveExamFromPersistedStudentSession();
+        if (justCompletedExamId !== exam.id) {
+          setHasStarted(false);
+        }
         setViolationAlert(null);
         setUnlockCheckNotice(null);
         return { unlocked: true, statusText: 'Ujian sudah berstatus selesai di Supabase.' };
@@ -952,8 +971,10 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
       // Only transition screen AFTER database persistence is confirmed
       clearSyncError();
-      clearPersistedStudentSession();
+      // Keep student login identity intact; clear ONLY this finished exam's active_exam_id
+      clearActiveExamFromPersistedStudentSession();
       sessionRef.current = result.session;
+      setJustCompletedExamId(exam.id);
       onUpdateSession(result.session, { skipSupabaseMirror: true });
       setShowSubmitConfirm(false);
       return true;
@@ -964,6 +985,52 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       return false;
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Look up a student's session strictly by `exam_id`
+  const getSessionForExam = (targetExamId: string): StudentExamSession | undefined => {
+    const matched = studentSessions.find(s => s.examId === targetExamId);
+    if (matched) return matched;
+    return session.examId === targetExamId ? session : undefined;
+  };
+
+  const studentEligibleExams = availableExams.filter(ex =>
+    isExamMatchingStudentClass(ex, student.classId, student.className)
+  );
+
+  // Next uncompleted & unlocked exam (e.g. Session 2 on the same day after Session 1 finishes)
+  const nextAvailableExam = (() => {
+    const others = studentEligibleExams.filter(ex => {
+      if (ex.id === exam.id) return false;
+      const s = getSessionForExam(ex.id);
+      const done = s ? isSessionCompleted(s.status) : false;
+      const locked = s ? Boolean(s.isLocked || s.status === 'locked') : false;
+      return !done && !locked;
+    });
+    return others.find(ex => validateExamSchedule(ex, nowTime).canStart) || others[0] || null;
+  })();
+
+  const handleGoToScheduleList = async (preferredNextExamId?: string) => {
+    setJustCompletedExamId(null);
+    setHasStarted(false);
+    setViolationAlert(null);
+    setShowSubmitConfirm(false);
+    setSubmitError(null);
+    setUnlockCheckNotice(null);
+    setCurrentQuestionIndex(0);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore fullscreen exit errors
+      }
+    }
+    if (onReturnToScheduleList) {
+      await onReturnToScheduleList(preferredNextExamId);
+    } else if (preferredNextExamId && onSelectExam) {
+      const target = studentEligibleExams.find(e => e.id === preferredNextExamId);
+      if (target) onSelectExam(target);
     }
   };
 
@@ -1037,54 +1104,95 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
         )}
 
-        {/* Available Exams Selector (Strictly for Student's Class) */}
+        {/* Available Exams Selector (Daftar Jadwal Ujian Siswa per exam_id — Kelas Siswa) */}
         {(() => {
-          const studentEligibleExams = availableExams.filter(ex => 
-            isExamMatchingStudentClass(ex, student.classId, student.className)
-          );
-          if (!studentEligibleExams || studentEligibleExams.length <= 1 || !onSelectExam) return null;
+          if (!studentEligibleExams || studentEligibleExams.length === 0) return null;
 
           return (
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-slate-700">
-                Pilih Jadwal Ujian Terdaftar untuk Kelas {student.className}:
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <label className="block text-xs font-bold text-slate-800">
+                  Daftar Jadwal Ujian Kelas {student.className} ({studentEligibleExams.length} Jadwal):
+                </label>
+                <span className="text-[10px] font-medium text-slate-500">
+                  Status berlaku terpisah per mata pelajaran
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {studentEligibleExams.map(ex => {
                   const isSelected = ex.id === exam.id;
                   const exCheck = validateExamSchedule(ex, nowTime);
+                  const exSession = getSessionForExam(ex.id);
+                  const exIsDone = exSession ? isSessionCompleted(exSession.status) : false;
+                  const exIsLocked = exSession ? Boolean(exSession.isLocked || exSession.status === 'locked') : false;
+                  const exInProgress = exSession?.status === 'in_progress' && !exIsLocked;
                   const count = questionBank.questions.filter(q => 
                     q.subjectId === ex.subjectId && isQuestionMatchingClass(q.classId, q.grade, student.classId)
                   ).length;
+
+                  const statusLabel = exIsDone
+                    ? 'Selesai Dikerjakan'
+                    : exIsLocked
+                      ? `Terkunci (${exSession?.violationsCount || 3}/${schoolSetting.maxViolations || 3})`
+                      : exInProgress
+                        ? 'Sedang Dikerjakan'
+                        : exCheck.canStart
+                          ? 'Tersedia / Mulai Ujian'
+                          : exCheck.statusBadge;
+
+                  const statusBadgeStyle = exIsDone
+                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                    : exIsLocked
+                      ? 'bg-rose-100 text-rose-800 border-rose-300'
+                      : exInProgress
+                        ? 'bg-blue-100 text-blue-800 border-blue-300'
+                        : exCheck.canStart
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                          : exCheck.badgeClass;
+
                   return (
                     <button
                       key={ex.id}
                       type="button"
+                      disabled={exIsDone}
                       onClick={() => {
+                        if (exIsDone || !onSelectExam) return;
+                        setJustCompletedExamId(null);
                         onSelectExam(ex);
-                        setCurrentQuestionIndex(0);
+                        setCurrentQuestionIndex(exInProgress ? Math.max(0, exSession?.currentQuestionIndex || 0) : 0);
                       }}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        isSelected 
-                          ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 shadow-xs' 
-                          : 'border-slate-200 bg-white hover:bg-slate-50'
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        exIsDone
+                          ? 'border-emerald-200 bg-emerald-50/40 opacity-80 cursor-not-allowed'
+                          : isSelected
+                            ? 'border-blue-600 bg-blue-50/70 ring-2 ring-blue-500/20 shadow-xs cursor-pointer'
+                            : 'border-slate-200 bg-white hover:bg-slate-50 cursor-pointer'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1.5">
-                        <span className="text-xs font-bold text-slate-900 truncate">{ex.subjectName}</span>
+                        <span className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
+                          {exIsDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                          {ex.subjectName}
+                        </span>
                         <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold shrink-0 ${
-                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                          exIsDone
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-slate-100 text-slate-700'
                         }`}>
-                          {count} Soal
+                          {exIsDone && schoolSetting.allowStudentViewResult
+                            ? `Nilai: ${exSession?.finalScore ?? 0}`
+                            : `${count} Soal`}
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">{ex.title}</p>
-                      <div className="flex items-center justify-between gap-1.5 mt-1.5 pt-1.5 border-t border-slate-100">
+                      <div className="flex items-center justify-between gap-1.5 mt-2 pt-1.5 border-t border-slate-200/70">
                         <span className="text-[10px] font-mono text-slate-500">
                           {ex.date} · {ex.startTime}-{ex.endTime}
                         </span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${exCheck.badgeClass}`}>
-                          {exCheck.canStart ? 'AKTIF' : exCheck.statusBadge}
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border shrink-0 ${statusBadgeStyle}`}>
+                          {statusLabel}
                         </span>
                       </div>
                     </button>
@@ -1245,13 +1353,37 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         </div>
 
         <div className="space-y-2 pt-1">
-          {scheduleCheck.canStart && questions.length > 0 ? (
+          {isSessionCompleted(session.status) ? (
+            <div className="space-y-2">
+              <button
+                disabled
+                className="w-full py-3.5 px-4 bg-emerald-50 text-emerald-800 font-semibold rounded-xl text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-emerald-300"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Ujian {exam.subjectName} Sudah Selesai Dikerjakan</span>
+              </button>
+              {nextAvailableExam && (
+                <button
+                  type="button"
+                  onClick={() => void handleGoToScheduleList(nextAvailableExam.id)}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Maximize className="w-4 h-4" />
+                  <span>Pilih Jadwal Ujian Berikutnya: {nextAvailableExam.subjectName}</span>
+                </button>
+              )}
+            </div>
+          ) : scheduleCheck.canStart && questions.length > 0 ? (
             <button
               onClick={handleStartExam}
               className="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
             >
               <Maximize className="w-4 h-4" />
-              <span>Mulai Kerjakan Ujian ({questions.length} Soal · Kelas {student.className})</span>
+              <span>
+                {session.status === 'in_progress'
+                  ? `Lanjutkan Ujian ${exam.subjectName} (${questions.length} Soal)`
+                  : `Mulai Kerjakan Ujian ${exam.subjectName} (${questions.length} Soal · Kelas ${student.className})`}
+              </span>
             </button>
           ) : (
             <div className="space-y-2">
@@ -1392,11 +1524,21 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUnlock ? 'animate-spin' : ''}`} />
             <span>{isCheckingUnlock ? 'Memeriksa Supabase...' : 'Cek Status Pembukaan Kunci'}</span>
           </button>
+          {nextAvailableExam && (
+            <button
+              type="button"
+              onClick={() => void handleGoToScheduleList(nextAvailableExam.id)}
+              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Pilih Jadwal Ujian Lain</span>
+            </button>
+          )}
           <button
             onClick={onExitExam}
             className="w-full sm:w-auto px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border border-slate-200"
           >
-            Kembali ke Beranda
+            Keluar (Logout)
           </button>
         </div>
       </div>
@@ -1411,15 +1553,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <CheckCircle className="w-8 h-8" />
         </div>
         <div>
+          <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full mb-2">
+            {exam.subjectName} · Selesai Dikerjakan
+          </span>
           <h2 className="text-xl font-bold text-slate-900">Ujian Berhasil Dikumpulkan</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Terima kasih {student.name}, jawaban Anda telah tersimpan dengan aman di server CBT.
+            Terima kasih {student.name}, jawaban Anda untuk <strong>{exam.title}</strong> telah tersimpan dengan aman di server Supabase CBT.
           </p>
         </div>
 
         {schoolSetting.allowStudentViewResult && (
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-            <span className="text-xs font-semibold text-slate-500">Nilai Ujian Sementara:</span>
+            <span className="text-xs font-semibold text-slate-500">Nilai Ujian Sementara ({exam.subjectName}):</span>
             <div className="text-3xl font-bold font-mono text-blue-700">
               {session.finalScore} / 100
             </div>
@@ -1437,12 +1582,53 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
         )}
 
-        <button
-          onClick={onExitExam}
-          className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors"
-        >
-          Selesai & Keluar
-        </button>
+        {nextAvailableExam && (
+          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl text-left space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-blue-900">
+                Jadwal Ujian Sesi Berikutnya Tersedia:
+              </span>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${validateExamSchedule(nextAvailableExam, nowTime).badgeClass}`}>
+                {validateExamSchedule(nextAvailableExam, nowTime).canStart ? 'AKTIF SEKARANG' : validateExamSchedule(nextAvailableExam, nowTime).statusBadge}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-slate-900">
+              {nextAvailableExam.subjectName} — {nextAvailableExam.title}
+            </p>
+            <p className="text-[11px] text-slate-600 font-mono">
+              {formatDateIndo(nextAvailableExam.date)} · Pukul {nextAvailableExam.startTime} - {nextAvailableExam.endTime} WITA
+            </p>
+          </div>
+        )}
+
+        <div className="space-y-2 pt-1">
+          {nextAvailableExam ? (
+            <button
+              type="button"
+              onClick={() => void handleGoToScheduleList(nextAvailableExam.id)}
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Lanjut ke Daftar Jadwal ({nextAvailableExam.subjectName})</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleGoToScheduleList()}
+              className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Kembali ke Daftar Jadwal Ujian</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onExitExam}
+            className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer border border-slate-200"
+          >
+            Selesai & Keluar (Logout)
+          </button>
+        </div>
       </div>
     );
   }
