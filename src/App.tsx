@@ -672,9 +672,6 @@ export default function App() {
                 const localSess = prevSessions.find(p => p.id === remoteSess.id);
                 if (!localSess || localSess.studentId !== activeStudentId) return remoteSess;
 
-                const localAnswerCount = Object.keys(localSess.answers || {}).length;
-                const remoteAnswerCount = Object.keys(remoteSess.answers || {}).length;
-
                 // Authoritative Operator / Guru interventions always take effect immediately
                 const adminActionOccurred = Boolean(
                   remoteSess.adminActionAt && remoteSess.adminActionAt !== localSess.adminActionAt
@@ -706,15 +703,12 @@ export default function App() {
                   }
                   return {
                     ...remoteSess,
-                    answers: localAnswerCount > remoteAnswerCount ? localSess.answers : remoteSess.answers,
+                    answers: localSess.answers,
                   };
                 }
 
-                // Preserve active student's newer local progress if not yet synced to remote
-                if (
-                  (localAnswerCount > remoteAnswerCount || localSess.violationsCount > remoteSess.violationsCount) &&
-                  localSess.lastHeartbeat >= remoteSess.lastHeartbeat
-                ) {
+                // Never overwrite active student's local answers via periodic polling
+                if (localSess.status === 'in_progress' || localSess.isLocked) {
                   return localSess;
                 }
                 return remoteSess;
