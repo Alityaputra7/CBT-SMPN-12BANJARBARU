@@ -161,6 +161,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     count: number;
     max: number;
   } | null>(null);
+  const [focusLostWarning, setFocusLostWarning] = useState<{
+    active: boolean;
+    reason: string;
+    isSplitScreen: boolean;
+    focusReturned: boolean;
+  } | null>(null);
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const reportSyncError = (message: string) => {
@@ -181,6 +187,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const hasStartedRef = useRef<boolean>(hasStarted);
   const isPageUnloadingRef = useRef<boolean>(false);
   const lastViolationAtRef = useRef<number>(0);
+  const focusLostStartedAtRef = useRef<number | null>(null);
+  const lastSustainedPenaltyAtRef = useRef<number>(0);
+  const isSplitScreenActiveRef = useRef<boolean>(false);
   const lastExamIdRef = useRef<string>(exam.id);
   const textDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingTextSyncRef = useRef<boolean>(false);
@@ -959,19 +968,90 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   }, [hasStarted, session.status, session.isLocked]);
 
   // Anti-Cheat Event Listeners (3x tolerance: 1/3 warning, 2/3 final warning, 3/3 auto-lock)
+  // Hardened against Android Floating Window / Pop-up View / Split Screen with zero false positives
   useEffect(() => {
-    if (!hasStarted || session.status !== 'in_progress' || session.isLocked) return;
+    if (!hasStarted || session.status !== 'in_progress' || session.isLocked) {
+      setFocusLostWarning(null);
+      focusLostStartedAtRef.current = null;
+      lastSustainedPenaltyAtRef.current = 0;
+      isSplitScreenActiveRef.current = false;
+      return;
+    }
 
     const maxViolations = schoolSetting.maxViolations || 3;
+    const VIOLATION_COOLDOWN_MS = 2500;
+    const SUSTAINED_FLOATING_PENALTY_MS = 5000;
+    const FLOATING_WINDOW_REASON =
+      'Membuka jendela mengambang (Floating Window) / Split Screen / Keluar fokus ujian';
 
-    const handleViolation = (type: ViolationType, details: string) => {
+    // Capture baseline viewport dimensions for accurate Split-Screen detection
+    const baseline = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      outerWidth: window.outerWidth || window.innerWidth,
+      outerHeight: window.outerHeight || window.innerHeight,
+    };
+
+    const isEditableElementFocused = (): boolean => {
+      const activeEl = document.activeElement;
+      if (!activeEl) return false;
+      const tag = activeEl.tagName.toLowerCase();
+      return tag === 'textarea' || tag === 'input' || (activeEl as HTMLElement).isContentEditable;
+    };
+
+    const checkIsSplitScreenViewport = (): boolean => {
+      if (typeof window === 'undefined') return false;
+      const curW = window.innerWidth;
+      const curH = window.innerHeight;
+      const screenAvailW = window.screen?.availWidth || baseline.width;
+      const screenAvailH = window.screen?.availHeight || baseline.height;
+
+      // Detect natural phone orientation rotation (portrait <-> landscape): update baseline, NOT a violation
+      const looksLikeRotation =
+        Math.abs(curW - baseline.height) < 140 && Math.abs(curH - baseline.width) < 140;
+      if (looksLikeRotation) {
+        baseline.width = curW;
+        baseline.height = curH;
+        baseline.outerWidth = window.outerWidth || curW;
+        baseline.outerHeight = window.outerHeight || curH;
+        return false;
+      }
+
+      // Update baseline upward if user maximizes or enters fullscreen
+      if (curW > baseline.width) baseline.width = curW;
+      if (curH > baseline.height) baseline.height = curH;
+
+      // 1. Horizontal shrink (>28% narrower than baseline/screen) — side-by-side Split Screen or resized floating browser
+      const refW = Math.min(baseline.width, screenAvailW);
+      if (refW > 0 && curW < refW * 0.72) {
+        return true;
+      }
+
+      // 2. Vertical OS window shrink (top/bottom Android Split Screen):
+      // `window.outerHeight` tracks the browser window height (unaffected by mobile soft keyboard on Chrome Android)
+      const outerH = window.outerHeight || curH;
+      const outerHRatio = screenAvailH > 0 ? outerH / screenAvailH : 1;
+      if (screenAvailH >= 500 && outerHRatio < 0.7) {
+        return true;
+      }
+
+      // 3. Sudden viewport height collapse (>35%) when NO editable input/textarea is focused
+      // (excludes Android virtual keyboard sliding up when typing essays/short answers)
+      if (!isEditableElementFocused() && baseline.height >= 450 && curH < baseline.height * 0.65) {
+        return true;
+      }
+
+      return false;
+    };
+
+    const handleViolation = (type: ViolationType, details: string, bypassCooldown = false) => {
       if (isPageUnloadingRef.current) return;
       const latestSession = sessionRef.current;
       if (latestSession.isLocked || latestSession.status !== 'in_progress') return;
 
-      // Cooldown 1500ms so a single tab switch doesn't double-fire blur + visibilitychange
+      // Cooldown 2.5 seconds so a single action (blur + visibilitychange + resize) never double-counts
       const now = Date.now();
-      if (now - lastViolationAtRef.current < 1500) return;
+      if (!bypassCooldown && now - lastViolationAtRef.current < VIOLATION_COOLDOWN_MS) return;
       lastViolationAtRef.current = now;
 
       const newCount = (latestSession.violationsCount || 0) + 1;
@@ -982,6 +1062,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       if (isNowLocked) {
         clearTextDebounceTimer();
         hasPendingTextSyncRef.current = false;
+        setFocusLostWarning(null);
       }
 
       const latestWithAnswers: StudentExamSession = {
@@ -1027,7 +1108,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         setViolationAlert({
           show: true,
           title: `Peringatan 1/${maxViolations}: Dilarang meninggalkan halaman ujian!`,
-          msg: `Sistem mendeteksi pelanggaran: ${details}. Tetap berada di halaman ujian dalam mode layar penuh.`,
+          msg: `Sistem mendeteksi pelanggaran: ${details}. Tutup jendela mengambang / aplikasi lain dan tetap di layar penuh ujian.`,
           count: newCount,
           max: maxViolations
         });
@@ -1042,14 +1123,78 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       }
     };
 
+    const engageFocusLossShield = (
+      type: ViolationType,
+      reason: string,
+      isSplitScreen = false
+    ) => {
+      if (isPageUnloadingRef.current) return;
+      const latestSession = sessionRef.current;
+      if (latestSession.isLocked || latestSession.status !== 'in_progress') return;
+
+      const now = Date.now();
+      if (focusLostStartedAtRef.current === null) {
+        focusLostStartedAtRef.current = now;
+        lastSustainedPenaltyAtRef.current = now;
+      }
+
+      // Immediately blackout/hide exam questions so student cannot read questions behind a floating window
+      setFocusLostWarning({
+        active: true,
+        reason,
+        isSplitScreen,
+        focusReturned: false,
+      });
+
+      handleViolation(type, reason);
+    };
+
+    let blurVerifyTimer: ReturnType<typeof setTimeout> | null = null;
+
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        handleViolation('tab_switch', 'Beralih ke tab atau aplikasi lain');
+        engageFocusLossShield('tab_switch', 'Beralih ke tab atau aplikasi lain', false);
       }
     };
 
     const onBlur = () => {
-      handleViolation('blur_loss', 'Jendela ujian kehilangan fokus');
+      if (isPageUnloadingRef.current) return;
+      // Brief 120ms verification: normal clicks inside exam DOM (textarea, buttons, modal) keep document.hasFocus() === true
+      if (blurVerifyTimer) clearTimeout(blurVerifyTimer);
+      blurVerifyTimer = setTimeout(() => {
+        blurVerifyTimer = null;
+        if (isPageUnloadingRef.current) return;
+        if (!document.hasFocus()) {
+          engageFocusLossShield('blur_loss', FLOATING_WINDOW_REASON, isSplitScreenActiveRef.current);
+        }
+      }, 120);
+    };
+
+    const onFocus = () => {
+      if (blurVerifyTimer) {
+        clearTimeout(blurVerifyTimer);
+        blurVerifyTimer = null;
+      }
+      const stillSplit = checkIsSplitScreenViewport();
+      isSplitScreenActiveRef.current = stillSplit;
+
+      if (document.hasFocus() && !stillSplit) {
+        focusLostStartedAtRef.current = null;
+        lastSustainedPenaltyAtRef.current = 0;
+        // Overlay closes only after floating window/split-screen is closed and focus genuinely returns
+        setFocusLostWarning(null);
+      } else if (stillSplit) {
+        setFocusLostWarning(prev =>
+          prev
+            ? { ...prev, isSplitScreen: true, focusReturned: document.hasFocus() }
+            : {
+                active: true,
+                reason: 'Mode Split Screen masih aktif. Kembalikan layar ke ukuran penuh untuk melanjutkan ujian.',
+                isSplitScreen: true,
+                focusReturned: document.hasFocus(),
+              }
+        );
+      }
     };
 
     const onFullscreenChange = () => {
@@ -1062,13 +1207,76 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     };
 
     const onWindowResize = () => {
-      // Detect desktop/tablet split-screen without false-triggering on mobile virtual keyboard height changes
-      if (typeof window !== 'undefined' && window.screen?.availWidth >= 768) {
-        if (window.innerWidth < window.screen.availWidth * 0.65) {
-          handleViolation('blur_loss', 'Layar diperkecil / mode split-screen terdeteksi');
-        }
+      if (isPageUnloadingRef.current) return;
+      const isSplitNow = checkIsSplitScreenViewport();
+      isSplitScreenActiveRef.current = isSplitNow;
+
+      if (isSplitNow) {
+        engageFocusLossShield(
+          'blur_loss',
+          'Membuka jendela mengambang (Floating Window) / Split Screen / Ukuran layar menyusut drastis',
+          true
+        );
+      } else if (document.hasFocus()) {
+        focusLostStartedAtRef.current = null;
+        lastSustainedPenaltyAtRef.current = 0;
+        setFocusLostWarning(null);
       }
     };
+
+    // 1-second continuous watchdog for `!document.hasFocus()` (catches Android Pop-up View / Floating Window
+    // even if visibilitychange never fires, and escalates violation if kept open > 5 seconds)
+    const focusWatchdog = setInterval(() => {
+      if (isPageUnloadingRef.current) return;
+      const latestSession = sessionRef.current;
+      if (latestSession.isLocked || latestSession.status !== 'in_progress') {
+        setFocusLostWarning(null);
+        return;
+      }
+
+      const hasDocFocus = document.hasFocus();
+      const isSplitNow = checkIsSplitScreenViewport();
+      isSplitScreenActiveRef.current = isSplitNow;
+
+      if (!hasDocFocus || isSplitNow) {
+        const now = Date.now();
+        const reason = isSplitNow
+          ? 'Membuka jendela mengambang (Floating Window) / Split Screen / Ukuran layar menyusut drastis'
+          : FLOATING_WINDOW_REASON;
+
+        // Immediately ensure question-hiding overlay is active
+        setFocusLostWarning(prev =>
+          prev?.active && prev.isSplitScreen === isSplitNow && prev.focusReturned === hasDocFocus
+            ? prev
+            : {
+                active: true,
+                reason,
+                isSplitScreen: isSplitNow,
+                focusReturned: hasDocFocus,
+              }
+        );
+
+        if (focusLostStartedAtRef.current === null) {
+          // Newly detected focus loss via polling
+          focusLostStartedAtRef.current = now;
+          lastSustainedPenaltyAtRef.current = now;
+          handleViolation('blur_loss', reason);
+        } else if (now - lastSustainedPenaltyAtRef.current >= SUSTAINED_FLOATING_PENALTY_MS) {
+          // Student kept Floating Window / Split Screen open for > 5 seconds -> escalate violation until 3/3 lock
+          lastSustainedPenaltyAtRef.current = now;
+          handleViolation(
+            'blur_loss',
+            `${FLOATING_WINDOW_REASON} (dibiarkan terbuka >5 detik)`,
+            true
+          );
+        }
+      } else if (focusLostStartedAtRef.current !== null) {
+        // Focus fully returned & viewport restored
+        focusLostStartedAtRef.current = null;
+        lastSustainedPenaltyAtRef.current = 0;
+        setFocusLostWarning(null);
+      }
+    }, 1000);
 
     const onContextMenu = (e: MouseEvent) => {
       e.preventDefault();
@@ -1088,14 +1296,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     document.addEventListener('visibilitychange', onVisibilityChange);
     window.addEventListener('blur', onBlur);
+    window.addEventListener('focus', onFocus);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     window.addEventListener('resize', onWindowResize);
     window.addEventListener('contextmenu', onContextMenu);
     window.addEventListener('keydown', onKeyDown);
 
     return () => {
+      if (blurVerifyTimer) clearTimeout(blurVerifyTimer);
+      clearInterval(focusWatchdog);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       window.removeEventListener('resize', onWindowResize);
       window.removeEventListener('contextmenu', onContextMenu);
@@ -2027,6 +2239,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   // 4. Main Exam Workplace (read exclusively from pure localAnswers state)
   const studentAns = localAnswers[currentQ.id]?.answer;
   const isDoubtful = !!localAnswers[currentQ.id]?.isDoubtful;
+  const isShieldActive = Boolean(focusLostWarning?.active);
 
   return (
     <div 
@@ -2038,8 +2251,64 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       onCut={e => e.preventDefault()}
       onPaste={e => e.preventDefault()}
     >
+      {/* Full-Screen Anti-Cheat Blackout Overlay (Immediately Hides Questions on Floating Window / Split Screen / Focus Loss) */}
+      {isShieldActive && (
+        <div
+          onClick={async () => {
+            window.focus();
+            if (document.hasFocus() && !isSplitScreenActiveRef.current) {
+              focusLostStartedAtRef.current = null;
+              lastSustainedPenaltyAtRef.current = 0;
+              setFocusLostWarning(null);
+              await enterFullscreen();
+            }
+          }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-rose-950/98 backdrop-blur-xl p-5 select-none"
+        >
+          <div className="bg-slate-950/95 border-2 border-rose-500 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4 text-white">
+            <div className="w-16 h-16 rounded-2xl bg-rose-600/25 border border-rose-500 text-rose-400 flex items-center justify-center mx-auto animate-pulse">
+              <ShieldAlert className="w-9 h-9" />
+            </div>
+            <div className="space-y-2">
+              <span className="inline-block text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-rose-600 text-white tracking-wide">
+                PELANGGARAN {session.violationsCount || 1} / {schoolSetting.maxViolations || 3}
+              </span>
+              <h3 className="text-lg font-extrabold text-white tracking-tight">
+                PERINGATAN PELANGGARAN!
+              </h3>
+              <p className="text-xs text-rose-100 leading-relaxed">
+                {focusLostWarning?.isSplitScreen
+                  ? 'Terdeteksi mengaktifkan mode Split Screen / mengecilkan layar ujian. Kembalikan browser ujian ke layar penuh dan ketuk layar ini untuk melanjutkan.'
+                  : 'Terdeteksi membuka aplikasi lain / jendela mengambang (Floating Window). Tutup jendela mengambang tersebut dan ketuk layar ini untuk melanjutkan.'}
+              </p>
+              <p className="text-[11px] text-amber-300 bg-amber-950/60 border border-amber-500/40 rounded-lg p-2.5 leading-relaxed">
+                Soal ujian disembunyikan otomatis. Membiarkan jendela mengambang / Split Screen tetap terbuka lebih dari 5 detik akan dihitung sebagai pelanggaran berikutnya hingga akun terkunci otomatis ({schoolSetting.maxViolations || 3}/{schoolSetting.maxViolations || 3}).
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async e => {
+                e.stopPropagation();
+                window.focus();
+                if (document.hasFocus() && !isSplitScreenActiveRef.current) {
+                  focusLostStartedAtRef.current = null;
+                  lastSustainedPenaltyAtRef.current = 0;
+                  setFocusLostWarning(null);
+                  await enterFullscreen();
+                }
+              }}
+              className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-colors cursor-pointer"
+            >
+              {focusLostWarning?.isSplitScreen
+                ? 'Saya Sudah Keluar dari Split Screen — Lanjutkan'
+                : 'Tutup Jendela Mengambang & Ketuk untuk Melanjutkan'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Hard Blocking Warning Modal for Violation 1/3 and 2/3 */}
-      {violationAlert && violationAlert.show && (
+      {!isShieldActive && violationAlert && violationAlert.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-xs p-4">
           <div className={`bg-white max-w-md w-full rounded-2xl p-6 shadow-2xl border-2 text-center space-y-4 ${
             violationAlert.count >= 2 ? 'border-rose-600' : 'border-amber-500'
@@ -2204,7 +2473,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       )}
 
       {/* Main Grid: Question Content (Left) & Palette Navigator (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-5 transition-all duration-150 ${
+        isShieldActive ? 'blur-xl opacity-0 pointer-events-none select-none' : ''
+      }`}>
         {/* Left: Question Box */}
         <div className="lg:col-span-8 bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
           <div className="flex items-center justify-between pb-3 border-b border-slate-100">
