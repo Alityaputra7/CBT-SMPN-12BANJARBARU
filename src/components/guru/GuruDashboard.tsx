@@ -47,7 +47,10 @@ import {
   isQuestionMatchingClass, 
   getQuestionClassLabel 
 } from '../../utils/classGroups';
-import { unlockStudentSessionInSupabase } from '../../services/supabaseExamService';
+import {
+  unlockStudentSessionInSupabase,
+  calculateUnlockCooldown
+} from '../../services/supabaseExamService';
 
 interface GuruDashboardProps {
   teacher: UserAccount;
@@ -221,8 +224,11 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
     const targetSession = sessions.find(s => s.id === sessionId);
     if (!targetSession) return;
     const result = await unlockStudentSessionInSupabase(targetSession, { resetViolations: true });
+    const cooldownInfo = calculateUnlockCooldown(result.session.lockCount || targetSession.lockCount || 1);
     onUpdateSessions(sessions.map(s => (s.id === sessionId ? result.session : s)));
-    alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka dan pelanggaran di-reset ke 0! Siswa kini dapat melanjutkan ujian kembali tanpa kehilangan jawaban.`);
+    alert(
+      `Blokiran ujian siswa "${studentName}" (Pemblokiran ke-${cooldownInfo.lockCount}) berhasil dibuka dan pelanggaran di-reset ke 0! Siswa dikenakan masa tunggu ${cooldownInfo.penaltyMinutes} menit sebelum dapat melanjutkan soal.`
+    );
   };
 
 

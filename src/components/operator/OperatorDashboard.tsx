@@ -67,7 +67,11 @@ import {
 import { downloadExamCardsAsHtml } from '../../utils/cardDownloader';
 import { formatDateIndo, validateExamSchedule } from '../../utils/scheduleValidator';
 import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
-import { unlockStudentSessionInSupabase } from '../../services/supabaseExamService';
+import {
+  unlockStudentSessionInSupabase,
+  calculateUnlockCooldown,
+  formatCooldownMMSS
+} from '../../services/supabaseExamService';
 
 interface OperatorDashboardProps {
   students: Student[];
@@ -167,6 +171,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         violationsCount: 0,
         isLocked: false,
         lockReason: undefined,
+        lockCount: 0,
+        unlockCooldownUntil: undefined,
         deviceSessionId: undefined,
         adminActionAt: Date.now(),
         submittedAt: undefined,
@@ -195,6 +201,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             violationsCount: 0,
             isLocked: false,
             lockReason: undefined,
+            lockCount: 0,
+            unlockCooldownUntil: undefined,
             deviceSessionId: undefined,
             adminActionAt: now,
             submittedAt: undefined,
@@ -208,8 +216,9 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     }
   };
 
-  // Token ticker
+  // Token & Monitor Cooldown 1-second live ticker
   const [tokenInfo, setTokenInfo] = useState(generateDynamicToken());
+  const [monitorNowMs, setMonitorNowMs] = useState<number>(() => Date.now());
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
   const [monitorSearch, setMonitorSearch] = useState('');
@@ -280,6 +289,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
   useEffect(() => {
     const timer = setInterval(() => {
       setTokenInfo(generateDynamicToken());
+      setMonitorNowMs(Date.now());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
@@ -352,15 +362,18 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
     setIsUnlockingId(sessionId);
     try {
       const result = await unlockStudentSessionInSupabase(targetSession, { resetViolations: true });
+      const cooldownInfo = calculateUnlockCooldown(result.session.lockCount || targetSession.lockCount || 1);
       onUpdateSessions(sessions.map(s => (s.id === sessionId ? result.session : s)));
       onAddAuditLog(
         'BUKA_KUNCI_SISWA',
-        `Operator membuka blokiran ujian dan mereset pelanggaran menjadi 0 untuk siswa: ${studentName}.`
+        `Operator membuka blokiran ujian (pemblokiran ke-${cooldownInfo.lockCount}), mereset pelanggaran menjadi 0, dan menerapkan masa tunggu ${cooldownInfo.penaltyMinutes} menit untuk siswa: ${studentName}.`
       );
       if (!result.success && result.error) {
-        alert(`Kunci lokal dibuka, namun sinkronisasi Supabase bermasalah: ${result.error}`);
+        alert(`Kunci lokal dibuka (sanksi masa tunggu ${cooldownInfo.penaltyMinutes} menit), namun sinkronisasi Supabase bermasalah: ${result.error}`);
       } else {
-        alert(`Blokiran ujian siswa "${studentName}" berhasil dibuka dan pelanggaran di-reset ke 0! Layar siswa akan terbuka otomatis.`);
+        alert(
+          `Blokiran ujian siswa "${studentName}" (Pemblokiran ke-${cooldownInfo.lockCount}) berhasil dibuka dan pelanggaran di-reset ke 0!\n\nSiswa dikenakan sanksi waktu tunggu selama ${cooldownInfo.penaltyMinutes} menit sebelum dapat melanjutkan pengerjaan soal.`
+        );
       }
     } finally {
       setIsUnlockingId(null);
@@ -1057,6 +1070,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                     .map(ls => {
                       const lsExam = exams.find(e => e.id === ls.examId);
                       const isUnlocking = isUnlockingId === ls.id;
+                      const lsCooldown = calculateUnlockCooldown(ls.lockCount || 1);
                       return (
                         <div
                           key={`${ls.nis}_${ls.examId}_${ls.id}`}
@@ -1068,11 +1082,15 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             <span className="ml-1.5 font-mono text-[10px] font-bold text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded">
                               {ls.violationsCount}/{maxViolationsAllowed}
                             </span>
+                            <span className="ml-1 text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                              Blokir ke-{lsCooldown.lockCount} · Tunggu {lsCooldown.penaltyMinutes}m
+                            </span>
                           </div>
                           <button
                             onClick={() => void handleUnlockSession(ls.id, ls.studentName)}
                             disabled={isUnlocking}
                             className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-bold bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors cursor-pointer disabled:opacity-60"
+                            title={`Buka kunci & terapkan sanksi masa tunggu ${lsCooldown.penaltyMinutes} menit`}
                           >
                             <Unlock className="w-3 h-3" />
                             {isUnlocking ? 'Membuka...' : 'Buka Kunci'}
@@ -1183,8 +1201,19 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                       const totalQ = examQuestionsCount > 0 ? examQuestionsCount : (s.totalQuestions || matchingExam?.totalQuestions || 25);
                       const isSessionLocked = s.isLocked || s.status === 'locked';
                       const isSessionDone = isSessionCompleted(s.status);
+                      const cooldownRemainingSec =
+                        !isSessionLocked &&
+                        !isSessionDone &&
+                        typeof s.unlockCooldownUntil === 'number' &&
+                        s.unlockCooldownUntil > monitorNowMs
+                          ? Math.ceil((s.unlockCooldownUntil - monitorNowMs) / 1000)
+                          : 0;
+                      const isInCooldown = cooldownRemainingSec > 0;
+                      const lockCountNum = Math.max(0, s.lockCount || 0);
                       const canResetAccount =
                         isSessionLocked ||
+                        isInCooldown ||
+                        lockCountNum > 0 ||
                         s.violationsCount > 0 ||
                         s.status !== 'not_started' ||
                         isSessionDone ||
@@ -1194,7 +1223,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                         Boolean(s.deviceSessionId);
 
                       return (
-                        <tr key={`${s.nis}_${s.examId}_${s.id}`} className={`hover:bg-slate-50/60 ${isSessionLocked ? 'bg-rose-50/50' : ''}`}>
+                        <tr
+                          key={`${s.nis}_${s.examId}_${s.id}`}
+                          className={`hover:bg-slate-50/60 ${
+                            isSessionLocked
+                              ? 'bg-rose-50/50'
+                              : isInCooldown
+                                ? 'bg-amber-50/50'
+                                : ''
+                          }`}
+                        >
                           <td className="py-2.5 px-3 font-mono text-slate-700 whitespace-nowrap">{s.nis}</td>
                           <td className="py-2.5 px-3 font-medium text-slate-900">
                             <div className="flex items-center gap-2">
@@ -1202,9 +1240,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 className={`w-2 h-2 rounded-full shrink-0 ${
                                   isSessionLocked
                                     ? 'bg-rose-500'
-                                    : s.isOnline
-                                      ? 'bg-emerald-500 animate-pulse'
-                                      : 'bg-slate-300'
+                                    : isInCooldown
+                                      ? 'bg-amber-500 animate-pulse'
+                                      : s.isOnline
+                                        ? 'bg-emerald-500 animate-pulse'
+                                        : 'bg-slate-300'
                                 }`}
                               />
                               <div>
@@ -1231,17 +1271,40 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           <td className="py-2.5 px-3 text-slate-600 whitespace-nowrap">{s.className}</td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
                             {(isSessionLocked || s.violationsCount >= maxViolationsAllowed) ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded">
-                                <ShieldAlert className="w-3 h-3" /> Terkunci ({s.violationsCount}/{maxViolationsAllowed})
-                              </span>
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-100 border border-rose-300 px-2 py-0.5 rounded">
+                                  <ShieldAlert className="w-3 h-3" /> Terkunci ({s.violationsCount}/{maxViolationsAllowed})
+                                </span>
+                                {lockCountNum > 0 && (
+                                  <span className="text-[10px] font-semibold text-rose-600">
+                                    Pemblokiran ke-{lockCountNum} (Sanksi unlock: {calculateUnlockCooldown(lockCountNum).penaltyMinutes} mnt)
+                                  </span>
+                                )}
+                              </div>
+                            ) : isInCooldown ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded font-mono">
+                                  <Clock className="w-3 h-3 text-amber-700 animate-pulse" /> Masa Tunggu Sanksi ({formatCooldownMMSS(cooldownRemainingSec)})
+                                </span>
+                                <span className="text-[10px] font-medium text-amber-700">
+                                  Pemblokiran ke-{Math.max(1, lockCountNum)} · Menunggu sanksi selesai
+                                </span>
+                              </div>
                             ) : isSessionDone ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
                                 <CheckCircle className="w-3 h-3" /> Selesai
                               </span>
                             ) : s.status === 'in_progress' ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
-                                <Clock className="w-3 h-3" /> Sedang Mengerjakan
-                              </span>
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                                  <Clock className="w-3 h-3" /> Sedang Mengerjakan
+                                </span>
+                                {lockCountNum > 0 && (
+                                  <span className="text-[10px] text-slate-500">
+                                    Riwayat blokir: {lockCountNum}x
+                                  </span>
+                                )}
+                              </div>
                             ) : s.isOnline ? (
                               <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
                                 Sudah Login
@@ -1261,17 +1324,24 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                             )}
                           </td>
                           <td className="py-2.5 px-3 whitespace-nowrap">
-                            <span
-                              className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] border ${
-                                isSessionLocked || s.violationsCount >= maxViolationsAllowed
-                                  ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                  : s.violationsCount > 0
-                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                                    : 'bg-slate-50 text-slate-500 border-slate-200'
-                              }`}
-                            >
-                              {s.violationsCount}/{maxViolationsAllowed}
-                            </span>
+                            <div className="flex flex-col items-start gap-0.5">
+                              <span
+                                className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] border ${
+                                  isSessionLocked || s.violationsCount >= maxViolationsAllowed
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                                    : s.violationsCount > 0
+                                      ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                      : 'bg-slate-50 text-slate-500 border-slate-200'
+                                }`}
+                              >
+                                {s.violationsCount}/{maxViolationsAllowed}
+                              </span>
+                              {lockCountNum > 0 && (
+                                <span className="text-[10px] font-mono text-slate-500">
+                                  Blokir: {lockCountNum}x
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-2.5 px-3 font-mono whitespace-nowrap">
                             {s.status === 'not_started' && answeredCount === 0 ? (

@@ -173,6 +173,8 @@ export interface StudentExamSession {
   violationsCount: number;
   isLocked: boolean;
   lockReason?: string;
+  lockCount?: number;
+  unlockCooldownUntil?: number | null;
   extraTimeMinutes: number;
   deviceInfo: string;
   deviceSessionId?: string;

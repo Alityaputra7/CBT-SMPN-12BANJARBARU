@@ -50,7 +50,9 @@ import {
   mergeExamAnswers,
   FRIENDLY_OFFLINE_SUBMIT_MESSAGE,
   getPendingSubmissionForExam,
-  flushPendingSubmissionsToSupabase
+  flushPendingSubmissionsToSupabase,
+  calculateUnlockCooldown,
+  formatCooldownMMSS
 } from '../../services/supabaseExamService';
 import {
   loadPersistedStudentSession,
@@ -167,6 +169,27 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     isSplitScreen: boolean;
     focusReturned: boolean;
   } | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(() => {
+    if (
+      isSessionCompleted(session.status) ||
+      session.isLocked ||
+      session.status === 'locked' ||
+      session.status === 'not_started'
+    ) {
+      return null;
+    }
+    const fromSession =
+      typeof session.unlockCooldownUntil === 'number' && session.unlockCooldownUntil > 0
+        ? session.unlockCooldownUntil
+        : 0;
+    const fromStorage =
+      typeof persistedForExam?.unlock_cooldown_until === 'number' &&
+      persistedForExam.unlock_cooldown_until > 0
+        ? persistedForExam.unlock_cooldown_until
+        : 0;
+    const best = Math.max(fromSession, fromStorage);
+    return best > Date.now() ? best : null;
+  });
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const reportSyncError = (message: string) => {
@@ -283,6 +306,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       time_remaining_seconds: targetSession.timeRemainingSeconds ?? timeRemainingRef.current,
       violations_count: targetSession.violationsCount ?? 0,
       is_locked: Boolean(targetSession.isLocked || targetSession.status === 'locked'),
+      lock_count: Math.max(0, targetSession.lockCount ?? 0),
+      unlock_cooldown_until:
+        !targetSession.isLocked &&
+        targetSession.status !== 'locked' &&
+        typeof targetSession.unlockCooldownUntil === 'number' &&
+        targetSession.unlockCooldownUntil > 0
+          ? targetSession.unlockCooldownUntil
+          : null,
       saved_at: Date.now()
     });
   };
@@ -331,12 +362,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       setShowSubmitConfirm(false);
       setSubmitError(null);
       setUnlockCheckNotice(null);
+      setCooldownUntil(null);
       setCurrentQuestionIndex(0);
       setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     } else if (isSessionCompleted(session.status)) {
       clearActiveExamFromPersistedStudentSession();
       setViolationAlert(null);
       setShowSubmitConfirm(false);
+      setCooldownUntil(null);
       // Only show the completion card if the student JUST submitted this exam; otherwise keep on Schedule List
       if (justCompletedExamId !== exam.id) {
         setHasStarted(false);
@@ -344,16 +377,27 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     } else if (session.isLocked || session.status === 'locked') {
       setHasStarted(true);
       setViolationAlert(null);
+      setCooldownUntil(null);
       setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     } else if (!session.isLocked && session.status === 'in_progress') {
       setHasStarted(true);
       setViolationAlert(null);
+      const nextCooldown =
+        typeof session.unlockCooldownUntil === 'number' && session.unlockCooldownUntil > Date.now()
+          ? session.unlockCooldownUntil
+          : null;
+      setCooldownUntil(prev => {
+        if (nextCooldown) return nextCooldown;
+        // Preserve unexpired localStorage cooldown on initial mount if prop hasn't synced yet
+        if (prev && prev > Date.now() && lastExamIdRef.current === exam.id) return prev;
+        return null;
+      });
       setCurrentQuestionIndex(Math.max(0, session.currentQuestionIndex || 0));
       setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     }
-  }, [exam.id, session.status, session.isLocked, session.id, session.adminActionAt, exam.durationMinutes, justCompletedExamId]);
+  }, [exam.id, session.status, session.isLocked, session.id, session.adminActionAt, session.unlockCooldownUntil, exam.durationMinutes, justCompletedExamId]);
 
-  // Live Clock to track exam schedule timing in real-time
+  // Live Clock to track exam schedule timing & cooldown countdown in real-time
   const [nowTime, setNowTime] = useState<Date>(() => new Date());
   useEffect(() => {
     const clockTimer = setInterval(() => {
@@ -361,6 +405,38 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }, 1000);
     return () => clearInterval(clockTimer);
   }, []);
+
+  // Progressive Unlock Cooldown Penalty live status
+  const isInCooldown =
+    !isSessionCompleted(session.status) &&
+    !session.isLocked &&
+    session.status !== 'locked' &&
+    session.status !== 'not_started' &&
+    Boolean(cooldownUntil && cooldownUntil > nowTime.getTime());
+
+  const cooldownRemainingSec =
+    isInCooldown && cooldownUntil
+      ? Math.max(0, Math.ceil((cooldownUntil - nowTime.getTime()) / 1000))
+      : 0;
+
+  // Automatically close cooldown screen & resume exam once countdown reaches 00:00
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    if (nowTime.getTime() >= cooldownUntil) {
+      setCooldownUntil(null);
+      const latest = sessionRef.current;
+      if (latest.unlockCooldownUntil) {
+        const resumedSession: StudentExamSession = {
+          ...latest,
+          unlockCooldownUntil: undefined,
+          updatedAt: new Date().toISOString(),
+        };
+        sessionRef.current = resumedSession;
+        persistExamSnapshotLocally(resumedSession, hasStartedRef.current);
+        onUpdateSession(resumedSession, { skipSupabaseMirror: true });
+      }
+    }
+  }, [cooldownUntil, nowTime]);
 
   // Always pull fresh exam schedules from Supabase when student views the readiness / schedule screen
   useEffect(() => {
@@ -452,6 +528,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           status: 'not_started',
           isLocked: false,
           lockReason: undefined,
+          lockCount: 0,
+          unlockCooldownUntil: undefined,
           violationsCount: 0,
           answers: {},
           scorePg: 0,
@@ -471,6 +549,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         persistExamSnapshotLocally(cleanResetSession, false);
         setHasStarted(false);
         setViolationAlert(null);
+        setCooldownUntil(null);
         setShowSubmitConfirm(false);
         setUnlockCheckNotice(null);
         setCurrentQuestionIndex(0);
@@ -496,6 +575,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const isAdminActionChanged = Boolean(
       remote.adminActionAt && remote.adminActionAt !== localLatest.adminActionAt
     );
+    const isAdminCooldownChanged =
+      (remote.unlockCooldownUntil || 0) !== (localLatest.unlockCooldownUntil || 0);
 
     // A. POST-INITIAL-LOAD (Realtime / Polling / Manual Check):
     // ONLY process Operator administrative changes; NEVER overwrite student's localAnswers!
@@ -509,6 +590,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           status: 'not_started',
           isLocked: false,
           lockReason: undefined,
+          lockCount: 0,
+          unlockCooldownUntil: undefined,
           violationsCount: 0,
           answers: {},
           scorePg: 0,
@@ -526,6 +609,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         persistExamSnapshotLocally(cleanResetSession, false);
         setHasStarted(false);
         setViolationAlert(null);
+        setCooldownUntil(null);
         setShowSubmitConfirm(false);
         setUnlockCheckNotice(null);
         setCurrentQuestionIndex(0);
@@ -539,6 +623,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         hasPendingTextSyncRef.current = false;
         const doneSession: StudentExamSession = {
           ...remote,
+          unlockCooldownUntil: undefined,
           answers:
             Object.keys(localAnswersRef.current).length > 0
               ? mergeExamAnswers(remote.answers, localAnswersRef.current)
@@ -547,6 +632,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         sessionRef.current = doneSession;
         onUpdateSession(doneSession, { skipSupabaseMirror: true });
         clearActiveExamFromPersistedStudentSession();
+        setCooldownUntil(null);
         if (justCompletedExamId !== exam.id) {
           setHasStarted(false);
         }
@@ -555,13 +641,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         return { unlocked: true, statusText: 'Ujian sudah berstatus selesai di Supabase.' };
       }
 
-      // 3. Operator administrative interventions (unlock, lock, violation reset, extra time)
+      // 3. Operator administrative interventions (unlock, lock, violation reset, extra time, cooldown)
       const hasAdminChange =
         isAdminUnlocked ||
         isAdminLocked ||
         isAdminViolationReset ||
         isAdminExtraTime ||
-        isAdminActionChanged;
+        isAdminActionChanged ||
+        isAdminCooldownChanged;
 
       if (!hasAdminChange) {
         // Pure echo of the student's own debounced save / heartbeat -> IGNORE COMPLETELY!
@@ -582,11 +669,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           )
         : timeRemainingRef.current;
 
+      const resolvedLockCount = Math.max(remote.lockCount || 0, localLatest.lockCount || 0);
+      const resolvedCooldownUntil = isRemoteLocked
+        ? undefined
+        : remote.unlockCooldownUntil ?? localLatest.unlockCooldownUntil ?? undefined;
+
       const adminUpdatedSession: StudentExamSession = {
         ...localLatest,
         status: isRemoteLocked ? 'locked' : (remote.status === 'in_progress' ? 'in_progress' : localLatest.status),
         isLocked: isRemoteLocked,
         lockReason: isRemoteLocked ? remote.lockReason : undefined,
+        lockCount: resolvedLockCount,
+        unlockCooldownUntil: resolvedCooldownUntil,
         violationsCount: isAdminUnlocked || isAdminViolationReset || isAdminActionChanged
           ? (remote.violationsCount || 0)
           : Math.max(localLatest.violationsCount || 0, remote.violationsCount || 0),
@@ -606,6 +700,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       if (!adminUpdatedSession.isLocked && adminUpdatedSession.status !== 'locked') {
         const startedNow = adminUpdatedSession.status === 'in_progress';
         if (startedNow) setHasStarted(true);
+        const activeCooldownMs =
+          typeof adminUpdatedSession.unlockCooldownUntil === 'number' &&
+          adminUpdatedSession.unlockCooldownUntil > Date.now()
+            ? adminUpdatedSession.unlockCooldownUntil
+            : null;
+        setCooldownUntil(activeCooldownMs);
         persistExamSnapshotLocally(adminUpdatedSession, startedNow);
         setViolationAlert(null);
         setUnlockCheckNotice(null);
@@ -613,6 +713,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           return { unlocked: true, statusText: 'Kunci ujian telah dibuka oleh Operator!' };
         }
       } else {
+        setCooldownUntil(null);
         persistExamSnapshotLocally(adminUpdatedSession, true);
         setHasStarted(true);
         setViolationAlert(null);
@@ -660,6 +761,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       persistExamSnapshotLocally(hydratedSession, false);
       setHasStarted(false);
       setViolationAlert(null);
+      setCooldownUntil(null);
       setShowSubmitConfirm(false);
       setUnlockCheckNotice(null);
       setCurrentQuestionIndex(0);
@@ -671,6 +773,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       clearTextDebounceTimer();
       hasPendingTextSyncRef.current = false;
       clearActiveExamFromPersistedStudentSession();
+      setCooldownUntil(null);
       if (justCompletedExamId !== exam.id) {
         setHasStarted(false);
       }
@@ -678,6 +781,15 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       setUnlockCheckNotice(null);
       return { unlocked: true, statusText: 'Ujian sudah berstatus selesai di Supabase.' };
     }
+
+    const hydratedCooldownMs =
+      !hydratedSession.isLocked &&
+      hydratedSession.status === 'in_progress' &&
+      typeof hydratedSession.unlockCooldownUntil === 'number' &&
+      hydratedSession.unlockCooldownUntil > Date.now()
+        ? hydratedSession.unlockCooldownUntil
+        : null;
+    setCooldownUntil(hydratedCooldownMs);
 
     const restoredQuestionIdx =
       questions.length > 0
@@ -918,9 +1030,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
   };
 
-  // Timer countdown (with lightweight 5-second localStorage timer checkpoint)
+  // Timer countdown (paused during progressive cooldown penalty; 5-second localStorage checkpoint)
   useEffect(() => {
-    if (!hasStarted || isSessionCompleted(session.status) || session.isLocked || session.status === 'locked') return;
+    if (!hasStarted || isSessionCompleted(session.status) || session.isLocked || session.status === 'locked' || isInCooldown) return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -945,7 +1057,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [hasStarted, session.status, session.isLocked]);
+  }, [hasStarted, session.status, session.isLocked, isInCooldown]);
 
   // Real-Time Periodic Heartbeat to Operator Dashboard (every 10 seconds, skips if essay debounce is actively pending)
   useEffect(() => {
@@ -969,8 +1081,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   // Anti-Cheat Event Listeners (3x tolerance: 1/3 warning, 2/3 final warning, 3/3 auto-lock)
   // Hardened against Android Floating Window / Pop-up View / Split Screen with zero false positives
+  // Paused automatically while student is waiting on the Progressive Cooldown Penalty screen
   useEffect(() => {
-    if (!hasStarted || session.status !== 'in_progress' || session.isLocked) {
+    if (!hasStarted || session.status !== 'in_progress' || session.isLocked || isInCooldown) {
       setFocusLostWarning(null);
       focusLostStartedAtRef.current = null;
       lastSustainedPenaltyAtRef.current = 0;
@@ -1056,6 +1169,9 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
       const newCount = (latestSession.violationsCount || 0) + 1;
       const isNowLocked = newCount >= maxViolations;
+      const nextLockCount = isNowLocked
+        ? (latestSession.lockCount || 0) + 1
+        : Math.max(0, latestSession.lockCount || 0);
 
       onRecordViolation(type, details);
 
@@ -1063,6 +1179,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         clearTextDebounceTimer();
         hasPendingTextSyncRef.current = false;
         setFocusLostWarning(null);
+        setCooldownUntil(null);
       }
 
       const latestWithAnswers: StudentExamSession = {
@@ -1074,9 +1191,11 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         ...latestWithAnswers,
         violationsCount: newCount,
         isLocked: isNowLocked,
+        lockCount: nextLockCount,
+        unlockCooldownUntil: isNowLocked ? undefined : latestWithAnswers.unlockCooldownUntil,
         status: isNowLocked ? 'locked' : 'in_progress',
         lockReason: isNowLocked
-          ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
+          ? `Pemblokiran ke-${nextLockCount}: Mencapai batas ${maxViolations}x pelanggaran (${details})`
           : undefined,
         currentQuestionIndex: currentQuestionIndexRef.current,
         timeRemainingSeconds: timeRemainingRef.current,
@@ -1313,7 +1432,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       window.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [hasStarted, session.status, session.isLocked, schoolSetting.maxViolations]);
+  }, [hasStarted, session.status, session.isLocked, isInCooldown, schoolSetting.maxViolations]);
 
   // Discrete answer handler (PG, PG Kompleks, Benar/Salah, Mencocokkan, Ragu-ragu):
   // Updates pure local state + localStorage + Supabase immediately
@@ -1729,6 +1848,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                   const exIsDone = exSession ? isSessionCompleted(exSession.status) : false;
                   const exIsLocked = exSession ? Boolean(exSession.isLocked || exSession.status === 'locked') : false;
                   const exInProgress = exSession?.status === 'in_progress' && !exIsLocked;
+                  const exCooldownSec =
+                    exInProgress &&
+                    typeof exSession?.unlockCooldownUntil === 'number' &&
+                    exSession.unlockCooldownUntil > nowTime.getTime()
+                      ? Math.ceil((exSession.unlockCooldownUntil - nowTime.getTime()) / 1000)
+                      : 0;
                   const count = questionBank.questions.filter(q => 
                     q.subjectId === ex.subjectId && isQuestionMatchingClass(q.classId, q.grade, student.classId)
                   ).length;
@@ -1737,21 +1862,25 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                     ? 'Selesai Dikerjakan'
                     : exIsLocked
                       ? `Terkunci (${exSession?.violationsCount || 3}/${schoolSetting.maxViolations || 3})`
-                      : exInProgress
-                        ? 'Sedang Dikerjakan'
-                        : exCheck.canStart
-                          ? 'Tersedia / Mulai Ujian'
-                          : exCheck.statusBadge;
+                      : exCooldownSec > 0
+                        ? `Masa Tunggu (${formatCooldownMMSS(exCooldownSec)})`
+                        : exInProgress
+                          ? 'Sedang Dikerjakan'
+                          : exCheck.canStart
+                            ? 'Tersedia / Mulai Ujian'
+                            : exCheck.statusBadge;
 
                   const statusBadgeStyle = exIsDone
                     ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                     : exIsLocked
                       ? 'bg-rose-100 text-rose-800 border-rose-300'
-                      : exInProgress
-                        ? 'bg-blue-100 text-blue-800 border-blue-300'
-                        : exCheck.canStart
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                          : exCheck.badgeClass;
+                      : exCooldownSec > 0
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : exInProgress
+                          ? 'bg-blue-100 text-blue-800 border-blue-300'
+                          : exCheck.canStart
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                            : exCheck.badgeClass;
 
                   return (
                     <button
@@ -2044,12 +2173,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   // 2. If Locked out due to cheat violations
   if (session.isLocked || session.status === 'locked') {
+    const lockedCountInfo = calculateUnlockCooldown(Math.max(1, session.lockCount || 1));
     return (
       <div className="max-w-lg mx-auto my-12 bg-white border-2 border-rose-500 rounded-2xl shadow-2xl p-6 text-center space-y-4">
         <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto">
           <ShieldAlert className="w-10 h-10" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900">Ujian Terkunci Otomatis</h2>
+        <div className="space-y-1">
+          <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
+            Pemblokiran ke-{lockedCountInfo.lockCount} · Sanksi Masa Tunggu {lockedCountInfo.penaltyMinutes} Menit
+          </span>
+          <h2 className="text-xl font-bold text-slate-900">Ujian Terkunci Otomatis</h2>
+        </div>
         <div className="text-xs text-rose-700 bg-rose-50 p-3.5 rounded-xl border border-rose-200 text-left space-y-1">
           <div className="font-bold flex items-center gap-1.5 text-rose-800">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -2060,7 +2195,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </p>
         </div>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Lembar jawaban Anda telah dibekukan sementara untuk menjaga kejujuran ujian. <strong>Segera laporkan kepada guru pengawas atau operator di ruang ujian</strong> untuk membuka kembali akses ujian Anda.
+          Lembar jawaban Anda telah dibekukan sementara untuk menjaga kejujuran ujian. <strong>Segera laporkan kepada guru pengawas atau operator di ruang ujian</strong> untuk membuka kembali akses ujian Anda. Setelah dibuka, Anda akan dikenakan <strong>sanksi waktu tunggu {lockedCountInfo.penaltyMinutes} menit</strong> sebelum dapat melanjutkan soal.
         </p>
 
         {/* Real-time waiting indicator */}
@@ -2068,7 +2203,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <RefreshCw className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
           <span>
             {isSupabaseConfigured
-              ? 'Supabase Realtime & Auto-Cek 3 Detik aktif: Layar otomatis terbuka begitu Operator menekan Buka Kunci atau Reset.'
+              ? 'Supabase Realtime & Auto-Cek 3 Detik aktif: Layar otomatis beralih begitu Operator menekan Buka Kunci atau Reset.'
               : 'Menunggu operator membuka kunci... Sistem otomatis memuat ulang saat dibuka.'}
           </span>
         </div>
@@ -2143,6 +2278,89 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           >
             Keluar (Logout)
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 2.5. Progressive Cooldown Penalty Screen (after Operator unlock, BEFORE showing exam questions)
+  if (isInCooldown && cooldownRemainingSec > 0) {
+    const cooldownMeta = calculateUnlockCooldown(
+      Math.max(1, session.lockCount || persistedForExam?.lock_count || 1)
+    );
+    const totalPenaltySec = Math.max(1, cooldownMeta.penaltySeconds);
+    const elapsedPct = Math.min(
+      100,
+      Math.max(0, Math.round(((totalPenaltySec - cooldownRemainingSec) / totalPenaltySec) * 100))
+    );
+
+    return (
+      <div className="max-w-lg mx-auto my-10 bg-white border-2 border-amber-500 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-amber-500 px-6 py-4 text-white flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+              <Clock className="w-6 h-6 text-white animate-pulse" />
+            </div>
+            <div>
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-100">
+                Pemblokiran ke-{cooldownMeta.lockCount} · {exam.subjectName}
+              </span>
+              <h2 className="text-lg font-extrabold leading-tight">
+                Sanksi Pelanggaran - Masa Tunggu
+              </h2>
+            </div>
+          </div>
+          <span className="text-xs font-bold bg-amber-900/30 border border-white/30 px-2.5 py-1 rounded-lg font-mono shrink-0">
+            {cooldownMeta.penaltyMinutes} Menit
+          </span>
+        </div>
+
+        <div className="p-6 text-center space-y-5">
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950 leading-relaxed text-left">
+            Akun Anda telah dibuka oleh Operator. Karena ini merupakan{' '}
+            <strong>pemblokiran ke-{cooldownMeta.lockCount}</strong>, Anda dikenakan sanksi waktu tunggu selama{' '}
+            <strong>{cooldownMeta.penaltyMinutes} menit</strong> sebelum dapat melanjutkan ujian.
+          </div>
+
+          <div className="py-5 px-4 bg-slate-900 rounded-2xl text-white space-y-2 shadow-inner">
+            <span className="block text-[11px] uppercase tracking-widest text-amber-300 font-semibold">
+              Sisa Waktu Tunggu Sanksi
+            </span>
+            <div className="text-5xl font-black font-mono tracking-wider text-amber-400">
+              {formatCooldownMMSS(cooldownRemainingSec)}
+            </div>
+            <div className="w-full max-w-xs mx-auto h-2 bg-slate-700 rounded-full overflow-hidden mt-3">
+              <div
+                className="h-full bg-amber-400 transition-all duration-700"
+                style={{ width: `${elapsedPct}%` }}
+              />
+            </div>
+            <p className="text-[11px] text-slate-300 pt-1">
+              Layar ujian akan otomatis terbuka kembali saat hitungan mencapai <strong className="text-white">00:00</strong>.
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 text-left space-y-1">
+            <div className="font-semibold text-slate-800 flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+              <span>Perhatian Selama Masa Tunggu:</span>
+            </div>
+            <ul className="list-disc pl-4 space-y-0.5 leading-relaxed">
+              <li>Jawaban yang sudah Anda isi sebelumnya tetap aman tersimpan.</li>
+              <li>Memuat ulang (refresh) halaman <strong>tidak akan mempercepat atau mereset</strong> sisa waktu tunggu.</li>
+              <li>Setelah ujian terbuka, tetap berada di layar penuh agar tidak terkena pemblokiran berikutnya (sanksi ke-{cooldownMeta.lockCount + 1}: <strong>{calculateUnlockCooldown(cooldownMeta.lockCount + 1).penaltyMinutes} menit</strong>).</li>
+            </ul>
+          </div>
+
+          <div className="pt-1 flex items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={onExitExam}
+              className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer border border-slate-200"
+            >
+              Keluar (Logout)
+            </button>
+          </div>
         </div>
       </div>
     );

@@ -33,6 +33,8 @@ export interface SupabaseExamSessionRow {
   violation_count: number;
   is_locked: boolean;
   lock_reason: string | null;
+  lock_count?: number | null;
+  unlock_cooldown_until?: number | null;
   answers_json: StudentExamSession['answers'] | string | null;
   time_remaining_seconds: number;
   extra_time_minutes: number;
@@ -124,6 +126,34 @@ export function countAnsweredQuestions(answers?: StudentExamSession['answers']):
   return Object.values(answers).filter(
     a => a && a.answer !== '' && a.answer !== undefined && (!Array.isArray(a.answer) || a.answer.length > 0)
   ).length;
+}
+
+/**
+ * Progressive Unlock Cooldown Penalty formula:
+ * - 1st lock (lock_count = 1): 1 minute (60s)
+ * - 2nd lock (lock_count = 2): 3 minutes (180s)
+ * - 3rd lock (lock_count = 3): 5 minutes (300s)
+ * - Nth lock: ((N * 2) - 1) minutes = ((N * 2) - 1) * 60 seconds
+ */
+export function calculateUnlockCooldown(lockCount?: number | null): {
+  lockCount: number;
+  penaltyMinutes: number;
+  penaltySeconds: number;
+} {
+  const effectiveLockCount = Math.max(1, Math.round(Number(lockCount) || 1));
+  const penaltyMinutes = effectiveLockCount * 2 - 1;
+  return {
+    lockCount: effectiveLockCount,
+    penaltyMinutes,
+    penaltySeconds: penaltyMinutes * 60,
+  };
+}
+
+export function formatCooldownMMSS(totalSeconds: number): string {
+  const safe = Math.max(0, Math.ceil(Number(totalSeconds) || 0));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function normalizeStatus(rawStatus?: string | null, isLocked?: boolean): StudentExamStatus {
@@ -227,6 +257,13 @@ export function mapSessionToSupabaseRow(
     violation_count: Math.max(0, Math.round(Number(session.violationsCount) || 0)),
     is_locked: Boolean(session.isLocked || session.status === 'locked'),
     lock_reason: session.lockReason || null,
+    lock_count: Math.max(0, Math.round(Number(session.lockCount) || 0)),
+    unlock_cooldown_until:
+      typeof session.unlockCooldownUntil === 'number' &&
+      Number.isFinite(session.unlockCooldownUntil) &&
+      session.unlockCooldownUntil > 0
+        ? Math.round(session.unlockCooldownUntil)
+        : null,
     answers_json: cleanAnswers,
     time_remaining_seconds: Math.max(0, Math.round(Number(session.timeRemainingSeconds) || 0)),
     extra_time_minutes: Math.max(0, Math.round(Number(session.extraTimeMinutes) || 0)),
@@ -264,6 +301,13 @@ export function mapSupabaseRowToSession(row: SupabaseExamSessionRow): StudentExa
     violationsCount: Number(row.violation_count ?? 0),
     isLocked: isLockedFlag,
     lockReason: row.lock_reason || undefined,
+    lockCount: Math.max(0, Math.round(Number(row.lock_count ?? 0))),
+    unlockCooldownUntil:
+      typeof row.unlock_cooldown_until === 'number' &&
+      Number.isFinite(row.unlock_cooldown_until) &&
+      row.unlock_cooldown_until > 0
+        ? Math.round(row.unlock_cooldown_until)
+        : undefined,
     extraTimeMinutes: Number(row.extra_time_minutes ?? 0),
     deviceInfo: row.device_info || 'CBT Browser',
     deviceSessionId: row.device_session_id || undefined,
@@ -407,6 +451,8 @@ function buildCompactSubmitRow(
     violation_count: Math.max(0, Math.round(Number(session.violationsCount) || 0)),
     is_locked: false,
     lock_reason: null,
+    lock_count: Math.max(0, Math.round(Number(session.lockCount) || 0)),
+    unlock_cooldown_until: null,
     answers_json: compactAnswers,
     time_remaining_seconds: 0,
     is_online: false,
@@ -689,6 +735,7 @@ export async function submitExamToSupabase(params: {
     isPassed: finalScore >= kkm,
     isLocked: false,
     lockReason: undefined,
+    unlockCooldownUntil: undefined,
     isOnline: false,
     deviceSessionId: undefined,
     lastHeartbeat: Date.now(),
@@ -825,6 +872,12 @@ export async function recordViolationToSupabase(params: {
   } = params;
   const nextCount = (session.violationsCount || 0) + 1;
   const isNowLocked = nextCount >= maxViolations;
+  const wasAlreadyLocked = Boolean(session.isLocked || session.status === 'locked');
+  const nextLockCount = isNowLocked
+    ? wasAlreadyLocked
+      ? Math.max(1, session.lockCount || 1)
+      : (session.lockCount || 0) + 1
+    : Math.max(0, session.lockCount || 0);
   const nowIso = new Date().toISOString();
 
   const updatedSession: StudentExamSession = {
@@ -832,9 +885,11 @@ export async function recordViolationToSupabase(params: {
     id: session.nis && session.examId ? buildDeterministicSessionId(session.nis, session.examId) : session.id,
     violationsCount: nextCount,
     isLocked: isNowLocked,
+    lockCount: nextLockCount,
+    unlockCooldownUntil: isNowLocked ? undefined : session.unlockCooldownUntil,
     status: isNowLocked ? 'locked' : 'in_progress',
     lockReason: isNowLocked
-      ? `Mencapai batas ${maxViolations}x pelanggaran (${details})`
+      ? `Pemblokiran ke-${nextLockCount}: Mencapai batas ${maxViolations}x pelanggaran (${details})`
       : `Pelanggaran ${nextCount}/${maxViolations}: ${details}`,
     timeRemainingSeconds:
       typeof timeRemainingSeconds === 'number' ? timeRemainingSeconds : session.timeRemainingSeconds,
@@ -911,11 +966,17 @@ export async function unlockStudentSessionInSupabase(
   const nowMs = Date.now();
   const nowIso = new Date(nowMs).toISOString();
 
+  // Progressive Cooldown Penalty: 1st lock = 1m, 2nd = 3m, 3rd = 5m, 4th = 7m...
+  const cooldown = calculateUnlockCooldown(session.lockCount || 1);
+  const unlockCooldownUntil = nowMs + cooldown.penaltySeconds * 1000;
+
   const unlockedSession: StudentExamSession = {
     ...session,
     id: session.nis && session.examId ? buildDeterministicSessionId(session.nis, session.examId) : session.id,
     isLocked: false,
     lockReason: undefined,
+    lockCount: cooldown.lockCount,
+    unlockCooldownUntil,
     status: 'in_progress',
     violationsCount: resetViolations ? 0 : session.violationsCount,
     isOnline: true,
@@ -935,6 +996,8 @@ export async function unlockStudentSessionInSupabase(
         .update({
           is_locked: false,
           lock_reason: null,
+          lock_count: cooldown.lockCount,
+          unlock_cooldown_until: unlockCooldownUntil,
           status: 'in_progress',
           violation_count: resetViolations ? 0 : session.violationsCount,
           admin_action_at: nowMs,
@@ -957,17 +1020,17 @@ export async function unlockStudentSessionInSupabase(
         exam_title: session.examTitle,
         violation_type: 'operator_unlock',
         description: resetViolations
-          ? 'Operator membuka kunci ujian dan mereset pelanggaran menjadi 0/3'
-          : 'Operator membuka kunci ujian siswa',
+          ? `Operator membuka kunci ujian (pemblokiran ke-${cooldown.lockCount}), mereset pelanggaran ke 0/3, dan menerapkan sanksi masa tunggu ${cooldown.penaltyMinutes} menit`
+          : `Operator membuka kunci ujian siswa (pemblokiran ke-${cooldown.lockCount}) dengan masa tunggu ${cooldown.penaltyMinutes} menit`,
         violation_number: 0,
-        action_taken: 'OPERATOR_UNLOCK',
+        action_taken: `OPERATOR_UNLOCK_COOLDOWN_${cooldown.penaltyMinutes}M`,
         created_at: nowIso,
       })
       .then(() => {}, () => {});
 
     if (error) {
       console.error('[Supabase] Unlock session failed:', error);
-      return { success: false, session: unlockedSession, error: error.message };
+      return { success: false, session: unlockedSession, error: formatSupabaseError(error) };
     }
 
     const confirmed = data ? mapSupabaseRowToSession(data as SupabaseExamSessionRow) : unlockedSession;
@@ -1329,13 +1392,15 @@ export function mergeActiveStudentSessionWithRemote(params: {
     (local.violationsCount > 0 && remote.violationsCount === 0 && isRemoteUnlocked && Boolean(remote.adminActionAt)) ||
     isAdminIntervention;
 
-  // 1. Operator reset exam -> clean state
+  // 1. Operator reset exam -> clean state (including lock_count & unlock_cooldown_until)
   if (isRemoteReset) {
     return {
       session: {
         ...remote,
         isLocked: false,
         lockReason: undefined,
+        lockCount: 0,
+        unlockCooldownUntil: undefined,
         violationsCount: 0,
         answers: remote.answers || {},
         currentQuestionIndex: 0,
@@ -1378,12 +1443,14 @@ export function mergeActiveStudentSessionWithRemote(params: {
     mergedTimeRemaining = remote.timeRemainingSeconds || local.timeRemainingSeconds || defaultDurationSec;
   }
 
-  // 3. Operator explicitly unlocked / cleared violations -> Supabase lock & violation state wins
+  // 3. Operator explicitly unlocked / cleared violations -> Supabase lock, violation & cooldown state wins
   if (unlockedOrReset) {
     const unlockedSession: StudentExamSession = {
       ...remote,
       isLocked: Boolean(remote.isLocked),
       lockReason: remote.isLocked ? remote.lockReason : undefined,
+      lockCount: Math.max(remote.lockCount || 0, local.lockCount || 0),
+      unlockCooldownUntil: remote.isLocked ? undefined : (remote.unlockCooldownUntil ?? undefined),
       violationsCount: remote.violationsCount || 0,
       status: remote.isLocked ? 'locked' : remote.status,
       answers: mergedAnswers,
@@ -1400,11 +1467,15 @@ export function mergeActiveStudentSessionWithRemote(params: {
     };
   }
 
-  // 4. Normal refresh / active session reconciliation -> never reset violations or lose answers
+  // 4. Normal refresh / active session reconciliation -> never reset violations, lock_count, cooldown, or answers
   const mergedViolations = Math.max(remote.violationsCount || 0, local.violationsCount || 0);
   const mergedLocked = Boolean(
     remote.isLocked || remote.status === 'locked' || local.isLocked || local.status === 'locked'
   );
+  const mergedLockCount = Math.max(remote.lockCount || 0, local.lockCount || 0);
+  const mergedCooldownUntil = mergedLocked
+    ? undefined
+    : Math.max(remote.unlockCooldownUntil || 0, local.unlockCooldownUntil || 0) || undefined;
   const mergedStatus: StudentExamStatus = mergedLocked
     ? 'locked'
     : remote.status === 'in_progress' || local.status === 'in_progress'
@@ -1416,6 +1487,8 @@ export function mergeActiveStudentSessionWithRemote(params: {
     status: mergedStatus,
     isLocked: mergedLocked,
     lockReason: mergedLocked ? (remote.lockReason || local.lockReason) : undefined,
+    lockCount: mergedLockCount,
+    unlockCooldownUntil: mergedCooldownUntil,
     violationsCount: mergedViolations,
     answers: mergedAnswers,
     currentQuestionIndex: mergedQuestionIndex,
@@ -1431,6 +1504,7 @@ export function mergeActiveStudentSessionWithRemote(params: {
   const needsRemoteBackfill =
     countAnsweredQuestions(mergedAnswers) > countAnsweredQuestions(remote.answers) ||
     mergedViolations > (remote.violationsCount || 0) ||
+    mergedLockCount > (remote.lockCount || 0) ||
     mergedLocked !== Boolean(remote.isLocked) ||
     mergedStatus !== remote.status ||
     mergedQuestionIndex !== (remote.currentQuestionIndex || 0) ||
