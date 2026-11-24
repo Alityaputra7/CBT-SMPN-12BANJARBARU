@@ -36,7 +36,7 @@ import {
   isSessionCompleted
 } from '../../types/cbt';
 import { generateDynamicToken } from '../../utils/tokenGenerator';
-import { KatexRenderer } from '../common/KatexRenderer';
+import { MathTextRenderer } from '../common/MathTextRenderer';
 import { QuestionImportModal } from '../common/QuestionImportModal';
 import { QuestionEditorModal } from '../common/QuestionEditorModal';
 import { ResetExamResultsModal } from '../common/ResetExamResultsModal';
@@ -793,10 +793,10 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                   {/* Question Prompt with KaTeX */}
                   <div>
                     <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                      Teks Pertanyaan & Formula KaTeX:
+                      Teks Pertanyaan &amp; Formula KaTeX:
                     </h4>
-                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm leading-relaxed">
-                      <KatexRenderer content={selectedQuestion.prompt} />
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm leading-relaxed overflow-x-auto">
+                      <MathTextRenderer content={selectedQuestion.prompt} />
                       {selectedQuestion.imageUrl && (
                         <img 
                           src={selectedQuestion.imageUrl} 
@@ -819,20 +819,22 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                           return (
                             <div
                               key={opt.id}
-                              className={`p-3 rounded-lg border flex items-center justify-between text-xs ${
+                              className={`p-3 rounded-lg border flex items-center justify-between gap-2 text-xs ${
                                 isCorrect 
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' 
                                 : 'bg-white border-slate-200 text-slate-700'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <span className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center font-bold font-mono text-slate-700">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center font-bold font-mono text-slate-700 shrink-0">
                                   {opt.id}
                                 </span>
-                                <KatexRenderer content={opt.text} />
+                                <div className="min-w-0 flex-1 overflow-x-auto">
+                                  <MathTextRenderer content={opt.text} />
+                                </div>
                               </div>
                               {isCorrect && (
-                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded shrink-0">
                                   Kunci Benar
                                 </span>
                               )}
@@ -851,10 +853,14 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                         {selectedQuestion.matchingPairs.map((pair, pIdx) => (
-                          <div key={pIdx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                            <KatexRenderer content={pair.leftText} />
-                            <span className="text-slate-400 font-bold px-2">↔</span>
-                            <span className="font-semibold text-blue-700">{pair.rightText}</span>
+                          <div key={pIdx} className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1 overflow-x-auto">
+                              <MathTextRenderer content={pair.leftText} inline />
+                            </div>
+                            <span className="text-slate-400 font-bold px-2 shrink-0">↔</span>
+                            <div className="min-w-0 flex-1 overflow-x-auto text-right font-semibold text-blue-700">
+                              <MathTextRenderer content={pair.rightText} inline />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -863,17 +869,19 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
 
                   {/* Isian Singkat Answer */}
                   {selectedQuestion.type === 'isian' && (
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs">
-                      <span className="font-bold text-blue-900">Kunci Jawaban Isian Singkat:</span>
-                      <span className="font-mono font-bold ml-2 text-blue-700">{selectedQuestion.correctAnswerText}</span>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs flex items-center gap-2">
+                      <span className="font-bold text-blue-900 shrink-0">Kunci Jawaban Isian Singkat:</span>
+                      <div className="font-semibold text-blue-700 min-w-0 flex-1 overflow-x-auto">
+                        <MathTextRenderer content={selectedQuestion.correctAnswerText} inline />
+                      </div>
                     </div>
                   )}
 
                   {/* Essay Rubric */}
                   {selectedQuestion.type === 'uraian' && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed">
-                      <span className="font-bold block mb-1">Pedoman Penskoran / Rubrik Guru:</span>
-                      {selectedQuestion.essayRubric}
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 leading-relaxed space-y-1">
+                      <span className="font-bold block">Pedoman Penskoran / Rubrik Guru:</span>
+                      <MathTextRenderer content={selectedQuestion.essayRubric} />
                     </div>
                   )}
                 </>
@@ -1617,8 +1625,8 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">
                 Naskah Pertanyaan Uraian #{selectedEssayQuestion.number}:
               </span>
-              <div className="text-xs text-slate-800">
-                <KatexRenderer content={selectedEssayQuestion.prompt} />
+              <div className="text-xs text-slate-800 overflow-x-auto">
+                <MathTextRenderer content={selectedEssayQuestion.prompt} />
               </div>
             </div>
 
@@ -1626,7 +1634,9 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
             {selectedEssayQuestion.essayRubric && (
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs space-y-1 text-amber-900">
                 <span className="font-bold block">Pedoman Penskoran / Rubrik Guru:</span>
-                <p className="leading-relaxed">{selectedEssayQuestion.essayRubric}</p>
+                <div className="leading-relaxed">
+                  <MathTextRenderer content={selectedEssayQuestion.essayRubric} />
+                </div>
               </div>
             )}
 

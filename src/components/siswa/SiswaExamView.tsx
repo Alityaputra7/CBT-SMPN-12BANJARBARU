@@ -37,7 +37,7 @@ import {
   SchoolSetting,
   isSessionCompleted
 } from '../../types/cbt';
-import { KatexRenderer } from '../common/KatexRenderer';
+import { MathTextRenderer, containsMathSyntax } from '../common/MathTextRenderer';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
 import { fetchServerData } from '../../utils/apiSync';
 import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
@@ -3568,12 +3568,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             </label>
           </div>
 
-          {/* Question Prompt with KaTeX (Protected from smart keyboard/browser translation) */}
+          {/* Question Prompt with KaTeX (Mobile-safe horizontal scroll + Protected from smart keyboard/browser translation) */}
           <div 
-            className="text-slate-800 text-sm leading-relaxed p-4 bg-slate-50 rounded-xl border border-slate-200 notranslate cbt-secure-text"
+            className="text-slate-800 text-sm leading-relaxed p-4 bg-slate-50 rounded-xl border border-slate-200 notranslate cbt-secure-text overflow-x-auto"
             translate="no"
           >
-            <KatexRenderer content={currentQ.prompt} />
+            <MathTextRenderer content={currentQ.prompt} />
             {currentQ.imageUrl && (
               <img 
                 src={currentQ.imageUrl} 
@@ -3606,8 +3606,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       }`}>
                         {opt.id}
                       </span>
-                      <div className="flex-1">
-                        <KatexRenderer content={opt.text} />
+                      <div className="min-w-0 flex-1 overflow-x-auto">
+                        <MathTextRenderer content={opt.text} />
                       </div>
                     </button>
                   );
@@ -3642,8 +3642,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                         className="w-4 h-4 rounded text-blue-600 shrink-0"
                       />
                       <span className="font-bold font-mono text-slate-700 shrink-0">{opt.id}.</span>
-                      <div className="flex-1">
-                        <KatexRenderer content={opt.text} />
+                      <div className="min-w-0 flex-1 overflow-x-auto">
+                        <MathTextRenderer content={opt.text} />
                       </div>
                     </button>
                   );
@@ -3657,6 +3657,29 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                 <p className="text-xs text-blue-700 font-medium">
                   * Pasangkan setiap item pada kolom kiri dengan jawaban yang sesuai pada pilihan kanan:
                 </p>
+
+                {/* Rendered math reference list when right-hand options contain LaTeX formulas */}
+                {currentQ.matchingPairs.some(m => containsMathSyntax(m.rightText)) && (
+                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs">
+                    <span className="font-semibold text-blue-900 block">
+                      Pilihan Jawaban Kanan:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {currentQ.matchingPairs.map((m, mIdx) => (
+                        <div
+                          key={m.id}
+                          className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg inline-flex items-center gap-1.5 max-w-full overflow-x-auto"
+                        >
+                          <span className="font-mono font-bold text-blue-700 text-[11px] shrink-0">
+                            {String.fromCharCode(65 + mIdx)}.
+                          </span>
+                          <MathTextRenderer content={m.rightText} inline />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2.5">
                   {currentQ.matchingPairs.map((pair, pIdx) => {
                     let studentPairs: Record<string, string> = {};
@@ -3668,35 +3691,43 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       studentPairs = {};
                     }
                     const selectedVal = studentPairs[pair.id] || '';
+                    const hasMathRight = currentQ.matchingPairs?.some(m => containsMathSyntax(m.rightText));
 
                     return (
                       <div 
                         key={pair.id} 
                         className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
                           <span className="w-6 h-6 rounded-md bg-white border border-slate-200 font-mono font-bold text-slate-600 flex items-center justify-center shrink-0">
                             {pIdx + 1}
                           </span>
-                          <div className="font-medium text-slate-900">
-                            <KatexRenderer content={pair.leftText} />
+                          <div className="font-medium text-slate-900 min-w-0 flex-1 overflow-x-auto">
+                            <MathTextRenderer content={pair.leftText} />
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 w-full sm:w-64">
-                          <span className="text-slate-400 font-bold hidden sm:inline">↔</span>
-                          <select
-                            value={selectedVal}
-                            onChange={e => handleMatchingSelect(currentQ.id, pair.id, e.target.value)}
-                            className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium text-slate-800"
-                          >
-                            <option value="">-- Pilih Pasangan --</option>
-                            {currentQ.matchingPairs?.map(m => (
-                              <option key={m.id} value={m.rightText}>
-                                {m.rightText}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="flex flex-col gap-1.5 w-full sm:w-64 shrink-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-slate-400 font-bold hidden sm:inline">↔</span>
+                            <select
+                              value={selectedVal}
+                              onChange={e => handleMatchingSelect(currentQ.id, pair.id, e.target.value)}
+                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium text-slate-800"
+                            >
+                              <option value="">-- Pilih Pasangan --</option>
+                              {currentQ.matchingPairs?.map((m, mIdx) => (
+                                <option key={m.id} value={m.rightText}>
+                                  {hasMathRight ? `${String.fromCharCode(65 + mIdx)}. ${m.rightText}` : m.rightText}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {selectedVal && containsMathSyntax(selectedVal) && (
+                            <div className="sm:ml-5 px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-blue-900 overflow-x-auto">
+                              <MathTextRenderer content={selectedVal} inline />
+                            </div>
+                          )}
                         </div>
                       </div>
                     );

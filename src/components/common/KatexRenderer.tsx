@@ -1,56 +1,11 @@
-import React, { useMemo } from 'react';
-import katex from 'katex';
-
-interface KatexRendererProps {
-  content: string;
-  className?: string;
-}
+import React from 'react';
+import { MathTextRenderer, MathTextRendererProps } from './MathTextRenderer';
 
 /**
- * Splits text into inline ($...$) and block ($$...$$) LaTeX expressions and renders them with KaTeX
+ * Backward-compatible alias for MathTextRenderer.
  */
-export const KatexRenderer: React.FC<KatexRendererProps> = ({ content, className = '' }) => {
-  const renderedContent = useMemo(() => {
-    if (!content) return '';
+export const KatexRenderer: React.FC<MathTextRendererProps> = props => (
+  <MathTextRenderer {...props} />
+);
 
-    try {
-      // First process block math $$...$$
-      let processed = content.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
-        try {
-          return `<div class="my-2 py-1 overflow-x-auto text-center">${katex.renderToString(math.trim(), {
-            displayMode: true,
-            throwOnError: false
-          })}</div>`;
-        } catch {
-          return `$$${math}$$`;
-        }
-      });
-
-      // Then process inline math $...$
-      processed = processed.replace(/\$([^\$\n]+?)\$/g, (_, math) => {
-        try {
-          return katex.renderToString(math.trim(), {
-            displayMode: false,
-            throwOnError: false
-          });
-        } catch {
-          return `$${math}$`;
-        }
-      });
-
-      // Convert line breaks
-      processed = processed.replace(/\n/g, '<br/>');
-
-      return processed;
-    } catch {
-      return content;
-    }
-  }, [content]);
-
-  return (
-    <div 
-      className={`prose prose-slate max-w-none ${className}`}
-      dangerouslySetInnerHTML={{ __html: renderedContent }}
-    />
-  );
-};
+export { MathTextRenderer, containsMathSyntax, normalizeLatexForKatex } from './MathTextRenderer';

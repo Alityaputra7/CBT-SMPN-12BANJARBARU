@@ -14,6 +14,40 @@
   translate: no !important;
 }
 
+/* Responsive KaTeX Math Rendering (mobile-safe horizontal scroll for wide formulas) */
+.cbt-math-content {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.cbt-math-block {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cbt-math-block .katex-display {
+  margin: 0.35em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 2px;
+}
+
+.cbt-math-inline {
+  display: inline-block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  vertical-align: middle;
+  -webkit-overflow-scrolling: touch;
+}
+
+.cbt-math-content .katex {
+  font-size: 1.05em;
+  line-height: 1.35;
+}
+
 /* Official A4 Portrait Print Layout: Exact 6 Exam Cards (2 columns x 3 rows) per page, zero mid-card splits */
 @page {
   size: A4 portrait;

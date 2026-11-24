@@ -56,7 +56,7 @@ import { ExamScheduleModal } from './ExamScheduleModal';
 import { QuestionImportModal } from '../common/QuestionImportModal';
 import { QuestionEditorModal } from '../common/QuestionEditorModal';
 import { ResetExamResultsModal } from '../common/ResetExamResultsModal';
-import { KatexRenderer } from '../common/KatexRenderer';
+import { MathTextRenderer } from '../common/MathTextRenderer';
 import { ExportExamResultsModal } from '../common/ExportExamResultsModal';
 import { exportExamResultsToCSV, getFilteredResultRows } from '../../utils/exportExamResults';
 import { 
@@ -2015,8 +2015,8 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                         </div>
 
                 {/* Prompt with KaTeX */}
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed">
-                  <KatexRenderer content={q.prompt} />
+                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed overflow-x-auto">
+                  <MathTextRenderer content={q.prompt} />
                   {q.imageUrl && (
                     <img 
                       src={q.imageUrl} 
@@ -2030,12 +2030,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 {q.type === 'mencocokkan' && q.matchingPairs && (
                   <div className="p-3 bg-amber-50/50 rounded-lg border border-amber-200 text-xs space-y-1.5">
                     <span className="font-semibold text-amber-900 block">Pasangan yang Dicocokkan (Menjodohkan):</span>
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
                       {q.matchingPairs.map((pair, pIdx) => (
-                        <div key={pIdx} className="bg-white p-2 rounded border border-amber-200 flex items-center justify-between">
-                          <KatexRenderer content={pair.leftText} />
-                          <span className="text-slate-400 font-bold px-1">↔</span>
-                          <span className="font-semibold text-blue-700">{pair.rightText}</span>
+                        <div key={pIdx} className="bg-white p-2 rounded border border-amber-200 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1 overflow-x-auto">
+                            <MathTextRenderer content={pair.leftText} inline />
+                          </div>
+                          <span className="text-slate-400 font-bold px-1 shrink-0">↔</span>
+                          <div className="min-w-0 flex-1 overflow-x-auto text-right font-semibold text-blue-700">
+                            <MathTextRenderer content={pair.rightText} inline />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -2043,24 +2047,26 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                 )}
 
                 {['pg', 'pg_kompleks', 'benar_salah'].includes(q.type) && q.options.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     {q.options.map(opt => {
                       const isCorrect = q.correctAnswers?.includes(opt.id);
                       return (
                         <div 
                           key={opt.id} 
-                          className={`p-2 rounded-lg border flex items-center justify-between ${
+                          className={`p-2 rounded-lg border flex items-center justify-between gap-2 ${
                             isCorrect 
                               ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium' 
                               : 'bg-white border-slate-200 text-slate-700'
                           }`}
                         >
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-mono font-bold">{opt.id}.</span>
-                            <KatexRenderer content={opt.text} />
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <span className="font-mono font-bold shrink-0">{opt.id}.</span>
+                            <div className="min-w-0 flex-1 overflow-x-auto">
+                              <MathTextRenderer content={opt.text} />
+                            </div>
                           </div>
                           {isCorrect && (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded shrink-0">
                               Kunci
                             </span>
                           )}
@@ -2070,9 +2076,19 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 )}
 
+                {q.type === 'isian' && q.correctAnswerText && (
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-900 flex items-center gap-2">
+                    <span className="font-bold shrink-0">Kunci Isian Singkat:</span>
+                    <div className="min-w-0 flex-1 overflow-x-auto font-semibold">
+                      <MathTextRenderer content={q.correctAnswerText} inline />
+                    </div>
+                  </div>
+                )}
+
                 {q.type === 'uraian' && q.essayRubric && (
-                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-                    <span className="font-bold text-slate-800">Rubrik Penskoran:</span> {q.essayRubric}
+                  <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 space-y-1">
+                    <span className="font-bold text-slate-800 block">Rubrik Penskoran / Pembahasan:</span>
+                    <MathTextRenderer content={q.essayRubric} />
                   </div>
                 )}
                     </div>
