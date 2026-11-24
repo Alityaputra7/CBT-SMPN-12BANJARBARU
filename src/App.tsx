@@ -25,7 +25,8 @@ import {
   INITIAL_EXAMS, 
   INITIAL_AUDIT_LOGS,
   createInitialStudentSessions,
-  reconcileOfficialTeachersAndSubjects
+  reconcileOfficialTeachersAndSubjects,
+  reconcileOfficialMathQuestions
 } from './data/seedData';
 import { 
   loadFromStorage, 
@@ -126,15 +127,17 @@ export default function App() {
   });
   const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
     const loaded = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
+    const loadedExams = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
     if (!loaded || !Array.isArray(loaded.questions)) {
       return INITIAL_QUESTION_BANK;
     }
-    return loaded;
+    return reconcileOfficialMathQuestions(loaded, loadedExams).questionBank;
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
+    const loadedBank = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
     if (loaded !== null && Array.isArray(loaded)) {
-      return loaded;
+      return reconcileOfficialMathQuestions(loadedBank, loaded).exams;
     }
     return INITIAL_EXAMS;
   });

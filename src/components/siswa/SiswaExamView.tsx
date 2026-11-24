@@ -3652,113 +3652,178 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             )}
 
             {/* Matching (Mencocokkan / Menjodohkan) */}
-            {currentQ.type === 'mencocokkan' && currentQ.matchingPairs && (
-              <div className="space-y-3">
-                <p className="text-xs text-blue-700 font-medium">
-                  * Pasangkan setiap item pada kolom kiri dengan jawaban yang sesuai pada pilihan kanan:
-                </p>
+            {currentQ.type === 'mencocokkan' && currentQ.matchingPairs && (() => {
+              const rightChoices =
+                currentQ.matchingRightOptions && currentQ.matchingRightOptions.length > 0
+                  ? currentQ.matchingRightOptions
+                  : Array.from(new Set(currentQ.matchingPairs.map(m => m.rightText)));
+              const hasMathRight = rightChoices.some(r => containsMathSyntax(r));
 
-                {/* Rendered math reference list when right-hand options contain LaTeX formulas */}
-                {currentQ.matchingPairs.some(m => containsMathSyntax(m.rightText)) && (
-                  <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs">
-                    <span className="font-semibold text-blue-900 block">
-                      Pilihan Jawaban Kanan:
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {currentQ.matchingPairs.map((m, mIdx) => (
-                        <div
-                          key={m.id}
-                          className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg inline-flex items-center gap-1.5 max-w-full overflow-x-auto"
-                        >
-                          <span className="font-mono font-bold text-blue-700 text-[11px] shrink-0">
-                            {String.fromCharCode(65 + mIdx)}.
-                          </span>
-                          <MathTextRenderer content={m.rightText} inline />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              return (
+                <div className="space-y-3">
+                  <p className="text-xs text-blue-700 font-medium">
+                    * Pasangkan setiap item pada kolom kiri dengan jawaban yang sesuai pada pilihan kanan:
+                  </p>
 
-                <div className="space-y-2.5">
-                  {currentQ.matchingPairs.map((pair, pIdx) => {
-                    let studentPairs: Record<string, string> = {};
-                    try {
-                      studentPairs = typeof studentAns === 'string' && studentAns.startsWith('{')
-                        ? JSON.parse(studentAns)
-                        : {};
-                    } catch {
-                      studentPairs = {};
-                    }
-                    const selectedVal = studentPairs[pair.id] || '';
-                    const hasMathRight = currentQ.matchingPairs?.some(m => containsMathSyntax(m.rightText));
-
-                    return (
-                      <div 
-                        key={pair.id} 
-                        className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className="w-6 h-6 rounded-md bg-white border border-slate-200 font-mono font-bold text-slate-600 flex items-center justify-center shrink-0">
-                            {pIdx + 1}
-                          </span>
-                          <div className="font-medium text-slate-900 min-w-0 flex-1 overflow-x-auto">
-                            <MathTextRenderer content={pair.leftText} />
+                  {/* Rendered math reference list when right-hand options contain LaTeX formulas */}
+                  {hasMathRight && (
+                    <div className="p-3 bg-blue-50/60 border border-blue-200 rounded-xl space-y-1.5 text-xs">
+                      <span className="font-semibold text-blue-900 block">
+                        Pilihan Jawaban Kolom B:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {rightChoices.map((choiceText, mIdx) => (
+                          <div
+                            key={`${mIdx}-${choiceText}`}
+                            className="px-2.5 py-1 bg-white border border-blue-200 rounded-lg inline-flex items-center gap-1.5 max-w-full overflow-x-auto"
+                          >
+                            <span className="font-mono font-bold text-blue-700 text-[11px] shrink-0">
+                              {String.fromCharCode(65 + mIdx)}.
+                            </span>
+                            <MathTextRenderer content={choiceText} inline />
                           </div>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5 w-full sm:w-64 shrink-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-slate-400 font-bold hidden sm:inline">↔</span>
-                            <select
-                              value={selectedVal}
-                              onChange={e => handleMatchingSelect(currentQ.id, pair.id, e.target.value)}
-                              className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium text-slate-800"
-                            >
-                              <option value="">-- Pilih Pasangan --</option>
-                              {currentQ.matchingPairs?.map((m, mIdx) => (
-                                <option key={m.id} value={m.rightText}>
-                                  {hasMathRight ? `${String.fromCharCode(65 + mIdx)}. ${m.rightText}` : m.rightText}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {selectedVal && containsMathSyntax(selectedVal) && (
-                            <div className="sm:ml-5 px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-blue-900 overflow-x-auto">
-                              <MathTextRenderer content={selectedVal} inline />
-                            </div>
-                          )}
-                        </div>
+                        ))}
                       </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2.5">
+                    {currentQ.matchingPairs.map((pair, pIdx) => {
+                      let studentPairs: Record<string, string> = {};
+                      try {
+                        studentPairs = typeof studentAns === 'string' && studentAns.startsWith('{')
+                          ? JSON.parse(studentAns)
+                          : {};
+                      } catch {
+                        studentPairs = {};
+                      }
+                      const selectedVal = studentPairs[pair.id] || '';
+
+                      return (
+                        <div 
+                          key={pair.id} 
+                          className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="w-6 h-6 rounded-md bg-white border border-slate-200 font-mono font-bold text-slate-600 flex items-center justify-center shrink-0">
+                              {pIdx + 1}
+                            </span>
+                            <div className="font-medium text-slate-900 min-w-0 flex-1 overflow-x-auto">
+                              <MathTextRenderer content={pair.leftText} />
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5 w-full sm:w-64 shrink-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-slate-400 font-bold hidden sm:inline">↔</span>
+                              <select
+                                value={selectedVal}
+                                onChange={e => handleMatchingSelect(currentQ.id, pair.id, e.target.value)}
+                                className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white outline-none focus:border-blue-500 font-medium text-slate-800"
+                              >
+                                <option value="">-- Pilih Pasangan --</option>
+                                {rightChoices.map((choiceText, mIdx) => (
+                                  <option key={`${mIdx}-${choiceText}`} value={choiceText}>
+                                    {hasMathRight ? `${String.fromCharCode(65 + mIdx)}. ${choiceText}` : choiceText}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            {selectedVal && containsMathSyntax(selectedVal) && (
+                              <div className="sm:ml-5 px-2.5 py-1 bg-white border border-blue-200 rounded-lg text-blue-900 overflow-x-auto">
+                                <MathTextRenderer content={selectedVal} inline />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* True / False (Benar / Salah) — supports both multi-statement table and single-statement */}
+            {currentQ.type === 'benar_salah' && (
+              currentQ.statements && currentQ.statements.length > 0 ? (() => {
+                let studentMap: Record<string, string> = {};
+                try {
+                  studentMap = typeof studentAns === 'string' && studentAns.startsWith('{')
+                    ? JSON.parse(studentAns)
+                    : {};
+                } catch {
+                  studentMap = {};
+                }
+
+                return (
+                  <div className="space-y-2.5">
+                    <p className="text-xs text-blue-700 font-medium">
+                      * Tentukan pilihan BENAR atau SALAH untuk setiap pernyataan di bawah ini:
+                    </p>
+                    {currentQ.statements.map((stmt, sIdx) => {
+                      const chosen = studentMap[stmt.id] || '';
+                      return (
+                        <div
+                          key={stmt.id}
+                          className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex items-start gap-2 min-w-0 flex-1">
+                            <span className="w-6 h-6 rounded-md bg-white border border-slate-200 font-mono font-bold text-slate-600 flex items-center justify-center shrink-0">
+                              {String.fromCharCode(97 + sIdx)}
+                            </span>
+                            <div className="font-medium text-slate-900 min-w-0 flex-1 overflow-x-auto pt-0.5">
+                              <MathTextRenderer content={stmt.text} />
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 w-full sm:w-44 shrink-0">
+                            {(['BENAR', 'SALAH'] as const).map(val => {
+                              const isPicked = chosen === val;
+                              return (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => handleMatchingSelect(currentQ.id, stmt.id, val)}
+                                  className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
+                                    isPicked
+                                      ? val === 'BENAR'
+                                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                        : 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {val}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })() : (
+                <div className="grid grid-cols-2 gap-4">
+                  {['BENAR', 'SALAH'].map(val => {
+                    const isSelected = studentAns === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => handleSelectOption(currentQ.id, val)}
+                        className={`p-4 rounded-xl border text-center font-bold text-sm transition-all cursor-pointer ${
+                          isSelected
+                            ? val === 'BENAR'
+                              ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                              : 'bg-rose-600 text-white border-rose-600 shadow-md'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        {val}
+                      </button>
                     );
                   })}
                 </div>
-              </div>
-            )}
-
-            {/* True / False (Benar / Salah) */}
-            {currentQ.type === 'benar_salah' && (
-              <div className="grid grid-cols-2 gap-4">
-                {['BENAR', 'SALAH'].map(val => {
-                  const isSelected = studentAns === val;
-                  return (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => handleSelectOption(currentQ.id, val)}
-                      className={`p-4 rounded-xl border text-center font-bold text-sm transition-all cursor-pointer ${
-                        isSelected
-                          ? val === 'BENAR'
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
-                            : 'bg-rose-600 text-white border-rose-600 shadow-md'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      {val}
-                    </button>
-                  );
-                })}
-              </div>
+              )
             )}
 
             {/* Short Answer (Isian Singkat) */}

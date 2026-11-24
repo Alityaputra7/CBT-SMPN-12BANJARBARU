@@ -81,6 +81,18 @@ export function calculateProvisionalScore(
 
     if (q.type === 'pg' && Array.isArray(q.correctAnswers)) {
       if (studentAns === q.correctAnswers[0]) scorePgTotal += q.points;
+    } else if (q.type === 'benar_salah' && q.statements && q.statements.length > 0) {
+      try {
+        const map: Record<string, string> =
+          typeof studentAns === 'string' && studentAns.startsWith('{') ? JSON.parse(studentAns) : {};
+        let matches = 0;
+        q.statements.forEach(st => {
+          if (map[st.id] === st.correctAnswer) matches++;
+        });
+        scorePgTotal += Math.round((matches / q.statements.length) * q.points);
+      } catch {
+        // ignore invalid JSON
+      }
     } else if (q.type === 'benar_salah' && Array.isArray(q.correctAnswers)) {
       if (studentAns === q.correctAnswers[0]) scorePgTotal += q.points;
     } else if (q.type === 'isian' && q.correctAnswerText) {

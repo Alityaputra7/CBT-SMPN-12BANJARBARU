@@ -20,7 +20,8 @@ import {
   INITIAL_QUESTION_BANK,
   INITIAL_AUDIT_LOGS,
   createInitialStudentSessions,
-  reconcileOfficialTeachersAndSubjects
+  reconcileOfficialTeachersAndSubjects,
+  reconcileOfficialMathQuestions
 } from '../data/seedData';
 
 export interface CbtStorePayload {
@@ -101,11 +102,17 @@ export async function fetchServerData(): Promise<CbtServerDataResponse | null> {
         json.data.teachers,
         json.data.subjects
       );
+      const mathReconciled = reconcileOfficialMathQuestions(
+        json.data.questionBank,
+        json.data.exams
+      );
       cachedStore = {
         ...cachedStore,
         ...json.data,
         teachers: reconciled.teachers,
         subjects: reconciled.subjects,
+        questionBank: mathReconciled.questionBank,
+        exams: mathReconciled.exams,
       };
       if (json.version) currentVersion = json.version;
       if (json.lastUpdated) lastUpdatedTimestamp = json.lastUpdated;

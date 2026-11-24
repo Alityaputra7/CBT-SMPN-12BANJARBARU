@@ -96,6 +96,12 @@ export interface MatchingPair {
   rightImageUrl?: string;
 }
 
+export interface TrueFalseStatement {
+  id: string;
+  text: string;
+  correctAnswer: 'BENAR' | 'SALAH';
+}
+
 export interface Question {
   id: string;
   bankId: string;
@@ -108,7 +114,9 @@ export interface Question {
   imageUrl?: string;
   options: QuestionOption[];
   matchingPairs?: MatchingPair[];
-  correctAnswers?: string[]; // for pg, pg_kompleks ('A', 'C'), or benar_salah ('true'/'false')
+  matchingRightOptions?: string[]; // Optional full Column B choices (including distractors & preserving column order)
+  statements?: TrueFalseStatement[]; // Optional multi-statement True/False rows (a, b, c, ...)
+  correctAnswers?: string[]; // for pg, pg_kompleks ('A', 'C'), or single-statement benar_salah ('BENAR'/'SALAH')
   correctAnswerText?: string; // for isian singkat (e.g. "45")
   essayRubric?: string;
   points: number;

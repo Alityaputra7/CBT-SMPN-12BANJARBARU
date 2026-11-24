@@ -18,6 +18,7 @@ import {
   createInitialStudentSessions,
   INITIAL_AUDIT_LOGS,
   reconcileOfficialTeachersAndSubjects,
+  reconcileOfficialMathQuestions,
 } from './src/data/seedData';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -87,13 +88,19 @@ try {
         inMemoryStore.teachers,
         inMemoryStore.subjects
       );
-      if (diskReconciled.migrated) {
+      const mathReconciled = reconcileOfficialMathQuestions(
+        inMemoryStore.questionBank,
+        inMemoryStore.exams
+      );
+      if (diskReconciled.migrated || mathReconciled.migrated) {
         inMemoryStore.teachers = diskReconciled.teachers;
         inMemoryStore.subjects = diskReconciled.subjects;
+        inMemoryStore.questionBank = mathReconciled.questionBank;
+        inMemoryStore.exams = mathReconciled.exams;
         storeVersion++;
         lastUpdated = Date.now();
         saveStoreToDisk();
-        console.log('[CBT Server] Migrated legacy teachers/subjects on disk to latest official database');
+        console.log('[CBT Server] Migrated legacy teachers/subjects/math questions on disk to latest official database');
       }
       console.log(`[CBT Server] Loaded existing shared database from ${DATA_FILE} (Version ${storeVersion})`);
     } else {

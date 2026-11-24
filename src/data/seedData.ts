@@ -188,6 +188,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
 ];
 
 import { OFFICIAL_QUESTION_LIST, OFFICIAL_EXAM_SCHEDULES } from './officialQuestions';
+import { MTK_ALL_OFFICIAL_QUESTIONS } from './mathOfficialQuestions';
 
 export const INITIAL_STUDENTS: Student[] = OFFICIAL_STUDENTS;
 
@@ -343,3 +344,67 @@ export function reconcileOfficialTeachersAndSubjects(
     migrated: true,
   };
 }
+
+/**
+ * Reconciles legacy Matematika seed questions (mtk-1..mtk-26 with grade='Semua') stored in
+ * localStorage or server disk with the official 60-question Kelas VII, VIII, and IX Matematika
+ * bank (20 questions per grade, 5 points each) without clobbering other subjects or custom teacher questions.
+ */
+export function reconcileOfficialMathQuestions(
+  loadedBank?: QuestionBank | null,
+  loadedExams?: ExamSchedule[] | null
+): { questionBank: QuestionBank; exams: ExamSchedule[]; migrated: boolean } {
+  const safeBank: QuestionBank =
+    loadedBank && Array.isArray(loadedBank.questions) ? loadedBank : INITIAL_QUESTION_BANK;
+  const safeExams: ExamSchedule[] =
+    Array.isArray(loadedExams) && loadedExams.length > 0 ? loadedExams : INITIAL_EXAMS;
+
+  const existingIds = new Set(safeBank.questions.map(q => q.id));
+  const hasOfficialVii = existingIds.has('mtk-vii-1');
+  const hasOfficialViii = existingIds.has('mtk-viii-1');
+  const hasOfficialIx = existingIds.has('mtk-ix-1');
+
+  if (hasOfficialVii && hasOfficialViii && hasOfficialIx) {
+    return {
+      questionBank: safeBank,
+      exams: safeExams,
+      migrated: false,
+    };
+  }
+
+  const officialMathIds = new Set(MTK_ALL_OFFICIAL_QUESTIONS.map(q => q.id));
+  const remainingQuestions = safeBank.questions.filter(q => {
+    // Drop legacy generic seed math questions (mtk-1 .. mtk-26)
+    if (/^mtk-\d+$/.test(q.id) && (q.subjectId === 'sbj-mat' || q.bankId === 'qbank-mat')) {
+      return false;
+    }
+    // Deduplicate against incoming official IDs
+    if (officialMathIds.has(q.id)) {
+      return false;
+    }
+    return true;
+  });
+
+  const mergedQuestions = [...MTK_ALL_OFFICIAL_QUESTIONS, ...remainingQuestions];
+
+  const updatedExams = safeExams.map(ex => {
+    if (ex.id === 'ex-mat-2026' || (ex.subjectId === 'sbj-mat' && ex.totalQuestions === 26)) {
+      return {
+        ...ex,
+        totalQuestions: 20,
+      };
+    }
+    return ex;
+  });
+
+  return {
+    questionBank: {
+      ...safeBank,
+      totalQuestions: mergedQuestions.length,
+      questions: mergedQuestions,
+    },
+    exams: updatedExams,
+    migrated: true,
+  };
+}
+

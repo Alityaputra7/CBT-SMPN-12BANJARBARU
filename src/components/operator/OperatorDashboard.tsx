@@ -2046,6 +2046,40 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                   </div>
                 )}
 
+                {q.type === 'benar_salah' && q.statements && q.statements.length > 0 && (
+                  <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-200 text-xs space-y-1.5">
+                    <span className="font-semibold text-indigo-900 block">
+                      Pernyataan Benar / Salah ({q.statements.length} butir):
+                    </span>
+                    <div className="space-y-1.5">
+                      {q.statements.map((st, sIdx) => (
+                        <div
+                          key={st.id}
+                          className="bg-white p-2 rounded border border-indigo-100 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <span className="font-mono font-bold text-slate-500 shrink-0">
+                              {String.fromCharCode(97 + sIdx)}.
+                            </span>
+                            <div className="min-w-0 flex-1 overflow-x-auto">
+                              <MathTextRenderer content={st.text} inline />
+                            </div>
+                          </div>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                              st.correctAnswer === 'BENAR'
+                                ? 'bg-emerald-100 text-emerald-700'
+                                : 'bg-rose-100 text-rose-700'
+                            }`}
+                          >
+                            {st.correctAnswer}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {['pg', 'pg_kompleks', 'benar_salah'].includes(q.type) && q.options.length > 0 && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     {q.options.map(opt => {

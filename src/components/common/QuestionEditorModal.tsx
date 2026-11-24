@@ -8,7 +8,7 @@ import {
   CheckCircle2,
   Calculator
 } from 'lucide-react';
-import { Question, QuestionType, Subject, ClassRoom, MatchingPair } from '../../types/cbt';
+import { Question, QuestionType, Subject, ClassRoom, MatchingPair, TrueFalseStatement } from '../../types/cbt';
 import { MathTextRenderer, containsMathSyntax } from './MathTextRenderer';
 import { MathFormulaToolbar } from './MathFormulaToolbar';
 import { QUESTION_CLASS_GROUPS } from '../../utils/classGroups';
@@ -99,6 +99,11 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       { id: 'p-3', leftText: '$5 \\times 12$', rightText: '$60$' },
       { id: 'p-4', leftText: '$100 \\div 4$', rightText: '$25$' }
     ]
+  );
+
+  // Multi-statement True/False rows (optional)
+  const [statements, setStatements] = useState<TrueFalseStatement[]>(
+    initialQuestion?.statements || []
   );
 
   // Track currently focused field & DOM refs for cursor-accurate LaTeX insertion
@@ -277,11 +282,18 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       subjectId: selectedSubjectId,
       classId: selectedClassId,
       grade: gradeVal,
-      options: ['pg', 'pg_kompleks', 'benar_salah'].includes(qType) ? options : [],
+      options:
+        ['pg', 'pg_kompleks'].includes(qType) || (qType === 'benar_salah' && statements.length === 0)
+          ? options
+          : [],
       matchingPairs: qType === 'mencocokkan' ? matchingPairs : undefined,
-      correctAnswers: ['pg', 'pg_kompleks', 'benar_salah'].includes(qType)
-        ? correctAnswers
-        : undefined,
+      matchingRightOptions:
+        qType === 'mencocokkan' ? initialQuestion?.matchingRightOptions : undefined,
+      statements: qType === 'benar_salah' && statements.length > 0 ? statements : undefined,
+      correctAnswers:
+        ['pg', 'pg_kompleks'].includes(qType) || (qType === 'benar_salah' && statements.length === 0)
+          ? correctAnswers
+          : undefined,
       correctAnswerText: qType === 'isian' ? correctAnswerText : undefined,
       essayRubric: qType === 'uraian' ? essayRubric : undefined
     };
@@ -589,6 +601,95 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             </div>
           )}
 
+          {/* 1B. MULTI-STATEMENT BENAR / SALAH */}
+          {qType === 'benar_salah' && statements.length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-slate-700">
+                  Daftar Pernyataan Benar / Salah ({statements.length} Butir):
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setStatements(prev => [
+                      ...prev,
+                      { id: `s${prev.length + 1}`, text: '', correctAnswer: 'BENAR' }
+                    ])
+                  }
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded border border-blue-200 font-medium cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  Tambah Pernyataan
+                </button>
+              </div>
+              <div className="space-y-2">
+                {statements.map((st, sIdx) => (
+                  <div
+                    key={st.id}
+                    className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 space-y-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 h-6 rounded bg-white border border-slate-200 font-mono font-bold text-slate-600 flex items-center justify-center shrink-0">
+                        {String.fromCharCode(97 + sIdx)}
+                      </span>
+                      <input
+                        type="text"
+                        value={st.text}
+                        onChange={e =>
+                          setStatements(prev =>
+                            prev.map(row =>
+                              row.id === st.id ? { ...row, text: e.target.value } : row
+                            )
+                          )
+                        }
+                        placeholder="Teks pernyataan (mendukung rumus LaTeX $...$)..."
+                        className="flex-1 px-2.5 py-1.5 font-mono text-xs border border-slate-300 rounded bg-white outline-none focus:border-blue-500"
+                      />
+                      <div className="flex items-center gap-1 shrink-0">
+                        {(['BENAR', 'SALAH'] as const).map(val => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() =>
+                              setStatements(prev =>
+                                prev.map(row =>
+                                  row.id === st.id ? { ...row, correctAnswer: val } : row
+                                )
+                              )
+                            }
+                            className={`px-2 py-1 rounded text-[11px] font-bold border cursor-pointer ${
+                              st.correctAnswer === val
+                                ? val === 'BENAR'
+                                  ? 'bg-emerald-600 text-white border-emerald-600'
+                                  : 'bg-rose-600 text-white border-rose-600'
+                                : 'bg-white text-slate-600 border-slate-300'
+                            }`}
+                          >
+                            {val}
+                          </button>
+                        ))}
+                      </div>
+                      {statements.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setStatements(prev => prev.filter(row => row.id !== st.id))}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    {containsMathSyntax(st.text) && (
+                      <div className="ml-8 px-2 py-1 bg-white border border-slate-200 rounded text-xs overflow-x-auto">
+                        <MathTextRenderer content={st.text} inline />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 2. MENCOCOKKAN (MATCHING) */}
           {qType === 'mencocokkan' && (
             <div className="space-y-3 pt-2 border-t border-slate-200">
@@ -750,7 +851,36 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                 />
               )}
 
-              {['pg', 'pg_kompleks', 'benar_salah'].includes(qType) && options.length > 0 && (
+              {qType === 'benar_salah' && statements.length > 0 && (
+                <div className="space-y-1.5 pt-1">
+                  {statements.map((st, sIdx) => (
+                    <div
+                      key={st.id}
+                      className="p-2 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className="font-mono font-bold text-slate-500 shrink-0">
+                          {String.fromCharCode(97 + sIdx)}.
+                        </span>
+                        <div className="min-w-0 flex-1 overflow-x-auto">
+                          <MathTextRenderer content={st.text || '(Kosong)'} inline />
+                        </div>
+                      </div>
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                          st.correctAnswer === 'BENAR'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-rose-100 text-rose-700'
+                        }`}
+                      >
+                        {st.correctAnswer}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(['pg', 'pg_kompleks'].includes(qType) || (qType === 'benar_salah' && statements.length === 0)) && options.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   {options.map(opt => {
                     const isCorrect = correctAnswers.includes(opt.id);

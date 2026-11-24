@@ -807,6 +807,43 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                     </div>
                   </div>
 
+                  {/* Multi-statement Benar / Salah Preview */}
+                  {selectedQuestion.type === 'benar_salah' &&
+                    selectedQuestion.statements &&
+                    selectedQuestion.statements.length > 0 && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                          Pernyataan Benar / Salah ({selectedQuestion.statements.length} Butir):
+                        </h4>
+                        <div className="space-y-2">
+                          {selectedQuestion.statements.map((st, sIdx) => (
+                            <div
+                              key={st.id}
+                              className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between gap-2 text-xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="w-6 h-6 rounded-md bg-white border border-slate-200 flex items-center justify-center font-bold font-mono text-slate-600 shrink-0">
+                                  {String.fromCharCode(97 + sIdx)}
+                                </span>
+                                <div className="min-w-0 flex-1 overflow-x-auto">
+                                  <MathTextRenderer content={st.text} />
+                                </div>
+                              </div>
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                                  st.correctAnswer === 'BENAR'
+                                    ? 'bg-emerald-100 text-emerald-700'
+                                    : 'bg-rose-100 text-rose-700'
+                                }`}
+                              >
+                                {st.correctAnswer}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                   {/* Options if PG or PG Kompleks */}
                   {['pg', 'pg_kompleks', 'benar_salah'].includes(selectedQuestion.type) && selectedQuestion.options.length > 0 && (
                     <div>
