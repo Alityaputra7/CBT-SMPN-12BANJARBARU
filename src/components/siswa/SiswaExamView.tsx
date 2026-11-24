@@ -23,7 +23,9 @@ import {
   AlertCircle,
   Download,
   WifiOff,
-  X
+  X,
+  PauseCircle,
+  Info
 } from 'lucide-react';
 import { 
   Student, 
@@ -69,6 +71,72 @@ import {
   getStudentSessionDeviceId, 
   detectClientDeviceInfo 
 } from '../../utils/sessionDevice';
+
+// Screen-off tolerance: phone screen turning off / sleeping <= 3 minutes (180,000 ms) is NOT counted as a violation.
+// Exceeding 3 minutes triggers a violation immediately.
+const SCREEN_OFF_GRACE_MS = 3 * 60 * 1000;
+// Brief delay to distinguish OS power-button / screen-sleep (which fires blur ~50-300ms before visibilityState='hidden')
+// from an active Floating Window / Pop-up View (where visibilityState stays 'visible' and hasFocus() stays false).
+const BLUR_VERIFY_DELAY_MS = 350;
+
+interface ViewportBaseline {
+  width: number;
+  height: number;
+  outerWidth: number;
+  outerHeight: number;
+}
+
+function isEditableElementCurrentlyFocused(): boolean {
+  if (typeof document === 'undefined') return false;
+  const activeEl = document.activeElement;
+  if (!activeEl) return false;
+  const tag = activeEl.tagName.toLowerCase();
+  return tag === 'textarea' || tag === 'input' || (activeEl as HTMLElement).isContentEditable;
+}
+
+function detectSplitScreenViewport(baseline: ViewportBaseline): boolean {
+  if (typeof window === 'undefined') return false;
+  const curW = window.innerWidth;
+  const curH = window.innerHeight;
+  const screenAvailW = window.screen?.availWidth || baseline.width;
+  const screenAvailH = window.screen?.availHeight || baseline.height;
+
+  // Natural phone orientation rotation (portrait <-> landscape): update baseline, NOT a violation
+  const looksLikeRotation =
+    Math.abs(curW - baseline.height) < 140 && Math.abs(curH - baseline.width) < 140;
+  if (looksLikeRotation) {
+    baseline.width = curW;
+    baseline.height = curH;
+    baseline.outerWidth = window.outerWidth || curW;
+    baseline.outerHeight = window.outerHeight || curH;
+    return false;
+  }
+
+  // Update baseline upward if user maximizes or enters fullscreen
+  if (curW > baseline.width) baseline.width = curW;
+  if (curH > baseline.height) baseline.height = curH;
+
+  // 1. Horizontal shrink (>28% narrower than baseline/screen) — side-by-side Split Screen or resized floating browser
+  const refW = Math.min(baseline.width, screenAvailW);
+  if (refW > 0 && curW < refW * 0.72) {
+    return true;
+  }
+
+  // 2. Vertical OS window shrink (top/bottom Android Split Screen)
+  const outerH = window.outerHeight || curH;
+  const outerHRatio = screenAvailH > 0 ? outerH / screenAvailH : 1;
+  if (screenAvailH >= 500 && outerHRatio < 0.7) {
+    return true;
+  }
+
+  // 3. Sudden viewport height collapse (>35%) when NO editable input/textarea is focused
+  // (excludes Android virtual keyboard sliding up when typing essays/short answers)
+  if (!isEditableElementCurrentlyFocused() && baseline.height >= 450 && curH < baseline.height * 0.65) {
+    return true;
+  }
+
+  return false;
+}
 
 interface SiswaExamViewProps {
   student: Student;
@@ -193,6 +261,13 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     return best > Date.now() ? best : null;
   });
   const [cooldownEscapeAlert, setCooldownEscapeAlert] = useState<string | null>(null);
+  const [cooldownFocusShield, setCooldownFocusShield] = useState<{
+    active: boolean;
+    reason: string;
+    isSplitScreen: boolean;
+    focusReturned: boolean;
+  } | null>(null);
+  const [screenOffNotice, setScreenOffNotice] = useState<string | null>(null);
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const reportSyncError = (message: string) => {
@@ -218,10 +293,158 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const focusLostStartedAtRef = useRef<number | null>(null);
   const lastSustainedPenaltyAtRef = useRef<number>(0);
   const isSplitScreenActiveRef = useRef<boolean>(false);
+  const cooldownFocusLostStartedAtRef = useRef<number | null>(null);
+  const cooldownLastSustainedPenaltyAtRef = useRef<number>(0);
+  const cooldownIsSplitScreenRef = useRef<boolean>(false);
+  const cooldownUntilRef = useRef<number | null>(cooldownUntil);
+  const screenHiddenAtRef = useRef<number | null>(null);
+  const screenOffNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wakeLockSentinelRef = useRef<{ release: () => Promise<void>; released?: boolean } | null>(null);
   const lastExamIdRef = useRef<string>(exam.id);
   const textDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingTextSyncRef = useRef<boolean>(false);
   const initialMountHydratedExamRef = useRef<string | null>(null);
+
+  const screenHiddenStorageKey = `cbt_screen_off_at_${student.nis}_${exam.id}`;
+
+  const [hiddenAtState, setHiddenAtState] = useState<number | null>(() => {
+    try {
+      const raw = localStorage.getItem(screenHiddenStorageKey);
+      if (raw) {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  });
+
+  const getPersistedScreenHiddenAt = (): number | null => {
+    if (screenHiddenAtRef.current !== null) return screenHiddenAtRef.current;
+    if (hiddenAtState !== null) {
+      screenHiddenAtRef.current = hiddenAtState;
+      return hiddenAtState;
+    }
+    try {
+      const raw = localStorage.getItem(screenHiddenStorageKey);
+      if (raw) {
+        const parsed = Number(raw);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          screenHiddenAtRef.current = parsed;
+          return parsed;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+    return null;
+  };
+
+  const markScreenHiddenNow = (): number => {
+    const existing = getPersistedScreenHiddenAt();
+    if (existing !== null) return existing;
+    const now = Date.now();
+    screenHiddenAtRef.current = now;
+    setHiddenAtState(now);
+    try {
+      localStorage.setItem(screenHiddenStorageKey, String(now));
+    } catch {
+      // ignore
+    }
+    return now;
+  };
+
+  const clearScreenHiddenMarker = () => {
+    screenHiddenAtRef.current = null;
+    setHiddenAtState(null);
+    try {
+      localStorage.removeItem(screenHiddenStorageKey);
+    } catch {
+      // ignore
+    }
+  };
+
+  const showBriefScreenOffNotice = (elapsedSec: number) => {
+    if (elapsedSec < 3) return;
+    if (screenOffNoticeTimerRef.current) {
+      clearTimeout(screenOffNoticeTimerRef.current);
+    }
+    setScreenOffNotice(
+      `Layar HP sempat mati/redup selama ${formatCooldownMMSS(elapsedSec)} (≤ 3 menit) — tidak dihitung sebagai pelanggaran. Mohon jaga layar tetap menyala selama ujian.`
+    );
+    screenOffNoticeTimerRef.current = setTimeout(() => {
+      setScreenOffNotice(null);
+      screenOffNoticeTimerRef.current = null;
+    }, 9000);
+  };
+
+  useEffect(() => {
+    cooldownUntilRef.current = cooldownUntil;
+  }, [cooldownUntil]);
+
+  useEffect(() => {
+    return () => {
+      if (screenOffNoticeTimerRef.current) {
+        clearTimeout(screenOffNoticeTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Screen Wake Lock API: proactively keep student's phone screen awake during active exam & cooldown
+  useEffect(() => {
+    const shouldKeepAwake =
+      hasStarted &&
+      !isSessionCompleted(session.status) &&
+      session.status !== 'not_started';
+
+    if (!shouldKeepAwake) {
+      if (wakeLockSentinelRef.current) {
+        void wakeLockSentinelRef.current.release().catch(() => {});
+        wakeLockSentinelRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const requestWakeLock = async () => {
+      if (cancelled || document.visibilityState !== 'visible') return;
+      try {
+        const nav = navigator as Navigator & {
+          wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void>; released?: boolean }> };
+        };
+        if (nav.wakeLock && typeof nav.wakeLock.request === 'function') {
+          if (wakeLockSentinelRef.current && !wakeLockSentinelRef.current.released) return;
+          const sentinel = await nav.wakeLock.request('screen');
+          if (cancelled) {
+            void sentinel.release().catch(() => {});
+            return;
+          }
+          wakeLockSentinelRef.current = sentinel;
+        }
+      } catch {
+        // Wake Lock not supported or blocked by battery saver — gracefully ignore
+      }
+    };
+
+    void requestWakeLock();
+
+    const onVisibilityWake = () => {
+      if (document.visibilityState === 'visible') {
+        void requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityWake);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibilityWake);
+      if (wakeLockSentinelRef.current) {
+        void wakeLockSentinelRef.current.release().catch(() => {});
+        wakeLockSentinelRef.current = null;
+      }
+    };
+  }, [hasStarted, session.status]);
 
   const clearTextDebounceTimer = () => {
     if (textDebounceTimerRef.current) {
@@ -363,6 +586,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   useEffect(() => {
     const defaultSec = (exam.durationMinutes || 90) * 60;
     if (session.status === 'not_started' && !session.isLocked) {
+      clearScreenHiddenMarker();
       setHasStarted(false);
       setViolationAlert(null);
       setShowSubmitConfirm(false);
@@ -372,6 +596,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       setCurrentQuestionIndex(0);
       setTimeRemaining(session.timeRemainingSeconds > 0 ? session.timeRemainingSeconds : defaultSec);
     } else if (isSessionCompleted(session.status)) {
+      clearScreenHiddenMarker();
       clearActiveExamFromPersistedStudentSession();
       setViolationAlert(null);
       setShowSubmitConfirm(false);
@@ -381,6 +606,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         setHasStarted(false);
       }
     } else if (session.isLocked || session.status === 'locked') {
+      clearScreenHiddenMarker();
       setHasStarted(true);
       setViolationAlert(null);
       setCooldownUntil(null);
@@ -467,31 +693,61 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     }
   }, [session.status, session.isLocked, session.logoutCount, student.nis, exam.id, isSubmitting]);
 
-  // Cooldown Escape Watchdog (Requirement 4):
-  // If student leaves app / switches tab / opens floating window DURING ANY active Cooldown Screen
-  // before countdown reaches 00:00 -> escalate cooldown to 7 minutes (and auto-submit on 3rd strike)
+  // Hardened Cooldown Anti-Cheat Watchdog (ALL sensors fully active during 1m / 3m / 5m / 7m Cooldown):
+  // - Monitors window.blur, !document.hasFocus() (1s interval), Floating Window / Pop-up View, Split Screen / resize, AND tab switch (visibilitychange)
+  // - Immediately freezes & resets timer to 7 minutes (Date.now() + 7 * 60 * 1000) and saves to Supabase
+  // - Displays opaque full-screen red alert covering the entire viewport until acknowledged
+  // - Sustained Floating Window / Split Screen (>5s) escalates repeatedly until max violations -> re-lock (is_locked=true) or Auto-Submit
   useEffect(() => {
-    if (!isInCooldown || isSessionCompleted(session.status) || session.isLocked) return;
+    if (!isInCooldown || isSessionCompleted(session.status) || session.isLocked) {
+      setCooldownFocusShield(null);
+      cooldownFocusLostStartedAtRef.current = null;
+      cooldownLastSustainedPenaltyAtRef.current = 0;
+      cooldownIsSplitScreenRef.current = false;
+      return;
+    }
+
+    const SUSTAINED_COOLDOWN_FLOATING_MS = 5000;
+    const COOLDOWN_FLOATING_REASON =
+      'Membuka jendela mengambang (Floating Window) / aplikasi lain saat masa tunggu';
+
+    const cooldownBaseline: ViewportBaseline = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      outerWidth: window.outerWidth || window.innerWidth,
+      outerHeight: window.outerHeight || window.innerHeight,
+    };
 
     let blurCheckTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const triggerCooldownEscape = (reason: string) => {
+    const triggerCooldownEscape = (reason: string, bypassCooldown = false) => {
       if (isPageUnloadingRef.current) return;
       const latest = sessionRef.current;
       if (isSessionCompleted(latest.status) || latest.isLocked) return;
 
       const now = Date.now();
-      if (now - lastCooldownEscapeAtRef.current < 3500) return;
+      if (!bypassCooldown && now - lastCooldownEscapeAtRef.current < 2500) return;
       lastCooldownEscapeAtRef.current = now;
+
+      // Optimistically reset cooldown timer to 7 minutes immediately & persist to localStorage
+      const optimisticUntil = Math.max(
+        cooldownUntilRef.current || 0,
+        now + 7 * 60 * 1000
+      );
+      cooldownUntilRef.current = optimisticUntil;
+      setCooldownUntil(optimisticUntil);
 
       const latestWithAnswers: StudentExamSession = {
         ...latest,
         answers: localAnswersRef.current,
         currentQuestionIndex: currentQuestionIndexRef.current,
         timeRemainingSeconds: timeRemainingRef.current,
+        unlockCooldownUntil: optimisticUntil,
       };
+      sessionRef.current = latestWithAnswers;
+      persistExamSnapshotLocally(latestWithAnswers, true);
 
-      onRecordViolation('cooldown_escape', `Keluar aplikasi saat masa tunggu (${reason})`);
+      onRecordViolation('cooldown_escape', `Pelanggaran saat masa tunggu (${reason})`);
 
       void recordCooldownEscapeToSupabase({
         session: latestWithAnswers,
@@ -512,23 +768,71 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         if (res.autoSubmitted) {
           setCooldownUntil(null);
           setCooldownEscapeAlert(null);
+          setCooldownFocusShield(null);
+          clearScreenHiddenMarker();
           clearActiveExamFromPersistedStudentSession();
           setJustCompletedExamId(exam.id);
           return;
         }
 
-        const nextUntil = res.session.unlockCooldownUntil || Date.now() + 7 * 60 * 1000;
+        if (res.reLocked || res.session.isLocked || res.session.status === 'locked') {
+          setCooldownUntil(null);
+          setCooldownEscapeAlert(null);
+          setCooldownFocusShield(null);
+          clearScreenHiddenMarker();
+          persistExamSnapshotLocally(res.session, true);
+          return;
+        }
+
+        const nextUntil = Math.max(
+          cooldownUntilRef.current || 0,
+          res.session.unlockCooldownUntil || Date.now() + 7 * 60 * 1000
+        );
+        cooldownUntilRef.current = nextUntil;
         setCooldownUntil(nextUntil);
         setCooldownEscapeAlert(
-          `Pelanggaran terdeteksi saat masa tunggu (${reason})! Sanksi waktu tunggu dinaikkan menjadi 7 menit. Tetap di halaman ini hingga 00:00 atau ujian akan dikumpulkan otomatis.`
+          `PELANGGARAN SAAT MASA TUNGGU! Terdeteksi membuka jendela mengambang / aplikasi lain (${reason}). Waktu tunggu diperpanjang menjadi 7 menit.`
         );
-        persistExamSnapshotLocally(res.session, true);
+        persistExamSnapshotLocally(
+          { ...res.session, unlockCooldownUntil: nextUntil },
+          true
+        );
       });
+    };
+
+    const engageCooldownShield = (reason: string, isSplitScreen = false) => {
+      if (isPageUnloadingRef.current) return;
+      const latest = sessionRef.current;
+      if (isSessionCompleted(latest.status) || latest.isLocked) return;
+
+      const now = Date.now();
+      if (cooldownFocusLostStartedAtRef.current === null) {
+        cooldownFocusLostStartedAtRef.current = now;
+        cooldownLastSustainedPenaltyAtRef.current = now;
+      }
+
+      setCooldownFocusShield({
+        active: true,
+        reason,
+        isSplitScreen,
+        focusReturned: document.hasFocus(),
+      });
+
+      triggerCooldownEscape(reason);
     };
 
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        triggerCooldownEscape('Berpindah tab atau keluar dari aplikasi');
+        if (blurCheckTimer) {
+          clearTimeout(blurCheckTimer);
+          blurCheckTimer = null;
+        }
+        engageCooldownShield('Berpindah tab atau keluar dari halaman masa tunggu', false);
+      } else if (document.visibilityState === 'visible') {
+        // Keep full-screen red alert visible until acknowledged so student sees the 7-minute penalty clearly
+        setCooldownFocusShield(prev =>
+          prev?.active ? { ...prev, focusReturned: document.hasFocus() } : prev
+        );
       }
     };
 
@@ -539,18 +843,166 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         blurCheckTimer = null;
         if (isPageUnloadingRef.current) return;
         if (!document.hasFocus()) {
-          triggerCooldownEscape('Kehilangan fokus / membuka jendela mengambang');
+          engageCooldownShield(COOLDOWN_FLOATING_REASON, cooldownIsSplitScreenRef.current);
         }
       }, 150);
     };
 
+    const onWindowFocus = () => {
+      if (blurCheckTimer) {
+        clearTimeout(blurCheckTimer);
+        blurCheckTimer = null;
+      }
+      const stillSplit = detectSplitScreenViewport(cooldownBaseline);
+      cooldownIsSplitScreenRef.current = stillSplit;
+      if (document.hasFocus() && !stillSplit) {
+        // Focus returned: stop sustained >5s escalation timer, keep red warning visible until student clicks confirm
+        cooldownFocusLostStartedAtRef.current = null;
+        cooldownLastSustainedPenaltyAtRef.current = 0;
+        setCooldownFocusShield(prev =>
+          prev?.active ? { ...prev, isSplitScreen: false, focusReturned: true } : null
+        );
+      } else if (stillSplit) {
+        setCooldownFocusShield(prev => ({
+          active: true,
+          reason: prev?.reason || 'Mode Split Screen aktif saat masa tunggu. Kembalikan ke layar penuh!',
+          isSplitScreen: true,
+          focusReturned: document.hasFocus(),
+        }));
+      }
+    };
+
+    const onWindowResize = () => {
+      if (isPageUnloadingRef.current) return;
+      const isSplitNow = detectSplitScreenViewport(cooldownBaseline);
+      cooldownIsSplitScreenRef.current = isSplitNow;
+      if (isSplitNow) {
+        engageCooldownShield(
+          'Membuka Split Screen / mengecilkan layar saat masa tunggu',
+          true
+        );
+      } else if (document.hasFocus()) {
+        cooldownFocusLostStartedAtRef.current = null;
+        cooldownLastSustainedPenaltyAtRef.current = 0;
+        setCooldownFocusShield(prev =>
+          prev?.active ? { ...prev, isSplitScreen: false, focusReturned: true } : null
+        );
+      }
+    };
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false);
+        if (!document.hasFocus()) {
+          engageCooldownShield(COOLDOWN_FLOATING_REASON, cooldownIsSplitScreenRef.current);
+        }
+      } else {
+        setIsFullscreen(true);
+      }
+    };
+
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && ['c', 'v', 'u', 'p', 's', 'C', 'V', 'U', 'P', 'S'].includes(e.key))
+      ) {
+        e.preventDefault();
+        engageCooldownShield(`Menekan tombol terlarang (${e.key}) saat masa tunggu`, false);
+      }
+    };
+
+    // Continuous 1-second Cooldown Anti-Cheat Watchdog:
+    // 1. Freezes & resets timer to 7 minutes whenever Floating Window / Split Screen / unfocused / hidden is active
+    // 2. Detects silent Android Floating Windows / Pop-up View where blur didn't fire
+    // 3. Escalates sustained Floating Window / Split Screen (>5s) every 5s until re-lock or Auto-Submit
+    const cooldownWatchdog = setInterval(() => {
+      if (isPageUnloadingRef.current) return;
+      const latest = sessionRef.current;
+      if (isSessionCompleted(latest.status) || latest.isLocked) {
+        setCooldownFocusShield(null);
+        return;
+      }
+
+      const isHidden = document.visibilityState === 'hidden';
+      const hasDocFocus = document.hasFocus();
+      const isSplitNow = !isHidden && detectSplitScreenViewport(cooldownBaseline);
+      cooldownIsSplitScreenRef.current = isSplitNow;
+
+      if (isHidden || !hasDocFocus || isSplitNow) {
+        const now = Date.now();
+        const reason = isHidden
+          ? 'Berpindah tab atau keluar dari halaman masa tunggu'
+          : isSplitNow
+            ? 'Membuka Split Screen / mengecilkan layar saat masa tunggu'
+            : COOLDOWN_FLOATING_REASON;
+
+        // FREEZE & HOLD COOLDOWN AT FULL 7 MINUTES (+1000ms/tick) while Floating Window / Split Screen / backgrounded
+        setCooldownUntil(prev => {
+          const base = prev || now + 7 * 60 * 1000;
+          const extended = Math.max(base + 1000, now + 7 * 60 * 1000);
+          cooldownUntilRef.current = extended;
+          const frozenSession: StudentExamSession = {
+            ...sessionRef.current,
+            unlockCooldownUntil: extended,
+          };
+          sessionRef.current = frozenSession;
+          persistExamSnapshotLocally(frozenSession, true);
+          return extended;
+        });
+
+        setCooldownFocusShield(prev =>
+          prev?.active && prev.isSplitScreen === isSplitNow && prev.focusReturned === false
+            ? prev
+            : {
+                active: true,
+                reason,
+                isSplitScreen: isSplitNow,
+                focusReturned: false,
+              }
+        );
+
+        if (cooldownFocusLostStartedAtRef.current === null) {
+          cooldownFocusLostStartedAtRef.current = now;
+          cooldownLastSustainedPenaltyAtRef.current = now;
+          triggerCooldownEscape(reason);
+        } else if (now - cooldownLastSustainedPenaltyAtRef.current >= SUSTAINED_COOLDOWN_FLOATING_MS) {
+          cooldownLastSustainedPenaltyAtRef.current = now;
+          triggerCooldownEscape(
+            `${reason} (dibiarkan terbuka >5 detik)`,
+            true
+          );
+        }
+      } else if (cooldownFocusLostStartedAtRef.current !== null) {
+        cooldownFocusLostStartedAtRef.current = null;
+        cooldownLastSustainedPenaltyAtRef.current = 0;
+        setCooldownFocusShield(prev =>
+          prev?.active ? { ...prev, isSplitScreen: false, focusReturned: true } : null
+        );
+      }
+    }, 1000);
+
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('blur', onWindowBlur);
+    window.addEventListener('focus', onWindowFocus);
+    window.addEventListener('resize', onWindowResize);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('keydown', onKeyDown);
 
     return () => {
       if (blurCheckTimer) clearTimeout(blurCheckTimer);
+      clearInterval(cooldownWatchdog);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('blur', onWindowBlur);
+      window.removeEventListener('focus', onWindowFocus);
+      window.removeEventListener('resize', onWindowResize);
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('contextmenu', onContextMenu);
+      window.removeEventListener('keydown', onKeyDown);
     };
   }, [isInCooldown, session.status, session.isLocked, exam.id, schoolSetting.maxViolations]);
 
@@ -1225,64 +1677,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       'Membuka jendela mengambang (Floating Window) / Split Screen / Keluar fokus ujian';
 
     // Capture baseline viewport dimensions for accurate Split-Screen detection
-    const baseline = {
+    const baseline: ViewportBaseline = {
       width: window.innerWidth,
       height: window.innerHeight,
       outerWidth: window.outerWidth || window.innerWidth,
       outerHeight: window.outerHeight || window.innerHeight,
     };
 
-    const isEditableElementFocused = (): boolean => {
-      const activeEl = document.activeElement;
-      if (!activeEl) return false;
-      const tag = activeEl.tagName.toLowerCase();
-      return tag === 'textarea' || tag === 'input' || (activeEl as HTMLElement).isContentEditable;
-    };
-
-    const checkIsSplitScreenViewport = (): boolean => {
-      if (typeof window === 'undefined') return false;
-      const curW = window.innerWidth;
-      const curH = window.innerHeight;
-      const screenAvailW = window.screen?.availWidth || baseline.width;
-      const screenAvailH = window.screen?.availHeight || baseline.height;
-
-      // Detect natural phone orientation rotation (portrait <-> landscape): update baseline, NOT a violation
-      const looksLikeRotation =
-        Math.abs(curW - baseline.height) < 140 && Math.abs(curH - baseline.width) < 140;
-      if (looksLikeRotation) {
-        baseline.width = curW;
-        baseline.height = curH;
-        baseline.outerWidth = window.outerWidth || curW;
-        baseline.outerHeight = window.outerHeight || curH;
-        return false;
-      }
-
-      // Update baseline upward if user maximizes or enters fullscreen
-      if (curW > baseline.width) baseline.width = curW;
-      if (curH > baseline.height) baseline.height = curH;
-
-      // 1. Horizontal shrink (>28% narrower than baseline/screen) — side-by-side Split Screen or resized floating browser
-      const refW = Math.min(baseline.width, screenAvailW);
-      if (refW > 0 && curW < refW * 0.72) {
-        return true;
-      }
-
-      // 2. Vertical OS window shrink (top/bottom Android Split Screen):
-      // `window.outerHeight` tracks the browser window height (unaffected by mobile soft keyboard on Chrome Android)
-      const outerH = window.outerHeight || curH;
-      const outerHRatio = screenAvailH > 0 ? outerH / screenAvailH : 1;
-      if (screenAvailH >= 500 && outerHRatio < 0.7) {
-        return true;
-      }
-
-      // 3. Sudden viewport height collapse (>35%) when NO editable input/textarea is focused
-      // (excludes Android virtual keyboard sliding up when typing essays/short answers)
-      if (!isEditableElementFocused() && baseline.height >= 450 && curH < baseline.height * 0.65) {
-        return true;
-      }
-
-      return false;
-    };
+    const checkIsSplitScreenViewport = (): boolean => detectSplitScreenViewport(baseline);
 
     const handleViolation = (type: ViolationType, details: string, bypassCooldown = false) => {
       if (isPageUnloadingRef.current) return;
@@ -1396,30 +1798,76 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     };
 
     let blurVerifyTimer: ReturnType<typeof setTimeout> | null = null;
+    let fullscreenVerifyTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Evaluate elapsed screen-off / hidden duration when returning to visible:
+    // <= 3 minutes (180,000 ms) -> NOT a violation (show brief non-penalty notice)
+    // > 3 minutes -> Violation recorded immediately
+    const resolveReturnFromScreenHidden = () => {
+      const hiddenAt = getPersistedScreenHiddenAt();
+      if (hiddenAt === null) return;
+      clearScreenHiddenMarker();
+      const elapsedMs = Date.now() - hiddenAt;
+
+      if (elapsedMs > SCREEN_OFF_GRACE_MS) {
+        const durLabel = formatCooldownMMSS(Math.ceil(elapsedMs / 1000));
+        handleViolation(
+          'tab_switch',
+          `Layar HP mati / keluar dari halaman ujian lebih dari 3 menit (${durLabel})`,
+          true
+        );
+      } else {
+        // Screen sleep <= 3 minutes: NOT a violation! Clear focus loss timers cleanly.
+        focusLostStartedAtRef.current = null;
+        lastSustainedPenaltyAtRef.current = 0;
+        if (document.hasFocus() && !checkIsSplitScreenViewport()) {
+          setFocusLostWarning(null);
+        }
+        showBriefScreenOffNotice(Math.round(elapsedMs / 1000));
+      }
+    };
 
     const onVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        engageFocusLossShield('tab_switch', 'Beralih ke tab atau aplikasi lain', false);
+        // Cancel pending blur timer so OS power-button / screen sleep is NEVER miscounted as Floating Window
+        if (blurVerifyTimer) {
+          clearTimeout(blurVerifyTimer);
+          blurVerifyTimer = null;
+        }
+        if (fullscreenVerifyTimer) {
+          clearTimeout(fullscreenVerifyTimer);
+          fullscreenVerifyTimer = null;
+        }
+        markScreenHiddenNow();
+      } else if (document.visibilityState === 'visible') {
+        resolveReturnFromScreenHidden();
       }
     };
 
     const onBlur = () => {
       if (isPageUnloadingRef.current) return;
-      // Brief 120ms verification: normal clicks inside exam DOM (textarea, buttons, modal) keep document.hasFocus() === true
+      // 450ms verification: Android power-button / auto-sleep fires blur ~50-300ms before visibilityState='hidden'.
+      // If screen turned off (visibilityState === 'hidden'), skip Floating Window penalty and let 3-minute grace handle it.
       if (blurVerifyTimer) clearTimeout(blurVerifyTimer);
       blurVerifyTimer = setTimeout(() => {
         blurVerifyTimer = null;
         if (isPageUnloadingRef.current) return;
+        if (document.visibilityState === 'hidden' || getPersistedScreenHiddenAt() !== null) {
+          return;
+        }
         if (!document.hasFocus()) {
           engageFocusLossShield('blur_loss', FLOATING_WINDOW_REASON, isSplitScreenActiveRef.current);
         }
-      }, 120);
+      }, BLUR_VERIFY_DELAY_MS);
     };
 
     const onFocus = () => {
       if (blurVerifyTimer) {
         clearTimeout(blurVerifyTimer);
         blurVerifyTimer = null;
+      }
+      if (document.visibilityState === 'visible') {
+        resolveReturnFromScreenHidden();
       }
       const stillSplit = checkIsSplitScreenViewport();
       isSplitScreenActiveRef.current = stillSplit;
@@ -1446,7 +1894,18 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) {
         setIsFullscreen(false);
-        handleViolation('exit_fullscreen', 'Keluar dari mode layar penuh (fullscreen)');
+        // Verify after 400ms that fullscreen exit was NOT caused by phone screen turning off
+        if (fullscreenVerifyTimer) clearTimeout(fullscreenVerifyTimer);
+        fullscreenVerifyTimer = setTimeout(() => {
+          fullscreenVerifyTimer = null;
+          if (isPageUnloadingRef.current) return;
+          if (document.visibilityState === 'hidden' || getPersistedScreenHiddenAt() !== null) {
+            return;
+          }
+          if (!document.fullscreenElement) {
+            handleViolation('exit_fullscreen', 'Keluar dari mode layar penuh (fullscreen)');
+          }
+        }, 400);
       } else {
         setIsFullscreen(true);
       }
@@ -1454,6 +1913,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     const onWindowResize = () => {
       if (isPageUnloadingRef.current) return;
+      if (document.visibilityState === 'hidden') return;
       const isSplitNow = checkIsSplitScreenViewport();
       isSplitScreenActiveRef.current = isSplitNow;
 
@@ -1470,14 +1930,39 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       }
     };
 
-    // 1-second continuous watchdog for `!document.hasFocus()` (catches Android Pop-up View / Floating Window
-    // even if visibilitychange never fires, and escalates violation if kept open > 5 seconds)
+    // 1-second continuous watchdog:
+    // - While visibilityState === 'hidden': enforces 3-minute screen-off tolerance (NO Floating Window false positive!)
+    // - While visibilityState === 'visible': catches Android Pop-up View / Floating Window / Split Screen with ZERO grace
+    //   and escalates violation every 5 seconds if kept open
     const focusWatchdog = setInterval(() => {
       if (isPageUnloadingRef.current) return;
       const latestSession = sessionRef.current;
       if (latestSession.isLocked || latestSession.status !== 'in_progress') {
         setFocusLostWarning(null);
         return;
+      }
+
+      // If screen is off / page hidden: honor 3-minute grace period
+      if (document.visibilityState === 'hidden') {
+        const hiddenAt = markScreenHiddenNow();
+        const elapsedHiddenMs = Date.now() - hiddenAt;
+        if (elapsedHiddenMs > SCREEN_OFF_GRACE_MS) {
+          clearScreenHiddenMarker();
+          const durLabel = formatCooldownMMSS(Math.ceil(elapsedHiddenMs / 1000));
+          handleViolation(
+            'tab_switch',
+            `Layar HP mati / keluar dari halaman ujian lebih dari 3 menit (${durLabel})`,
+            true
+          );
+          // Re-arm hidden marker so staying hidden > 3 more minutes counts again
+          markScreenHiddenNow();
+        }
+        return;
+      }
+
+      // Page is visible — resolve any completed screen-off period first
+      if (getPersistedScreenHiddenAt() !== null) {
+        resolveReturnFromScreenHidden();
       }
 
       const hasDocFocus = document.hasFocus();
@@ -1550,6 +2035,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
     return () => {
       if (blurVerifyTimer) clearTimeout(blurVerifyTimer);
+      if (fullscreenVerifyTimer) clearTimeout(fullscreenVerifyTimer);
       clearInterval(focusWatchdog);
       document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('blur', onBlur);
@@ -2210,7 +2696,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <ul className="list-disc pl-5 space-y-1 text-slate-700 text-[11px] leading-relaxed">
             <li>Pengerjaan soal hanya dapat dilakukan saat jam jadwal berlangsung (Pukul {exam.startTime} - {exam.endTime} WITA).</li>
             <li>Ujian wajib dilaksanakan dalam mode <strong>Layar Penuh (Fullscreen)</strong>.</li>
-            <li>Dilarang berpindah aplikasi, membuka tab lain, atau meminimalkan browser selama ujian berlangsung.</li>
+            <li>Dilarang membuka <strong>Jendela Mengambang (Floating Window)</strong>, <strong>Split Screen</strong>, atau berpindah aplikasi selama ujian maupun saat masa tunggu sanksi berlangsung.</li>
+            <li><strong>Toleransi Layar HP Mati:</strong> Jika layar HP mati/redup otomatis <strong>≤ 3 menit</strong>, tidak dihitung sebagai pelanggaran. Jika layar mati / keluar halaman lebih dari 3 menit, otomatis tercatat sebagai pelanggaran.</li>
             <li>Batas toleransi pelanggaran <strong>{schoolSetting.maxViolations}x</strong> sebelum lembar ujian terkunci otomatis.</li>
             <li><strong>Dilarang keluar akun (Logout)</strong> sebelum ujian dikumpulkan — keluar ke-1 sanksi tunggu 5 menit, ke-2 sanksi 7 menit, ke-3 <strong>dikumpulkan otomatis (Auto-Submit)</strong>.</li>
           </ul>
@@ -2472,8 +2959,80 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         ? 'border-orange-500'
         : 'border-amber-500';
 
+    const isCooldownPausedByFloat = Boolean(cooldownFocusShield?.active);
+
     return (
-      <div className={`max-w-lg mx-auto my-10 bg-white border-2 ${cardBorder} rounded-2xl shadow-2xl overflow-hidden`}>
+      <div
+        className={`max-w-lg mx-auto my-10 bg-white border-2 ${cardBorder} rounded-2xl shadow-2xl overflow-hidden select-none`}
+        onContextMenu={e => e.preventDefault()}
+        onCopy={e => e.preventDefault()}
+      >
+        {/* Full-Screen Opaque Red Blocker During Cooldown when Floating Window / Split Screen / Tab Switch is Detected */}
+        {isCooldownPausedByFloat && (
+          <div
+            onClick={async () => {
+              window.focus();
+              if (document.hasFocus() && !cooldownIsSplitScreenRef.current) {
+                cooldownFocusLostStartedAtRef.current = null;
+                cooldownLastSustainedPenaltyAtRef.current = 0;
+                setCooldownFocusShield(null);
+                await enterFullscreen();
+              }
+            }}
+            className="fixed inset-0 z-[95] flex items-center justify-center bg-rose-950/98 backdrop-blur-xl p-5 select-none"
+          >
+            <div className="bg-slate-950/95 border-2 border-rose-500 rounded-2xl max-w-md w-full p-6 shadow-2xl text-center space-y-4 text-white">
+              <div className="w-16 h-16 rounded-2xl bg-rose-600/25 border border-rose-500 text-rose-400 flex items-center justify-center mx-auto animate-pulse">
+                <ShieldAlert className="w-9 h-9" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-amber-500 text-slate-950 tracking-wide">
+                    <PauseCircle className="w-3.5 h-3.5" />
+                    {cooldownFocusShield?.focusReturned
+                      ? `MASA TUNGGU: ${formatCooldownMMSS(cooldownRemainingSec)}`
+                      : `TIMER DIJEDA (${formatCooldownMMSS(cooldownRemainingSec)})`}
+                  </span>
+                  <span className="inline-block text-[11px] font-mono font-bold px-3 py-1 rounded-full bg-rose-600 text-white tracking-wide">
+                    PELANGGARAN {session.violationsCount || 1} / {schoolSetting.maxViolations || 3}
+                  </span>
+                </div>
+                <h3 className="text-lg font-extrabold text-white tracking-tight">
+                  PELANGGARAN SAAT MASA TUNGGU!
+                </h3>
+                <p className="text-xs text-rose-100 leading-relaxed">
+                  {cooldownFocusShield?.isSplitScreen
+                    ? 'Terdeteksi mengaktifkan mode Split Screen / mengecilkan layar. Waktu tunggu diperpanjang menjadi 7 menit.'
+                    : 'Terdeteksi membuka jendela mengambang / aplikasi lain. Waktu tunggu diperpanjang menjadi 7 menit.'}
+                </p>
+                <p className="text-[11px] text-amber-300 bg-amber-950/70 border border-amber-500/40 rounded-lg p-2.5 leading-relaxed">
+                  Tutup jendela mengambang / aplikasi lain sekarang! Membiarkannya terbuka lebih dari 5 detik akan memicu pelanggaran berulang hingga akun dikunci kembali atau ujian <strong>dikumpulkan otomatis (Auto-Submit)</strong>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async e => {
+                  e.stopPropagation();
+                  window.focus();
+                  if (document.hasFocus() && !cooldownIsSplitScreenRef.current) {
+                    cooldownFocusLostStartedAtRef.current = null;
+                    cooldownLastSustainedPenaltyAtRef.current = 0;
+                    setCooldownFocusShield(null);
+                    await enterFullscreen();
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-colors cursor-pointer"
+              >
+                {cooldownFocusShield?.isSplitScreen
+                  ? 'Saya Sudah Keluar dari Split Screen — Lanjutkan Masa Tunggu'
+                  : cooldownFocusShield?.focusReturned
+                    ? 'Saya Mengerti — Tutup Peringatan & Lanjutkan Masa Tunggu'
+                    : 'Tutup Jendela Mengambang & Ketuk untuk Melanjutkan Masa Tunggu'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className={`${headerBg} px-6 py-4 text-white flex items-center justify-between gap-3`}>
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
@@ -2500,6 +3059,23 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         </div>
 
         <div className="p-6 text-center space-y-5">
+          {screenOffNotice && (
+            <div className="p-3 bg-sky-50 border border-sky-300 rounded-xl text-xs text-sky-900 text-left flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2">
+                <Info className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" />
+                <span>{screenOffNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScreenOffNotice(null)}
+                className="text-sky-600 hover:text-sky-900 shrink-0 cursor-pointer"
+                aria-label="Tutup pemberitahuan"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {cooldownEscapeAlert && (
             <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl text-xs text-rose-900 text-left font-semibold flex items-start gap-2">
               <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -2524,8 +3100,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               </>
             ) : isEscalatedDuringCooldown ? (
               <>
-                Anda terdeteksi keluar dari aplikasi atau berpindah tab saat masa tunggu berlangsung. Sesuai aturan anti-kecurangan, sanksi waktu tunggu dinaikkan menjadi{' '}
-                <strong>7 menit</strong>.
+                Anda terdeteksi membuka jendela mengambang / aplikasi lain saat masa tunggu berlangsung. Sesuai aturan anti-kecurangan, sanksi waktu tunggu dinaikkan menjadi{' '}
+                <strong>7 menit</strong> dan pengawasan fokus layar penuh diaktifkan setiap detik.
               </>
             ) : (
               <>
@@ -2537,15 +3113,23 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
 
           <div className="py-5 px-4 bg-slate-900 rounded-2xl text-white space-y-2 shadow-inner">
-            <span className="block text-[11px] uppercase tracking-widest text-amber-300 font-semibold">
-              Sisa Waktu Tunggu Sanksi
-            </span>
-            <div className="text-5xl font-black font-mono tracking-wider text-amber-400">
+            <div className="flex items-center justify-center gap-2">
+              <span className="text-[11px] uppercase tracking-widest text-amber-300 font-semibold">
+                Sisa Waktu Tunggu Sanksi
+              </span>
+              {isCooldownPausedByFloat && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded bg-rose-600 text-white animate-pulse">
+                  <PauseCircle className="w-3 h-3" />
+                  DIJEDA
+                </span>
+              )}
+            </div>
+            <div className={`text-5xl font-black font-mono tracking-wider ${isCooldownPausedByFloat ? 'text-rose-400' : 'text-amber-400'}`}>
               {formatCooldownMMSS(cooldownRemainingSec)}
             </div>
             <div className="w-full max-w-xs mx-auto h-2 bg-slate-700 rounded-full overflow-hidden mt-3">
               <div
-                className="h-full bg-amber-400 transition-all duration-700"
+                className={`h-full transition-all duration-700 ${isCooldownPausedByFloat ? 'bg-rose-500' : 'bg-amber-400'}`}
                 style={{ width: `${elapsedPct}%` }}
               />
             </div>
@@ -2557,16 +3141,26 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 text-left space-y-1">
             <div className="font-semibold text-slate-800 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>Larangan Selama Masa Tunggu:</span>
+              <span>Larangan &amp; Pengawasan Ketat Selama Masa Tunggu:</span>
             </div>
             <ul className="list-disc pl-4 space-y-0.5 leading-relaxed">
-              <li><strong>DILARANG berpindah tab, membuka aplikasi lain, atau logout</strong> sebelum waktu mencapai 00:00 — hukuman akan dinaikkan menjadi <strong>7 menit</strong> (atau Auto-Submit jika mencapai batas 3x).</li>
+              <li><strong>DILARANG membuka Jendela Mengambang (Floating Window), Split Screen, berpindah tab, atau keluar halaman tunggu</strong> — waktu tunggu akan dibekukan &amp; direset menjadi <strong>7 menit</strong>, dan jika mencapai batas maksimal akun akan <strong>dikunci kembali / Auto-Submit</strong>.</li>
               <li>Memuat ulang (refresh) halaman atau ganti perangkat <strong>tidak akan mereset</strong> sisa waktu tunggu.</li>
               <li>Jawaban yang sudah Anda isi sebelumnya tetap aman tersimpan di server.</li>
             </ul>
           </div>
 
-          <div className="pt-1 flex items-center justify-center gap-2">
+          <div className="pt-1 flex flex-wrap items-center justify-center gap-2">
+            {!isFullscreen && (
+              <button
+                type="button"
+                onClick={() => void enterFullscreen()}
+                className="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                <Maximize className="w-3.5 h-3.5" />
+                <span>Aktifkan Layar Penuh</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onExitExam}
@@ -2799,6 +3393,24 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
               Saya Mengerti &amp; Lanjutkan Ujian
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Calm Non-Penalty Notice when Phone Screen Slept <= 3 Minutes */}
+      {screenOffNotice && (
+        <div className="bg-sky-50 border border-sky-300 text-sky-900 rounded-xl px-3.5 py-2.5 text-xs flex items-center justify-between gap-2 shadow-xs">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-sky-600 shrink-0" />
+            <span className="font-medium leading-snug">{screenOffNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setScreenOffNotice(null)}
+            className="text-sky-600 hover:text-sky-900 p-0.5 rounded cursor-pointer shrink-0"
+            aria-label="Tutup pemberitahuan layar mati"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 

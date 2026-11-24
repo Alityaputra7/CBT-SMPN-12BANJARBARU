@@ -1283,6 +1283,7 @@ export async function recordCooldownEscapeToSupabase(params: {
   success: boolean;
   session: StudentExamSession;
   autoSubmitted: boolean;
+  reLocked: boolean;
   penaltyMinutes: number;
   error?: string;
 }> {
@@ -1291,11 +1292,25 @@ export async function recordCooldownEscapeToSupabase(params: {
   const nowIso = new Date(nowMs).toISOString();
   const nextViolations = (session.violationsCount || 0) + 1;
   const currentLogouts = Math.max(0, session.logoutCount || 0);
-  const shouldAutoSubmit = nextViolations >= maxViolations || currentLogouts >= 3;
+  const reachedMaxViolations = nextViolations >= maxViolations;
+  const shouldAutoSubmit = currentLogouts >= 3 || (reachedMaxViolations && currentLogouts > 0);
+  const shouldReLock = reachedMaxViolations && !shouldAutoSubmit;
   const detId =
     session.nis && session.examId
       ? buildDeterministicSessionId(session.nis, session.examId)
       : session.id;
+
+  const logDescription = shouldAutoSubmit
+    ? `PELANGGARAN SAAT MASA TUNGGU (${reason}) — Mencapai batas pelanggaran, ujian dikumpulkan otomatis (Auto-Submit)`
+    : shouldReLock
+      ? `PELANGGARAN SAAT MASA TUNGGU (${reason}) — Mencapai batas ${maxViolations}x pelanggaran, akun dikunci kembali`
+      : `PELANGGARAN SAAT MASA TUNGGU (${reason}) — Waktu tunggu diperpanjang menjadi 7 menit`;
+
+  const actionTaken = shouldAutoSubmit
+    ? 'AUTO_SUBMIT_COOLDOWN_ESCAPE'
+    : shouldReLock
+      ? 'RE_LOCKED_COOLDOWN_ESCAPE'
+      : 'COOLDOWN_ESCALATED_7M';
 
   if (isSupabaseConfigured && supabase) {
     await supabase
@@ -1310,19 +1325,18 @@ export async function recordCooldownEscapeToSupabase(params: {
         exam_id: session.examId,
         exam_title: session.examTitle,
         violation_type: 'cooldown_escape',
-        description: shouldAutoSubmit
-          ? `Keluar aplikasi/pindah tab saat masa tunggu (${reason}) — Mencapai batas pelanggaran, ujian dikumpulkan otomatis`
-          : `Keluar aplikasi/pindah tab saat masa tunggu (${reason}) — Sanksi waktu tunggu dinaikkan menjadi 7 menit`,
+        description: logDescription,
         violation_number: nextViolations,
-        action_taken: shouldAutoSubmit ? 'AUTO_SUBMIT_COOLDOWN_ESCAPE' : 'COOLDOWN_ESCALATED_7M',
+        action_taken: actionTaken,
         created_at: nowIso,
       })
       .then(() => {}, () => {});
   }
 
+  // Case A: Forced-Logout cooldown reached max violations or 3x logout -> Auto-Submit
   if (shouldAutoSubmit) {
     const autoSubmitReason =
-      'Auto-Submit: Mencapai batas pelanggaran saat masa tunggu sanksi berlangsung';
+      `Auto-Submit: Mencapai batas pelanggaran saat masa tunggu sanksi (${reason})`;
     const submitRes = await submitExamToSupabase({
       session: {
         ...session,
@@ -1342,16 +1356,89 @@ export async function recordCooldownEscapeToSupabase(params: {
       success: submitRes.success || Boolean(submitRes.queuedOffline),
       session: submitRes.session,
       autoSubmitted: true,
+      reLocked: false,
       penaltyMinutes: 0,
       error: submitRes.error,
     };
   }
 
-  const escalatedUntil = nowMs + 7 * 60 * 1000;
+  // Case B: Unlock cooldown reached max violations -> Re-Lock account (`is_locked = true`) & increment `lock_count`
+  if (shouldReLock) {
+    const nextLockCount = Math.max(0, session.lockCount || 0) + 1;
+    const reLockReason = `Pemblokiran ke-${nextLockCount}: Mencapai batas ${maxViolations}x pelanggaran saat masa tunggu sanksi (${reason})`;
+    const reLockedSession: StudentExamSession = {
+      ...session,
+      id: detId,
+      status: 'locked',
+      isLocked: true,
+      violationsCount: nextViolations,
+      lockCount: nextLockCount,
+      unlockCooldownUntil: undefined,
+      lockReason: reLockReason,
+      isOnline: true,
+      lastHeartbeat: nowMs,
+      adminActionAt: nowMs,
+      updatedAt: nowIso,
+    };
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const row = mapSessionToSupabaseRow(reLockedSession, questions.length);
+        const { data, error } = await upsertSessionRow(row);
+        if (error) {
+          await syncSingleSession(reLockedSession).catch(() => false);
+          return {
+            success: false,
+            session: reLockedSession,
+            autoSubmitted: false,
+            reLocked: true,
+            penaltyMinutes: 0,
+            error: formatSupabaseError(error),
+          };
+        }
+        const confirmed = data
+          ? mapSupabaseRowToSession(data as SupabaseExamSessionRow)
+          : reLockedSession;
+        syncSingleSession(confirmed).catch(() => false);
+        return {
+          success: true,
+          session: confirmed,
+          autoSubmitted: false,
+          reLocked: true,
+          penaltyMinutes: 0,
+        };
+      } catch (err) {
+        await syncSingleSession(reLockedSession).catch(() => false);
+        return {
+          success: false,
+          session: reLockedSession,
+          autoSubmitted: false,
+          reLocked: true,
+          penaltyMinutes: 0,
+          error: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
+    await syncSingleSession(reLockedSession).catch(() => false);
+    return {
+      success: true,
+      session: reLockedSession,
+      autoSubmitted: false,
+      reLocked: true,
+      penaltyMinutes: 0,
+    };
+  }
+
+  // Case C: Escalate / reset cooldown timer to 7 minutes (`Date.now() + 7 * 60 * 1000`)
+  const escalatedUntil = Math.max(
+    session.unlockCooldownUntil || 0,
+    nowMs + 7 * 60 * 1000
+  );
   const escalatedReason =
     currentLogouts > 0
-      ? `Sanksi Logout ke-${currentLogouts} · Keluar Saat Masa Tunggu (Dinaikkan 7 Menit)`
-      : 'Sanksi Keluar Saat Masa Tunggu (Dinaikkan 7 Menit)';
+      ? `Sanksi Logout ke-${currentLogouts} · Pelanggaran Masa Tunggu (Diperpanjang 7 Menit)`
+      : 'Sanksi Pelanggaran Saat Masa Tunggu (Diperpanjang 7 Menit)';
 
   const escalatedSession: StudentExamSession = {
     ...session,
@@ -1376,6 +1463,7 @@ export async function recordCooldownEscapeToSupabase(params: {
           success: false,
           session: escalatedSession,
           autoSubmitted: false,
+          reLocked: false,
           penaltyMinutes: 7,
           error: formatSupabaseError(error),
         };
@@ -1388,6 +1476,7 @@ export async function recordCooldownEscapeToSupabase(params: {
         success: true,
         session: confirmed,
         autoSubmitted: false,
+        reLocked: false,
         penaltyMinutes: 7,
       };
     } catch (err) {
@@ -1395,6 +1484,7 @@ export async function recordCooldownEscapeToSupabase(params: {
         success: false,
         session: escalatedSession,
         autoSubmitted: false,
+        reLocked: false,
         penaltyMinutes: 7,
         error: err instanceof Error ? err.message : String(err),
       };
@@ -1406,6 +1496,7 @@ export async function recordCooldownEscapeToSupabase(params: {
     success: true,
     session: escalatedSession,
     autoSubmitted: false,
+    reLocked: false,
     penaltyMinutes: 7,
   };
 }
