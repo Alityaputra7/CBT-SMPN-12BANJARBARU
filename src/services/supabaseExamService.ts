@@ -34,6 +34,7 @@ export interface SupabaseExamSessionRow {
   is_locked: boolean;
   lock_reason: string | null;
   lock_count?: number | null;
+  logout_count?: number | null;
   unlock_cooldown_until?: number | null;
   answers_json: StudentExamSession['answers'] | string | null;
   time_remaining_seconds: number;
@@ -156,6 +157,47 @@ export function formatCooldownMMSS(totalSeconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
+/**
+ * Progressive Forced-Logout Penalty Rules:
+ * - 1st logout (`logout_count === 1`): 5 minutes (300s) — escalated to 7m if during an active cooldown
+ * - 2nd logout (`logout_count === 2`): 7 minutes (420s)
+ * - 3rd+ logout (`logout_count >= 3`): Immediate Auto-Submit (`status = 'completed'`)
+ */
+export function calculateLogoutPenalty(
+  logoutCount?: number | null,
+  isDuringCooldown = false
+): {
+  logoutCount: number;
+  shouldAutoSubmit: boolean;
+  penaltyMinutes: number;
+  penaltySeconds: number;
+} {
+  const count = Math.max(0, Math.round(Number(logoutCount) || 0));
+  if (count >= 3) {
+    return {
+      logoutCount: count,
+      shouldAutoSubmit: true,
+      penaltyMinutes: 0,
+      penaltySeconds: 0,
+    };
+  }
+  if (count === 0) {
+    return {
+      logoutCount: 0,
+      shouldAutoSubmit: false,
+      penaltyMinutes: isDuringCooldown ? 7 : 0,
+      penaltySeconds: isDuringCooldown ? 420 : 0,
+    };
+  }
+  const penaltyMinutes = count >= 2 || isDuringCooldown ? 7 : 5;
+  return {
+    logoutCount: count,
+    shouldAutoSubmit: false,
+    penaltyMinutes,
+    penaltySeconds: penaltyMinutes * 60,
+  };
+}
+
 function normalizeStatus(rawStatus?: string | null, isLocked?: boolean): StudentExamStatus {
   if (isLocked) return 'locked';
   const s = (rawStatus || 'not_started').toLowerCase().trim();
@@ -258,6 +300,7 @@ export function mapSessionToSupabaseRow(
     is_locked: Boolean(session.isLocked || session.status === 'locked'),
     lock_reason: session.lockReason || null,
     lock_count: Math.max(0, Math.round(Number(session.lockCount) || 0)),
+    logout_count: Math.max(0, Math.round(Number(session.logoutCount) || 0)),
     unlock_cooldown_until:
       typeof session.unlockCooldownUntil === 'number' &&
       Number.isFinite(session.unlockCooldownUntil) &&
@@ -302,6 +345,7 @@ export function mapSupabaseRowToSession(row: SupabaseExamSessionRow): StudentExa
     isLocked: isLockedFlag,
     lockReason: row.lock_reason || undefined,
     lockCount: Math.max(0, Math.round(Number(row.lock_count ?? 0))),
+    logoutCount: Math.max(0, Math.round(Number(row.logout_count ?? 0))),
     unlockCooldownUntil:
       typeof row.unlock_cooldown_until === 'number' &&
       Number.isFinite(row.unlock_cooldown_until) &&
@@ -450,8 +494,9 @@ function buildCompactSubmitRow(
     is_passed: Boolean(session.isPassed),
     violation_count: Math.max(0, Math.round(Number(session.violationsCount) || 0)),
     is_locked: false,
-    lock_reason: null,
+    lock_reason: session.lockReason || null,
     lock_count: Math.max(0, Math.round(Number(session.lockCount) || 0)),
+    logout_count: Math.max(0, Math.round(Number(session.logoutCount) || 0)),
     unlock_cooldown_until: null,
     answers_json: compactAnswers,
     time_remaining_seconds: 0,
@@ -705,9 +750,17 @@ export async function submitExamToSupabase(params: {
   questions: Question[];
   exam: ExamSchedule;
   forcedStatus?: 'completed' | 'force_submitted';
+  customLockReason?: string;
   onRetryStatus?: (attempt: number, maxAttempts: number, statusMessage: string) => void;
 }): Promise<SubmitExamResult> {
-  const { session, questions, exam, forcedStatus = 'completed', onRetryStatus } = params;
+  const {
+    session,
+    questions,
+    exam,
+    forcedStatus = 'completed',
+    customLockReason,
+    onRetryStatus,
+  } = params;
   const compactAnswers = buildCompactAnswersJson(session.answers || {});
   const { scorePg, finalScore } = calculateProvisionalScore(
     questions,
@@ -734,7 +787,7 @@ export async function submitExamToSupabase(params: {
     finalScore,
     isPassed: finalScore >= kkm,
     isLocked: false,
-    lockReason: undefined,
+    lockReason: customLockReason || undefined,
     unlockCooldownUntil: undefined,
     isOnline: false,
     deviceSessionId: undefined,
@@ -1040,6 +1093,321 @@ export async function unlockStudentSessionInSupabase(
 
   await syncSingleSession(unlockedSession).catch(() => false);
   return { success: true, session: unlockedSession };
+}
+
+export interface ForcedLogoutPenaltyResult {
+  success: boolean;
+  session: StudentExamSession;
+  autoSubmitted: boolean;
+  logoutCount: number;
+  penaltyMinutes: number;
+  error?: string;
+}
+
+/**
+ * 3B. RECORD FORCED LOGOUT DURING ACTIVE EXAM (OR DURING COOLDOWN)
+ * - Increments `logout_count` +1 and logs to `cbt_violation_logs`.
+ * - 1st logout -> 5 minutes cooldown (7 minutes if logged out during an active cooldown).
+ * - 2nd logout -> 7 minutes cooldown.
+ * - 3rd+ logout -> Immediate Auto-Submit (`status: 'completed'`) with latest answers saved to Supabase!
+ */
+export async function recordForcedLogoutToSupabase(params: {
+  session: StudentExamSession;
+  questions: Question[];
+  exam: ExamSchedule;
+  isDuringCooldown?: boolean;
+}): Promise<ForcedLogoutPenaltyResult> {
+  const { session, questions, exam, isDuringCooldown = false } = params;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const nextLogoutCount = Math.max(0, Math.round(Number(session.logoutCount) || 0)) + 1;
+  const penalty = calculateLogoutPenalty(nextLogoutCount, isDuringCooldown);
+  const detId =
+    session.nis && session.examId
+      ? buildDeterministicSessionId(session.nis, session.examId)
+      : session.id;
+
+  const violationDescription = penalty.shouldAutoSubmit
+    ? `Keluar akun (logout) ke-${nextLogoutCount} saat ujian berlangsung — Ujian dikumpulkan otomatis (Auto-Submit)`
+    : isDuringCooldown
+      ? `Keluar akun (logout) ke-${nextLogoutCount} di tengah masa tunggu sanksi — Sanksi dinaikkan menjadi ${penalty.penaltyMinutes} menit`
+      : `Keluar akun (logout) ke-${nextLogoutCount} saat ujian berlangsung — Sanksi masa tunggu ${penalty.penaltyMinutes} menit`;
+
+  const violationAction = penalty.shouldAutoSubmit
+    ? `AUTO_SUBMIT_LOGOUT_${nextLogoutCount}`
+    : isDuringCooldown
+      ? `COOLDOWN_ESCAPE_LOGOUT_${penalty.penaltyMinutes}M`
+      : `FORCED_LOGOUT_COOLDOWN_${penalty.penaltyMinutes}M`;
+
+  // Always attempt audit log insert in Supabase
+  if (isSupabaseConfigured && supabase) {
+    await supabase
+      .from('cbt_violation_logs')
+      .insert({
+        id: `logout-${nowMs}-${Math.random().toString(36).slice(2, 7)}`,
+        session_id: detId,
+        student_id: session.studentId,
+        student_name: session.studentName,
+        nis: session.nis,
+        class_name: session.className,
+        exam_id: session.examId,
+        exam_title: session.examTitle,
+        violation_type: isDuringCooldown ? 'cooldown_escape' : 'forced_logout',
+        description: violationDescription,
+        violation_number: nextLogoutCount,
+        action_taken: violationAction,
+        created_at: nowIso,
+      })
+      .then(() => {}, () => {});
+  }
+
+  // Case 3rd+ logout -> Immediate Auto-Submit!
+  if (penalty.shouldAutoSubmit) {
+    const autoSubmitReason =
+      'Auto-Submit: Mencapai batas 3x keluar akun (logout) saat ujian berlangsung';
+    const sessionForSubmit: StudentExamSession = {
+      ...session,
+      id: detId,
+      logoutCount: nextLogoutCount,
+      unlockCooldownUntil: undefined,
+      lockReason: autoSubmitReason,
+      updatedAt: nowIso,
+    };
+
+    const submitRes = await submitExamToSupabase({
+      session: sessionForSubmit,
+      questions,
+      exam,
+      forcedStatus: 'completed',
+      customLockReason: autoSubmitReason,
+    });
+
+    await syncSingleSession(submitRes.session).catch(() => false);
+    return {
+      success: submitRes.success || Boolean(submitRes.queuedOffline),
+      session: submitRes.session,
+      autoSubmitted: true,
+      logoutCount: nextLogoutCount,
+      penaltyMinutes: 0,
+      error: submitRes.error,
+    };
+  }
+
+  // Case 1st or 2nd logout -> Apply 5m or 7m cooldown penalty and save to Supabase
+  const cooldownUntil = Math.max(
+    session.unlockCooldownUntil || 0,
+    nowMs + penalty.penaltySeconds * 1000
+  );
+  const cooldownReason = isDuringCooldown
+    ? `Sanksi Logout ke-${nextLogoutCount} Saat Masa Tunggu (Tunggu ${penalty.penaltyMinutes} Menit)`
+    : `Sanksi Logout ke-${nextLogoutCount} (Tunggu ${penalty.penaltyMinutes} Menit)`;
+
+  const penalizedSession: StudentExamSession = {
+    ...session,
+    id: detId,
+    status: session.isLocked ? 'locked' : 'in_progress',
+    logoutCount: nextLogoutCount,
+    unlockCooldownUntil: session.isLocked ? undefined : cooldownUntil,
+    lockReason: session.isLocked ? session.lockReason : cooldownReason,
+    isOnline: false,
+    lastHeartbeat: nowMs,
+    adminActionAt: nowMs,
+    updatedAt: nowIso,
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const row = mapSessionToSupabaseRow(penalizedSession, questions.length);
+      const { data, error } = await upsertSessionRow(row);
+      if (error) {
+        const exactErr = formatSupabaseError(error);
+        console.error('[Supabase] Forced logout penalty upsert failed:', exactErr);
+        await syncSingleSession(penalizedSession).catch(() => false);
+        return {
+          success: false,
+          session: penalizedSession,
+          autoSubmitted: false,
+          logoutCount: nextLogoutCount,
+          penaltyMinutes: penalty.penaltyMinutes,
+          error: exactErr,
+        };
+      }
+      const confirmed = data
+        ? mapSupabaseRowToSession(data as SupabaseExamSessionRow)
+        : penalizedSession;
+      syncSingleSession(confirmed).catch(() => false);
+      return {
+        success: true,
+        session: confirmed,
+        autoSubmitted: false,
+        logoutCount: nextLogoutCount,
+        penaltyMinutes: penalty.penaltyMinutes,
+      };
+    } catch (err) {
+      const exactErr = err instanceof Error ? err.message : String(err);
+      await syncSingleSession(penalizedSession).catch(() => false);
+      return {
+        success: false,
+        session: penalizedSession,
+        autoSubmitted: false,
+        logoutCount: nextLogoutCount,
+        penaltyMinutes: penalty.penaltyMinutes,
+        error: exactErr,
+      };
+    }
+  }
+
+  await syncSingleSession(penalizedSession).catch(() => false);
+  return {
+    success: true,
+    session: penalizedSession,
+    autoSubmitted: false,
+    logoutCount: nextLogoutCount,
+    penaltyMinutes: penalty.penaltyMinutes,
+  };
+}
+
+/**
+ * 3C. ESCALATE COOLDOWN TO 7 MINUTES WHEN STUDENT LEAVES APP / SWITCHES TAB DURING COOLDOWN
+ * - Escalates `unlock_cooldown_until` to `Date.now() + 7 * 60 * 1000` (420s) and saves to Supabase.
+ * - Increments `violationsCount`; if student hits maxViolations (3) or logoutCount >= 3 during cooldown,
+ *   auto-submits the exam immediately.
+ */
+export async function recordCooldownEscapeToSupabase(params: {
+  session: StudentExamSession;
+  questions: Question[];
+  exam: ExamSchedule;
+  reason: string;
+  maxViolations?: number;
+}): Promise<{
+  success: boolean;
+  session: StudentExamSession;
+  autoSubmitted: boolean;
+  penaltyMinutes: number;
+  error?: string;
+}> {
+  const { session, questions, exam, reason, maxViolations = 3 } = params;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const nextViolations = (session.violationsCount || 0) + 1;
+  const currentLogouts = Math.max(0, session.logoutCount || 0);
+  const shouldAutoSubmit = nextViolations >= maxViolations || currentLogouts >= 3;
+  const detId =
+    session.nis && session.examId
+      ? buildDeterministicSessionId(session.nis, session.examId)
+      : session.id;
+
+  if (isSupabaseConfigured && supabase) {
+    await supabase
+      .from('cbt_violation_logs')
+      .insert({
+        id: `cdesc-${nowMs}-${Math.random().toString(36).slice(2, 7)}`,
+        session_id: detId,
+        student_id: session.studentId,
+        student_name: session.studentName,
+        nis: session.nis,
+        class_name: session.className,
+        exam_id: session.examId,
+        exam_title: session.examTitle,
+        violation_type: 'cooldown_escape',
+        description: shouldAutoSubmit
+          ? `Keluar aplikasi/pindah tab saat masa tunggu (${reason}) — Mencapai batas pelanggaran, ujian dikumpulkan otomatis`
+          : `Keluar aplikasi/pindah tab saat masa tunggu (${reason}) — Sanksi waktu tunggu dinaikkan menjadi 7 menit`,
+        violation_number: nextViolations,
+        action_taken: shouldAutoSubmit ? 'AUTO_SUBMIT_COOLDOWN_ESCAPE' : 'COOLDOWN_ESCALATED_7M',
+        created_at: nowIso,
+      })
+      .then(() => {}, () => {});
+  }
+
+  if (shouldAutoSubmit) {
+    const autoSubmitReason =
+      'Auto-Submit: Mencapai batas pelanggaran saat masa tunggu sanksi berlangsung';
+    const submitRes = await submitExamToSupabase({
+      session: {
+        ...session,
+        id: detId,
+        violationsCount: nextViolations,
+        unlockCooldownUntil: undefined,
+        lockReason: autoSubmitReason,
+        updatedAt: nowIso,
+      },
+      questions,
+      exam,
+      forcedStatus: 'completed',
+      customLockReason: autoSubmitReason,
+    });
+    await syncSingleSession(submitRes.session).catch(() => false);
+    return {
+      success: submitRes.success || Boolean(submitRes.queuedOffline),
+      session: submitRes.session,
+      autoSubmitted: true,
+      penaltyMinutes: 0,
+      error: submitRes.error,
+    };
+  }
+
+  const escalatedUntil = nowMs + 7 * 60 * 1000;
+  const escalatedReason =
+    currentLogouts > 0
+      ? `Sanksi Logout ke-${currentLogouts} · Keluar Saat Masa Tunggu (Dinaikkan 7 Menit)`
+      : 'Sanksi Keluar Saat Masa Tunggu (Dinaikkan 7 Menit)';
+
+  const escalatedSession: StudentExamSession = {
+    ...session,
+    id: detId,
+    status: 'in_progress',
+    isLocked: false,
+    violationsCount: nextViolations,
+    unlockCooldownUntil: escalatedUntil,
+    lockReason: escalatedReason,
+    isOnline: true,
+    lastHeartbeat: nowMs,
+    adminActionAt: nowMs,
+    updatedAt: nowIso,
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const row = mapSessionToSupabaseRow(escalatedSession, questions.length);
+      const { data, error } = await upsertSessionRow(row);
+      if (error) {
+        return {
+          success: false,
+          session: escalatedSession,
+          autoSubmitted: false,
+          penaltyMinutes: 7,
+          error: formatSupabaseError(error),
+        };
+      }
+      const confirmed = data
+        ? mapSupabaseRowToSession(data as SupabaseExamSessionRow)
+        : escalatedSession;
+      syncSingleSession(confirmed).catch(() => false);
+      return {
+        success: true,
+        session: confirmed,
+        autoSubmitted: false,
+        penaltyMinutes: 7,
+      };
+    } catch (err) {
+      return {
+        success: false,
+        session: escalatedSession,
+        autoSubmitted: false,
+        penaltyMinutes: 7,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
+  await syncSingleSession(escalatedSession).catch(() => false);
+  return {
+    success: true,
+    session: escalatedSession,
+    autoSubmitted: false,
+    penaltyMinutes: 7,
+  };
 }
 
 /**
@@ -1392,7 +1760,7 @@ export function mergeActiveStudentSessionWithRemote(params: {
     (local.violationsCount > 0 && remote.violationsCount === 0 && isRemoteUnlocked && Boolean(remote.adminActionAt)) ||
     isAdminIntervention;
 
-  // 1. Operator reset exam -> clean state (including lock_count & unlock_cooldown_until)
+  // 1. Operator reset exam -> clean state (including lock_count, logout_count & unlock_cooldown_until)
   if (isRemoteReset) {
     return {
       session: {
@@ -1400,6 +1768,7 @@ export function mergeActiveStudentSessionWithRemote(params: {
         isLocked: false,
         lockReason: undefined,
         lockCount: 0,
+        logoutCount: 0,
         unlockCooldownUntil: undefined,
         violationsCount: 0,
         answers: remote.answers || {},
@@ -1443,13 +1812,16 @@ export function mergeActiveStudentSessionWithRemote(params: {
     mergedTimeRemaining = remote.timeRemainingSeconds || local.timeRemainingSeconds || defaultDurationSec;
   }
 
+  const mergedLogoutCount = Math.max(remote.logoutCount || 0, local.logoutCount || 0);
+
   // 3. Operator explicitly unlocked / cleared violations -> Supabase lock, violation & cooldown state wins
   if (unlockedOrReset) {
     const unlockedSession: StudentExamSession = {
       ...remote,
       isLocked: Boolean(remote.isLocked),
-      lockReason: remote.isLocked ? remote.lockReason : undefined,
+      lockReason: remote.isLocked ? remote.lockReason : (remote.unlockCooldownUntil ? remote.lockReason : undefined),
       lockCount: Math.max(remote.lockCount || 0, local.lockCount || 0),
+      logoutCount: mergedLogoutCount,
       unlockCooldownUntil: remote.isLocked ? undefined : (remote.unlockCooldownUntil ?? undefined),
       violationsCount: remote.violationsCount || 0,
       status: remote.isLocked ? 'locked' : remote.status,
@@ -1467,7 +1839,7 @@ export function mergeActiveStudentSessionWithRemote(params: {
     };
   }
 
-  // 4. Normal refresh / active session reconciliation -> never reset violations, lock_count, cooldown, or answers
+  // 4. Normal refresh / active session reconciliation -> never reset violations, lock_count, logout_count, cooldown, or answers
   const mergedViolations = Math.max(remote.violationsCount || 0, local.violationsCount || 0);
   const mergedLocked = Boolean(
     remote.isLocked || remote.status === 'locked' || local.isLocked || local.status === 'locked'
@@ -1486,8 +1858,13 @@ export function mergeActiveStudentSessionWithRemote(params: {
     ...remote,
     status: mergedStatus,
     isLocked: mergedLocked,
-    lockReason: mergedLocked ? (remote.lockReason || local.lockReason) : undefined,
+    lockReason: mergedLocked
+      ? (remote.lockReason || local.lockReason)
+      : mergedCooldownUntil
+        ? (remote.lockReason || local.lockReason)
+        : undefined,
     lockCount: mergedLockCount,
+    logoutCount: mergedLogoutCount,
     unlockCooldownUntil: mergedCooldownUntil,
     violationsCount: mergedViolations,
     answers: mergedAnswers,
@@ -1505,6 +1882,8 @@ export function mergeActiveStudentSessionWithRemote(params: {
     countAnsweredQuestions(mergedAnswers) > countAnsweredQuestions(remote.answers) ||
     mergedViolations > (remote.violationsCount || 0) ||
     mergedLockCount > (remote.lockCount || 0) ||
+    mergedLogoutCount > (remote.logoutCount || 0) ||
+    (mergedCooldownUntil || 0) > (remote.unlockCooldownUntil || 0) ||
     mergedLocked !== Boolean(remote.isLocked) ||
     mergedStatus !== remote.status ||
     mergedQuestionIndex !== (remote.currentQuestionIndex || 0) ||

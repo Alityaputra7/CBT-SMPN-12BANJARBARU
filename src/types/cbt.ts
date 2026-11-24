@@ -18,7 +18,9 @@ export type ViolationType =
   | 'blur_loss' 
   | 'devtools_or_shortcut' 
   | 'context_menu' 
-  | 'copy_paste';
+  | 'copy_paste'
+  | 'forced_logout'
+  | 'cooldown_escape';
 
 export interface SchoolSetting {
   id: string;
@@ -174,6 +176,7 @@ export interface StudentExamSession {
   isLocked: boolean;
   lockReason?: string;
   lockCount?: number;
+  logoutCount?: number;
   unlockCooldownUntil?: number | null;
   extraTimeMinutes: number;
   deviceInfo: string;

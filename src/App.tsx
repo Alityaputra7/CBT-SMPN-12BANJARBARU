@@ -65,9 +65,12 @@ import {
   deleteExamScheduleFromSupabase,
   subscribeToExamSchedulesRealtime,
   getPendingSubmissions,
-  flushPendingSubmissionsToSupabase
+  flushPendingSubmissionsToSupabase,
+  recordForcedLogoutToSupabase,
+  submitExamToSupabase,
+  calculateLogoutPenalty
 } from './services/supabaseExamService';
-import { isExamMatchingStudentClass } from './utils/classGroups';
+import { isExamMatchingStudentClass, isQuestionMatchingClass } from './utils/classGroups';
 import { getStudentSessionDeviceId, detectClientDeviceInfo } from './utils/sessionDevice';
 import { validateExamSchedule } from './utils/scheduleValidator';
 import { Navbar } from './components/layout/Navbar';
@@ -78,7 +81,7 @@ import { OperatorDashboard } from './components/operator/OperatorDashboard';
 import { GuruDashboard } from './components/guru/GuruDashboard';
 import { SiswaExamView } from './components/siswa/SiswaExamView';
 import { SecurityAndDeployGuide } from './components/common/SecurityAndDeployGuide';
-import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, WifiOff, X } from 'lucide-react';
+import { Database, Shield, BookOpen, Clock, Users, ArrowRight, Sparkles, RefreshCw, CheckCircle2, AlertTriangle, WifiOff, X, LogOut } from 'lucide-react';
 
 export default function App() {
   // App State with permanent local storage persistence
@@ -215,6 +218,26 @@ export default function App() {
   const examsRef = useRef<ExamSchedule[]>(exams);
   const hasRemoteSchedulesRef = useRef<boolean>(false);
 
+  // Forced-logout confirmation modal state (blocks accidental/intentional mid-exam logout loophole)
+  const [forcedLogoutTarget, setForcedLogoutTarget] = useState<{
+    student: Student;
+    session: StudentExamSession;
+    exam: ExamSchedule;
+    isDuringCooldown: boolean;
+  } | null>(null);
+  const [isProcessingForcedLogout, setIsProcessingForcedLogout] = useState<boolean>(false);
+
+  const getQuestionsForStudentExam = (student: Student, targetExam: ExamSchedule) => {
+    return questionBank.questions.filter(q => {
+      const matchSubject =
+        !targetExam.subjectId ||
+        q.subjectId === targetExam.subjectId ||
+        (targetExam.questionBankId && q.bankId === targetExam.questionBankId);
+      const matchClass = isQuestionMatchingClass(q.classId, q.grade, student.classId);
+      return matchSubject && matchClass;
+    });
+  };
+
   // Pick the most appropriate exam for a student:
   // 1) Ongoing in-progress exam -> 2) Active uncompleted & unlocked exam -> 3) Any uncompleted exam -> 4) Fallback
   const pickBestExamForStudent = (
@@ -298,6 +321,7 @@ export default function App() {
       violations_count: session?.violationsCount ?? 0,
       is_locked: Boolean(session?.isLocked || session?.status === 'locked'),
       lock_count: session?.lockCount ?? 0,
+      logout_count: session?.logoutCount ?? 0,
       unlock_cooldown_until: session?.unlockCooldownUntil ?? null,
       saved_at: Date.now(),
     });
@@ -1107,6 +1131,7 @@ export default function App() {
           isLocked: false,
           lockReason: undefined,
           lockCount: 0,
+          logoutCount: 0,
           unlockCooldownUntil: undefined,
           submittedAt: undefined,
           timeRemainingSeconds: (sessExam?.durationMinutes || 90) * 60,
@@ -1128,6 +1153,7 @@ export default function App() {
           isOnline: false,
           isLocked: false,
           lockCount: 0,
+          logoutCount: 0,
           unlockCooldownUntil: undefined,
           violationsCount: 0,
           deviceSessionId: undefined,
@@ -1183,6 +1209,7 @@ export default function App() {
           isLocked: false,
           lockReason: undefined,
           lockCount: 0,
+          logoutCount: 0,
           unlockCooldownUntil: undefined,
           submittedAt: undefined,
           timeRemainingSeconds: (sessExam?.durationMinutes || 90) * 60,
@@ -1346,6 +1373,16 @@ export default function App() {
       if (exactIdx >= 0) {
         const existing = currentList[exactIdx];
         const isExistingDone = isSessionCompleted(existing.status);
+        let enforcedCooldownUntil = existing.unlockCooldownUntil;
+        let enforcedLockReason = existing.lockReason;
+        if (!isExistingDone && !existing.isLocked && existing.status === 'in_progress' && (existing.logoutCount || 0) >= 1 && (existing.logoutCount || 0) < 3) {
+          const wasEscalated = Boolean(existing.lockReason?.includes('Masa Tunggu') || existing.lockReason?.includes('7 Menit'));
+          const pen = calculateLogoutPenalty(existing.logoutCount, wasEscalated);
+          enforcedCooldownUntil = Math.max(existing.unlockCooldownUntil || 0, Date.now() + pen.penaltySeconds * 1000);
+          enforcedLockReason = wasEscalated
+            ? `Sanksi Logout ke-${pen.logoutCount} Saat Masa Tunggu (Tunggu 7 Menit)`
+            : `Sanksi Logout ke-${pen.logoutCount} (Tunggu ${pen.penaltyMinutes} Menit)`;
+        }
         syncedSession = isExistingDone
           ? existing
           : {
@@ -1353,6 +1390,8 @@ export default function App() {
               id: deterministicId,
               examId: targetExamId,
               examTitle: targetExam?.title || existing.examTitle,
+              unlockCooldownUntil: enforcedCooldownUntil,
+              lockReason: enforcedLockReason,
               isOnline: true,
               deviceSessionId,
               deviceInfo: clientInfo,
@@ -1489,16 +1528,87 @@ export default function App() {
 
           const bestDetId = buildDeterministicSessionId(student.nis, bestExamId);
           const defaultDurationSec = (bestExam?.durationMinutes || 90) * 60;
+          const nowLoginMs = Date.now();
+
+          // ENFORCE FORCED-LOGOUT PROGRESSIVE PENALTY ON RE-LOGIN:
+          // - logout_count >= 3 & still in_progress -> Immediate Auto-Submit!
+          // - logout_count === 1 -> Enforce 5-minute cooldown (or 7m if previously escalated during cooldown)
+          // - logout_count === 2 -> Enforce 7-minute cooldown
+          if (
+            existingBest &&
+            existingBest.status === 'in_progress' &&
+            !existingBest.isLocked &&
+            (existingBest.logoutCount || 0) >= 3 &&
+            bestExam
+          ) {
+            const autoReason =
+              'Auto-Submit: Mencapai batas 3x keluar akun (logout) saat ujian berlangsung';
+            const examQuestions = getQuestionsForStudentExam(student, bestExam);
+            const autoRes = await submitExamToSupabase({
+              session: {
+                ...existingBest,
+                id: bestDetId,
+                examId: bestExamId,
+                examTitle: bestExam.title,
+                lockReason: autoReason,
+              },
+              questions: examQuestions,
+              exam: bestExam,
+              forcedStatus: 'completed',
+              customLockReason: autoReason,
+            });
+            const mergedAuto = reconcileSessionsWithStudents(
+              studentsRef.current,
+              [autoRes.session],
+              effectiveSchedules[0] || INITIAL_EXAMS[0],
+              sessionsRef.current
+            );
+            sessionsRef.current = mergedAuto;
+            setSessions(mergedAuto);
+            saveToStorage(STORAGE_KEYS.SESSIONS, mergedAuto);
+            clearActiveExamFromPersistedStudentSession();
+            handleAddAuditLog(
+              'AUTO_SUBMIT_3X_LOGOUT',
+              `Ujian ${bestExam.subjectName} siswa ${student.name} dikumpulkan otomatis saat login kembali karena mencapai 3x keluar akun.`
+            );
+            return;
+          }
+
+          let enforcedCooldownUntil = existingBest?.unlockCooldownUntil;
+          let enforcedLockReason = existingBest?.lockReason;
+          if (
+            existingBest &&
+            existingBest.status === 'in_progress' &&
+            !existingBest.isLocked &&
+            (existingBest.logoutCount || 0) >= 1
+          ) {
+            const wasEscalated = Boolean(
+              existingBest.lockReason?.includes('Masa Tunggu') ||
+                existingBest.lockReason?.includes('7 Menit')
+            );
+            const pen = calculateLogoutPenalty(existingBest.logoutCount, wasEscalated);
+            enforcedCooldownUntil = Math.max(
+              existingBest.unlockCooldownUntil || 0,
+              nowLoginMs + pen.penaltySeconds * 1000
+            );
+            enforcedLockReason = wasEscalated
+              ? `Sanksi Logout ke-${pen.logoutCount} Saat Masa Tunggu (Tunggu 7 Menit)`
+              : `Sanksi Logout ke-${pen.logoutCount} (Tunggu ${pen.penaltyMinutes} Menit)`;
+          }
+
           const hydratedBest: StudentExamSession = existingBest
             ? {
                 ...existingBest,
                 id: bestDetId,
                 examId: bestExamId,
                 examTitle: bestExam?.title || existingBest.examTitle,
+                unlockCooldownUntil: enforcedCooldownUntil,
+                lockReason: enforcedLockReason,
                 isOnline: !existingBest.isLocked,
                 deviceSessionId: existingBest.isLocked ? undefined : deviceSessionId,
                 deviceInfo: clientInfo,
-                lastHeartbeat: Date.now(),
+                lastHeartbeat: nowLoginMs,
+                adminActionAt: enforcedCooldownUntil ? nowLoginMs : existingBest.adminActionAt,
               }
             : {
                 id: bestDetId,
@@ -1513,12 +1623,14 @@ export default function App() {
                 timeRemainingSeconds: defaultDurationSec,
                 violationsCount: 0,
                 isLocked: false,
+                lockCount: 0,
+                logoutCount: 0,
                 extraTimeMinutes: 0,
                 deviceInfo: clientInfo,
                 deviceSessionId,
                 currentQuestionIndex: 0,
                 isOnline: true,
-                lastHeartbeat: Date.now(),
+                lastHeartbeat: nowLoginMs,
                 answers: {},
                 scorePg: 0,
                 scoreEssay: 0,
@@ -1555,8 +1667,9 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    if (currentRole === 'siswa' && currentStudent) {
+  // Final logout executor (after optional forced-logout penalty has been recorded)
+  const executeLogout = (skipOnlineUpdate = false) => {
+    if (!skipOnlineUpdate && currentRole === 'siswa' && currentStudent) {
       const currentList = sessionsRef.current;
       const modifiedSessions: StudentExamSession[] = [];
       const updated = currentList.map(s => {
@@ -1595,12 +1708,123 @@ export default function App() {
     // Clear persisted student auth/exam session ONLY on explicit Logout
     clearPersistedStudentSession();
 
+    setForcedLogoutTarget(null);
+    setIsProcessingForcedLogout(false);
     currentRoleRef.current = null;
     currentStudentRef.current = null;
     setCurrentRole(null);
     setCurrentUser(null);
     setCurrentStudent(null);
     setActiveSection('login');
+  };
+
+  // Guarded Logout entry point: intercepts mid-exam logout with mandatory warning modal & penalty tracking
+  const handleLogout = () => {
+    if (currentRole === 'siswa' && currentStudent) {
+      const storedSessions = loadFromStorage<StudentExamSession[]>(STORAGE_KEYS.SESSIONS, []);
+      const findInProgress = (list: StudentExamSession[]) =>
+        list.find(
+          s =>
+            ((s.nis && s.nis.trim() === currentStudent.nis.trim()) || s.studentId === currentStudent.id) &&
+            s.examId === selectedExamIdRef.current &&
+            s.status === 'in_progress' &&
+            !s.isLocked
+        ) ||
+        list.find(
+          s =>
+            ((s.nis && s.nis.trim() === currentStudent.nis.trim()) || s.studentId === currentStudent.id) &&
+            s.status === 'in_progress' &&
+            !s.isLocked
+        );
+
+      const memActive = findInProgress(sessionsRef.current);
+      const storageActive = findInProgress(storedSessions);
+      const activeSess = memActive || storageActive;
+
+      if (activeSess && !isSessionCompleted(activeSess.status)) {
+        // Merge the freshest locally saved answers (including debounced essay edits) before logout
+        const mergedAnswers = {
+          ...(memActive?.answers || {}),
+          ...(storageActive?.answers || {}),
+        };
+        const freshestSession: StudentExamSession = {
+          ...activeSess,
+          answers: Object.keys(mergedAnswers).length > 0 ? mergedAnswers : activeSess.answers,
+          logoutCount: Math.max(memActive?.logoutCount || 0, storageActive?.logoutCount || 0),
+          unlockCooldownUntil:
+            Math.max(memActive?.unlockCooldownUntil || 0, storageActive?.unlockCooldownUntil || 0) ||
+            undefined,
+        };
+        const matchedExam =
+          examsRef.current.find(e => e.id === freshestSession.examId) ||
+          examsRef.current[0] ||
+          INITIAL_EXAMS[0];
+        const isDuringCooldown = Boolean(
+          freshestSession.unlockCooldownUntil && freshestSession.unlockCooldownUntil > Date.now()
+        );
+
+        setForcedLogoutTarget({
+          student: currentStudent,
+          session: freshestSession,
+          exam: matchedExam,
+          isDuringCooldown,
+        });
+        return;
+      }
+    }
+
+    executeLogout(false);
+  };
+
+  const handleConfirmForcedLogout = async () => {
+    if (!forcedLogoutTarget || isProcessingForcedLogout) return;
+    setIsProcessingForcedLogout(true);
+    try {
+      const { student, session: targetSess, exam: targetExam, isDuringCooldown } = forcedLogoutTarget;
+      const examQuestions = getQuestionsForStudentExam(student, targetExam);
+      const res = await recordForcedLogoutToSupabase({
+        session: targetSess,
+        questions: examQuestions,
+        exam: targetExam,
+        isDuringCooldown,
+      });
+
+      const updated = sessionsRef.current.map(s =>
+        s.id === res.session.id ||
+        (((s.nis && s.nis.trim() === student.nis.trim()) || s.studentId === student.id) &&
+          s.examId === targetExam.id)
+          ? res.session
+          : s
+      );
+      const hasMatch = updated.some(s => s.id === res.session.id);
+      const finalList = hasMatch ? updated : [...updated, res.session];
+      sessionsRef.current = finalList;
+      setSessions(finalList);
+      saveToStorage(STORAGE_KEYS.SESSIONS, finalList);
+
+      if (!res.success && res.error) {
+        triggerSupabaseErrorNotification(
+          `Sanksi logout tercatat lokal, namun sinkronisasi Supabase bermasalah: ${res.error}`
+        );
+      }
+
+      if (res.autoSubmitted) {
+        handleAddAuditLog(
+          'AUTO_SUBMIT_3X_LOGOUT',
+          `Siswa ${student.name} (${student.nis}) keluar akun ke-${res.logoutCount} saat ujian ${targetExam.subjectName} — Ujian dikumpulkan otomatis (Nilai: ${res.session.finalScore}).`
+        );
+        triggerSyncNotification(
+          `Ujian ${targetExam.subjectName} dikumpulkan otomatis (Auto-Submit) karena keluar akun ke-${res.logoutCount}.`
+        );
+      } else {
+        handleAddAuditLog(
+          'FORCED_LOGOUT_PENALTY',
+          `Siswa ${student.name} (${student.nis}) keluar akun ke-${res.logoutCount} saat ujian ${targetExam.subjectName} — Sanksi waktu tunggu ${res.penaltyMinutes} menit.`
+        );
+      }
+    } finally {
+      executeLogout(true);
+    }
   };
 
   const handlePasswordChanged = (newPassword: string) => {
@@ -2167,6 +2391,82 @@ export default function App() {
           onPasswordChanged={handlePasswordChanged}
         />
       )}
+
+      {/* Forced-Logout Warning & Penalty Confirmation Modal (Active Student Exam) */}
+      {forcedLogoutTarget && (() => {
+        const nextLogoutNum = (forcedLogoutTarget.session.logoutCount || 0) + 1;
+        const nextPen = calculateLogoutPenalty(nextLogoutNum, forcedLogoutTarget.isDuringCooldown);
+        return (
+          <div className="fixed inset-0 z-[80] bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl border-2 border-rose-500 shadow-2xl overflow-hidden">
+              <div className="bg-rose-600 px-5 py-4 text-white flex items-center gap-3">
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-rose-100">
+                    Peringatan Anti-Kecurangan · {forcedLogoutTarget.exam.subjectName}
+                  </span>
+                  <h3 className="text-base font-extrabold leading-tight">
+                    Konfirmasi Keluar Akun Saat Ujian
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4 text-xs text-slate-700">
+                <p className="leading-relaxed bg-rose-50 border border-rose-200 text-rose-900 p-3.5 rounded-xl font-medium">
+                  <strong>PERINGATAN!</strong> Anda belum mengumpulkan ujian. Keluar akun sekarang akan dicatat sebagai kecurangan dengan sanksi waktu tunggu 5 menit (hingga pengumpulan otomatis pada keluar ke-3). Yakin ingin keluar?
+                </p>
+
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                  <div className="font-bold text-amber-900">
+                    Konsekuensi Keluar Akun ke-{nextLogoutNum} / 3:
+                  </div>
+                  {nextPen.shouldAutoSubmit ? (
+                    <p className="text-rose-700 font-bold leading-relaxed">
+                      ⛔ BATAS MAKSIMAL TERCAPAI! Jika Anda keluar sekarang, ujian Anda akan LANGSUNG DITUTUP &amp; DIKUMPULKAN OTOMATIS (Auto-Submit) dengan jawaban terakhir yang tersimpan!
+                    </p>
+                  ) : forcedLogoutTarget.isDuringCooldown ? (
+                    <p className="text-amber-900 leading-relaxed">
+                      Anda sedang berada di masa tunggu sanksi. Keluar sekarang akan menaikkan hukuman waktu tunggu menjadi <strong>7 menit</strong> saat login kembali!
+                    </p>
+                  ) : (
+                    <p className="text-amber-900 leading-relaxed">
+                      Saat Anda login kembali, Anda akan dikenakan <strong>sanksi waktu tunggu {nextPen.penaltyMinutes} menit</strong> sebelum soal dapat dibuka kembali.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={isProcessingForcedLogout}
+                    onClick={() => void handleConfirmForcedLogout()}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>
+                      {isProcessingForcedLogout
+                        ? 'Mencatat Sanksi...'
+                        : nextPen.shouldAutoSubmit
+                          ? 'Keluar & Kumpulkan Otomatis'
+                          : 'Tetap Keluar Akun'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isProcessingForcedLogout}
+                    onClick={() => setForcedLogoutTarget(null)}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer shadow-xs"
+                  >
+                    Batal &amp; Lanjutkan Ujian
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Quiet Minimal Footer */}
       <footer className="border-t border-slate-200 bg-white py-4 mt-12 print:hidden">

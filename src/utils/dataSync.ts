@@ -31,6 +31,7 @@ export interface PersistedStudentSession {
   violations_count?: number;
   is_locked?: boolean;
   lock_count?: number;
+  logout_count?: number;
   unlock_cooldown_until?: number | null;
   saved_at: number;
 }
@@ -99,6 +100,10 @@ export function loadPersistedStudentSession(): PersistedStudentSession | null {
           typeof parsed.lock_count === 'number' && Number.isFinite(parsed.lock_count)
             ? Math.max(0, Math.round(parsed.lock_count))
             : undefined,
+        logout_count:
+          typeof parsed.logout_count === 'number' && Number.isFinite(parsed.logout_count)
+            ? Math.max(0, Math.round(parsed.logout_count))
+            : undefined,
         unlock_cooldown_until:
           typeof parsed.unlock_cooldown_until === 'number' &&
           Number.isFinite(parsed.unlock_cooldown_until) &&
@@ -147,6 +152,7 @@ export function clearActiveExamFromPersistedStudentSession(): void {
       violations_count: 0,
       is_locked: false,
       lock_count: 0,
+      logout_count: 0,
       unlock_cooldown_until: null,
       saved_at: Date.now(),
     });

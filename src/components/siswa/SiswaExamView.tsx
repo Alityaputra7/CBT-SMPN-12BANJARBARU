@@ -52,7 +52,9 @@ import {
   getPendingSubmissionForExam,
   flushPendingSubmissionsToSupabase,
   calculateUnlockCooldown,
-  formatCooldownMMSS
+  formatCooldownMMSS,
+  calculateLogoutPenalty,
+  recordCooldownEscapeToSupabase
 } from '../../services/supabaseExamService';
 import {
   loadPersistedStudentSession,
@@ -190,6 +192,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     const best = Math.max(fromSession, fromStorage);
     return best > Date.now() ? best : null;
   });
+  const [cooldownEscapeAlert, setCooldownEscapeAlert] = useState<string | null>(null);
   const [showMobileQuestionList, setShowMobileQuestionList] = useState(false);
 
   const reportSyncError = (message: string) => {
@@ -210,6 +213,8 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
   const hasStartedRef = useRef<boolean>(hasStarted);
   const isPageUnloadingRef = useRef<boolean>(false);
   const lastViolationAtRef = useRef<number>(0);
+  const lastCooldownEscapeAtRef = useRef<number>(0);
+  const autoSubmitLogoutTriggeredRef = useRef<string | null>(null);
   const focusLostStartedAtRef = useRef<number | null>(null);
   const lastSustainedPenaltyAtRef = useRef<number>(0);
   const isSplitScreenActiveRef = useRef<boolean>(false);
@@ -307,6 +312,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       violations_count: targetSession.violationsCount ?? 0,
       is_locked: Boolean(targetSession.isLocked || targetSession.status === 'locked'),
       lock_count: Math.max(0, targetSession.lockCount ?? 0),
+      logout_count: Math.max(0, targetSession.logoutCount ?? 0),
       unlock_cooldown_until:
         !targetSession.isLocked &&
         targetSession.status !== 'locked' &&
@@ -424,11 +430,13 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     if (!cooldownUntil) return;
     if (nowTime.getTime() >= cooldownUntil) {
       setCooldownUntil(null);
+      setCooldownEscapeAlert(null);
       const latest = sessionRef.current;
       if (latest.unlockCooldownUntil) {
         const resumedSession: StudentExamSession = {
           ...latest,
           unlockCooldownUntil: undefined,
+          lockReason: undefined,
           updatedAt: new Date().toISOString(),
         };
         sessionRef.current = resumedSession;
@@ -437,6 +445,114 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       }
     }
   }, [cooldownUntil, nowTime]);
+
+  // Safeguard: If session has logoutCount >= 3 and is somehow not completed yet, trigger immediate Auto-Submit
+  useEffect(() => {
+    if (
+      isSessionCompleted(session.status) ||
+      session.isLocked ||
+      session.status === 'locked' ||
+      isSubmitting
+    ) {
+      return;
+    }
+    if ((session.logoutCount || 0) >= 3) {
+      const triggerKey = `${student.nis}_${exam.id}_${session.logoutCount}`;
+      if (autoSubmitLogoutTriggeredRef.current === triggerKey) return;
+      autoSubmitLogoutTriggeredRef.current = triggerKey;
+      void submitExam(
+        'completed',
+        'Auto-Submit: Mencapai batas 3x keluar akun (logout) saat ujian berlangsung'
+      );
+    }
+  }, [session.status, session.isLocked, session.logoutCount, student.nis, exam.id, isSubmitting]);
+
+  // Cooldown Escape Watchdog (Requirement 4):
+  // If student leaves app / switches tab / opens floating window DURING ANY active Cooldown Screen
+  // before countdown reaches 00:00 -> escalate cooldown to 7 minutes (and auto-submit on 3rd strike)
+  useEffect(() => {
+    if (!isInCooldown || isSessionCompleted(session.status) || session.isLocked) return;
+
+    let blurCheckTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const triggerCooldownEscape = (reason: string) => {
+      if (isPageUnloadingRef.current) return;
+      const latest = sessionRef.current;
+      if (isSessionCompleted(latest.status) || latest.isLocked) return;
+
+      const now = Date.now();
+      if (now - lastCooldownEscapeAtRef.current < 3500) return;
+      lastCooldownEscapeAtRef.current = now;
+
+      const latestWithAnswers: StudentExamSession = {
+        ...latest,
+        answers: localAnswersRef.current,
+        currentQuestionIndex: currentQuestionIndexRef.current,
+        timeRemainingSeconds: timeRemainingRef.current,
+      };
+
+      onRecordViolation('cooldown_escape', `Keluar aplikasi saat masa tunggu (${reason})`);
+
+      void recordCooldownEscapeToSupabase({
+        session: latestWithAnswers,
+        questions,
+        exam,
+        reason,
+        maxViolations: schoolSetting.maxViolations || 3,
+      }).then(res => {
+        if (!res.success && res.error) {
+          reportSyncError(`Gagal mencatat pelanggaran masa tunggu ke Supabase: ${res.error}`);
+        } else if (res.success) {
+          clearSyncError();
+        }
+
+        sessionRef.current = res.session;
+        onUpdateSession(res.session, { skipSupabaseMirror: true });
+
+        if (res.autoSubmitted) {
+          setCooldownUntil(null);
+          setCooldownEscapeAlert(null);
+          clearActiveExamFromPersistedStudentSession();
+          setJustCompletedExamId(exam.id);
+          return;
+        }
+
+        const nextUntil = res.session.unlockCooldownUntil || Date.now() + 7 * 60 * 1000;
+        setCooldownUntil(nextUntil);
+        setCooldownEscapeAlert(
+          `Pelanggaran terdeteksi saat masa tunggu (${reason})! Sanksi waktu tunggu dinaikkan menjadi 7 menit. Tetap di halaman ini hingga 00:00 atau ujian akan dikumpulkan otomatis.`
+        );
+        persistExamSnapshotLocally(res.session, true);
+      });
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        triggerCooldownEscape('Berpindah tab atau keluar dari aplikasi');
+      }
+    };
+
+    const onWindowBlur = () => {
+      if (isPageUnloadingRef.current) return;
+      if (blurCheckTimer) clearTimeout(blurCheckTimer);
+      blurCheckTimer = setTimeout(() => {
+        blurCheckTimer = null;
+        if (isPageUnloadingRef.current) return;
+        if (!document.hasFocus()) {
+          triggerCooldownEscape('Kehilangan fokus / membuka jendela mengambang');
+        }
+      }, 150);
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('blur', onWindowBlur);
+
+    return () => {
+      if (blurCheckTimer) clearTimeout(blurCheckTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onWindowBlur);
+    };
+  }, [isInCooldown, session.status, session.isLocked, exam.id, schoolSetting.maxViolations]);
 
   // Always pull fresh exam schedules from Supabase when student views the readiness / schedule screen
   useEffect(() => {
@@ -529,6 +645,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           isLocked: false,
           lockReason: undefined,
           lockCount: 0,
+          logoutCount: 0,
           unlockCooldownUntil: undefined,
           violationsCount: 0,
           answers: {},
@@ -550,6 +667,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         setHasStarted(false);
         setViolationAlert(null);
         setCooldownUntil(null);
+        setCooldownEscapeAlert(null);
         setShowSubmitConfirm(false);
         setUnlockCheckNotice(null);
         setCurrentQuestionIndex(0);
@@ -591,6 +709,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           isLocked: false,
           lockReason: undefined,
           lockCount: 0,
+          logoutCount: 0,
           unlockCooldownUntil: undefined,
           violationsCount: 0,
           answers: {},
@@ -610,6 +729,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         setHasStarted(false);
         setViolationAlert(null);
         setCooldownUntil(null);
+        setCooldownEscapeAlert(null);
         setShowSubmitConfirm(false);
         setUnlockCheckNotice(null);
         setCurrentQuestionIndex(0);
@@ -633,6 +753,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         onUpdateSession(doneSession, { skipSupabaseMirror: true });
         clearActiveExamFromPersistedStudentSession();
         setCooldownUntil(null);
+        setCooldownEscapeAlert(null);
         if (justCompletedExamId !== exam.id) {
           setHasStarted(false);
         }
@@ -670,6 +791,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         : timeRemainingRef.current;
 
       const resolvedLockCount = Math.max(remote.lockCount || 0, localLatest.lockCount || 0);
+      const resolvedLogoutCount = Math.max(remote.logoutCount || 0, localLatest.logoutCount || 0);
       const resolvedCooldownUntil = isRemoteLocked
         ? undefined
         : remote.unlockCooldownUntil ?? localLatest.unlockCooldownUntil ?? undefined;
@@ -678,8 +800,13 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         ...localLatest,
         status: isRemoteLocked ? 'locked' : (remote.status === 'in_progress' ? 'in_progress' : localLatest.status),
         isLocked: isRemoteLocked,
-        lockReason: isRemoteLocked ? remote.lockReason : undefined,
+        lockReason: isRemoteLocked
+          ? remote.lockReason
+          : resolvedCooldownUntil
+            ? (remote.lockReason || localLatest.lockReason)
+            : undefined,
         lockCount: resolvedLockCount,
+        logoutCount: resolvedLogoutCount,
         unlockCooldownUntil: resolvedCooldownUntil,
         violationsCount: isAdminUnlocked || isAdminViolationReset || isAdminActionChanged
           ? (remote.violationsCount || 0)
@@ -1638,7 +1765,10 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   // Submission function (`submitExam`): flushes local essay answers, auto-retries up to 4x with backoff,
   // and falls back safely to `cbt_pending_submissions` offline queue if connection is down
-  const submitExam = async (forcedStatus: 'completed' | 'force_submitted' = 'completed'): Promise<boolean> => {
+  const submitExam = async (
+    forcedStatus: 'completed' | 'force_submitted' = 'completed',
+    customLockReason?: string
+  ): Promise<boolean> => {
     if (isSubmitting) return false;
     setIsSubmitting(true);
     setSubmitError(null);
@@ -1657,6 +1787,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
         questions,
         exam,
         forcedStatus,
+        customLockReason,
         onRetryStatus: (_attempt, _max, statusMsg) => {
           setSubmitRetryStatus(statusMsg);
         },
@@ -2081,19 +2212,32 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             <li>Ujian wajib dilaksanakan dalam mode <strong>Layar Penuh (Fullscreen)</strong>.</li>
             <li>Dilarang berpindah aplikasi, membuka tab lain, atau meminimalkan browser selama ujian berlangsung.</li>
             <li>Batas toleransi pelanggaran <strong>{schoolSetting.maxViolations}x</strong> sebelum lembar ujian terkunci otomatis.</li>
+            <li><strong>Dilarang keluar akun (Logout)</strong> sebelum ujian dikumpulkan — keluar ke-1 sanksi tunggu 5 menit, ke-2 sanksi 7 menit, ke-3 <strong>dikumpulkan otomatis (Auto-Submit)</strong>.</li>
           </ul>
         </div>
 
         <div className="space-y-2 pt-1">
           {isSessionCompleted(session.status) ? (
             <div className="space-y-2">
-              <button
-                disabled
-                className="w-full py-3.5 px-4 bg-emerald-50 text-emerald-800 font-semibold rounded-xl text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-emerald-300"
-              >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Ujian {exam.subjectName} Sudah Selesai Dikerjakan</span>
-              </button>
+              {((session.logoutCount || 0) >= 3 || session.lockReason?.includes('3x keluar akun')) ? (
+                <div className="p-3.5 bg-rose-50 text-rose-900 rounded-xl text-xs border border-rose-300 space-y-1 text-left">
+                  <div className="font-bold flex items-center gap-1.5 text-rose-700">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>Ujian {exam.subjectName} Ditutup &amp; Dikumpulkan Otomatis (3x Keluar Akun)</span>
+                  </div>
+                  <p className="leading-relaxed text-rose-800">
+                    Sesi ujian ini telah ditutup otomatis karena mencapai batas maksimal 3x keluar akun saat ujian berlangsung. Nilai berdasarkan jawaban terakhir sudah tersimpan di server.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  disabled
+                  className="w-full py-3.5 px-4 bg-emerald-50 text-emerald-800 font-semibold rounded-xl text-sm cursor-not-allowed flex items-center justify-center gap-2 border border-emerald-300"
+                >
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <span>Ujian {exam.subjectName} Sudah Selesai Dikerjakan</span>
+                </button>
+              )}
               {nextAvailableExam && (
                 <button
                   type="button"
@@ -2283,43 +2427,113 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
     );
   }
 
-  // 2.5. Progressive Cooldown Penalty Screen (after Operator unlock, BEFORE showing exam questions)
+  // 2.5. Progressive Cooldown Penalty Screen (Unlock Cooldown / Forced-Logout Cooldown / Cooldown Escape 7m)
   if (isInCooldown && cooldownRemainingSec > 0) {
-    const cooldownMeta = calculateUnlockCooldown(
-      Math.max(1, session.lockCount || persistedForExam?.lock_count || 1)
+    const activeLogoutCount = Math.max(
+      0,
+      session.logoutCount || persistedForExam?.logout_count || 0
     );
-    const totalPenaltySec = Math.max(1, cooldownMeta.penaltySeconds);
+    const activeLockCount = Math.max(
+      0,
+      session.lockCount || persistedForExam?.lock_count || 0
+    );
+    const isEscalatedDuringCooldown = Boolean(
+      cooldownEscapeAlert || session.lockReason?.includes('Masa Tunggu')
+    );
+    const isLogoutPenaltyScreen =
+      activeLogoutCount > 0 &&
+      (Boolean(session.lockReason?.includes('Logout')) || activeLockCount === 0);
+
+    const logoutMeta = calculateLogoutPenalty(
+      Math.max(1, activeLogoutCount),
+      isEscalatedDuringCooldown
+    );
+    const unlockMeta = calculateUnlockCooldown(Math.max(1, activeLockCount));
+
+    const displayPenaltyMinutes = isEscalatedDuringCooldown
+      ? 7
+      : isLogoutPenaltyScreen
+        ? logoutMeta.penaltyMinutes
+        : unlockMeta.penaltyMinutes;
+    const totalPenaltySec = Math.max(1, displayPenaltyMinutes * 60);
     const elapsedPct = Math.min(
       100,
       Math.max(0, Math.round(((totalPenaltySec - cooldownRemainingSec) / totalPenaltySec) * 100))
     );
 
+    const headerBg = isEscalatedDuringCooldown
+      ? 'bg-rose-600'
+      : isLogoutPenaltyScreen
+        ? 'bg-orange-600'
+        : 'bg-amber-500';
+    const cardBorder = isEscalatedDuringCooldown
+      ? 'border-rose-500'
+      : isLogoutPenaltyScreen
+        ? 'border-orange-500'
+        : 'border-amber-500';
+
     return (
-      <div className="max-w-lg mx-auto my-10 bg-white border-2 border-amber-500 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="bg-amber-500 px-6 py-4 text-white flex items-center justify-between gap-3">
+      <div className={`max-w-lg mx-auto my-10 bg-white border-2 ${cardBorder} rounded-2xl shadow-2xl overflow-hidden`}>
+        <div className={`${headerBg} px-6 py-4 text-white flex items-center justify-between gap-3`}>
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
               <Clock className="w-6 h-6 text-white animate-pulse" />
             </div>
             <div>
-              <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-100">
-                Pemblokiran ke-{cooldownMeta.lockCount} · {exam.subjectName}
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-white/90">
+                {isLogoutPenaltyScreen
+                  ? `Keluar Akun (Logout) ke-${activeLogoutCount} / 3 · ${exam.subjectName}`
+                  : `Pemblokiran ke-${unlockMeta.lockCount} · ${exam.subjectName}`}
               </span>
               <h2 className="text-lg font-extrabold leading-tight">
-                Sanksi Pelanggaran - Masa Tunggu
+                {isEscalatedDuringCooldown
+                  ? `Sanksi Tambahan - Masa Tunggu (${displayPenaltyMinutes} Menit)`
+                  : isLogoutPenaltyScreen
+                    ? `Masa Tunggu Sanksi Logout (${displayPenaltyMinutes} Menit)`
+                    : 'Sanksi Pelanggaran - Masa Tunggu'}
               </h2>
             </div>
           </div>
-          <span className="text-xs font-bold bg-amber-900/30 border border-white/30 px-2.5 py-1 rounded-lg font-mono shrink-0">
-            {cooldownMeta.penaltyMinutes} Menit
+          <span className="text-xs font-bold bg-black/25 border border-white/30 px-2.5 py-1 rounded-lg font-mono shrink-0">
+            {displayPenaltyMinutes} Menit
           </span>
         </div>
 
         <div className="p-6 text-center space-y-5">
+          {cooldownEscapeAlert && (
+            <div className="p-3.5 bg-rose-50 border-2 border-rose-300 rounded-xl text-xs text-rose-900 text-left font-semibold flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span>{cooldownEscapeAlert}</span>
+            </div>
+          )}
+
           <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-950 leading-relaxed text-left">
-            Akun Anda telah dibuka oleh Operator. Karena ini merupakan{' '}
-            <strong>pemblokiran ke-{cooldownMeta.lockCount}</strong>, Anda dikenakan sanksi waktu tunggu selama{' '}
-            <strong>{cooldownMeta.penaltyMinutes} menit</strong> sebelum dapat melanjutkan ujian.
+            {isLogoutPenaltyScreen ? (
+              <>
+                Anda tercatat melakukan <strong>keluar akun (logout) ke-{activeLogoutCount}</strong> saat ujian sedang berlangsung. Anda dikenakan sanksi waktu tunggu selama{' '}
+                <strong>{displayPenaltyMinutes} menit</strong> sebelum dapat melanjutkan soal.{' '}
+                {activeLogoutCount === 2 ? (
+                  <span className="text-rose-700 font-bold">
+                    PERHATIAN: Keluar akun 1 kali lagi (ke-3) akan langsung menutup &amp; mengumpulkan ujian Anda secara otomatis!
+                  </span>
+                ) : (
+                  <span>
+                    Keluar akun ke-2 akan dikenakan sanksi <strong>7 menit</strong>, dan keluar akun ke-3 akan langsung <strong>dikumpulkan otomatis (Auto-Submit)</strong>.
+                  </span>
+                )}
+              </>
+            ) : isEscalatedDuringCooldown ? (
+              <>
+                Anda terdeteksi keluar dari aplikasi atau berpindah tab saat masa tunggu berlangsung. Sesuai aturan anti-kecurangan, sanksi waktu tunggu dinaikkan menjadi{' '}
+                <strong>7 menit</strong>.
+              </>
+            ) : (
+              <>
+                Akun Anda telah dibuka oleh Operator. Karena ini merupakan{' '}
+                <strong>pemblokiran ke-{unlockMeta.lockCount}</strong>, Anda dikenakan sanksi waktu tunggu selama{' '}
+                <strong>{unlockMeta.penaltyMinutes} menit</strong> sebelum dapat melanjutkan ujian.
+              </>
+            )}
           </div>
 
           <div className="py-5 px-4 bg-slate-900 rounded-2xl text-white space-y-2 shadow-inner">
@@ -2343,12 +2557,12 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] text-slate-600 text-left space-y-1">
             <div className="font-semibold text-slate-800 flex items-center gap-1.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-              <span>Perhatian Selama Masa Tunggu:</span>
+              <span>Larangan Selama Masa Tunggu:</span>
             </div>
             <ul className="list-disc pl-4 space-y-0.5 leading-relaxed">
-              <li>Jawaban yang sudah Anda isi sebelumnya tetap aman tersimpan.</li>
-              <li>Memuat ulang (refresh) halaman <strong>tidak akan mempercepat atau mereset</strong> sisa waktu tunggu.</li>
-              <li>Setelah ujian terbuka, tetap berada di layar penuh agar tidak terkena pemblokiran berikutnya (sanksi ke-{cooldownMeta.lockCount + 1}: <strong>{calculateUnlockCooldown(cooldownMeta.lockCount + 1).penaltyMinutes} menit</strong>).</li>
+              <li><strong>DILARANG berpindah tab, membuka aplikasi lain, atau logout</strong> sebelum waktu mencapai 00:00 — hukuman akan dinaikkan menjadi <strong>7 menit</strong> (atau Auto-Submit jika mencapai batas 3x).</li>
+              <li>Memuat ulang (refresh) halaman atau ganti perangkat <strong>tidak akan mereset</strong> sisa waktu tunggu.</li>
+              <li>Jawaban yang sudah Anda isi sebelumnya tetap aman tersimpan di server.</li>
             </ul>
           </div>
 
@@ -2368,19 +2582,38 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
 
   // 3. If submitted / completed
   if (isSessionCompleted(session.status)) {
+    const isAutoSubmitLogout =
+      (session.logoutCount || 0) >= 3 ||
+      Boolean(session.lockReason?.includes('3x keluar akun')) ||
+      Boolean(session.lockReason?.includes('Auto-Submit'));
+
     return (
-      <div className="max-w-md mx-auto my-10 bg-white border border-slate-200 rounded-2xl shadow-xl p-6 text-center space-y-5">
-        <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto">
-          <CheckCircle className="w-8 h-8" />
+      <div className={`max-w-md mx-auto my-10 bg-white border ${isAutoSubmitLogout ? 'border-rose-300 border-2' : 'border-slate-200'} rounded-2xl shadow-xl p-6 text-center space-y-5`}>
+        <div className={`w-14 h-14 ${isAutoSubmitLogout ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'} rounded-2xl flex items-center justify-center mx-auto`}>
+          {isAutoSubmitLogout ? <ShieldAlert className="w-8 h-8" /> : <CheckCircle className="w-8 h-8" />}
         </div>
         <div>
-          <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full mb-2">
-            {exam.subjectName} · Selesai Dikerjakan
+          <span className={`inline-block text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full mb-2 border ${
+            isAutoSubmitLogout
+              ? 'text-rose-700 bg-rose-50 border-rose-200'
+              : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+          }`}>
+            {isAutoSubmitLogout
+              ? `${exam.subjectName} · Auto-Submit Sanksi`
+              : `${exam.subjectName} · Selesai Dikerjakan`}
           </span>
-          <h2 className="text-xl font-bold text-slate-900">Ujian Berhasil Dikumpulkan</h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Terima kasih {student.name}, jawaban Anda untuk <strong>{exam.title}</strong> telah tersimpan dengan aman di server Supabase CBT.
-          </p>
+          <h2 className="text-xl font-bold text-slate-900">
+            {isAutoSubmitLogout ? 'Ujian Ditutup & Dikumpulkan Otomatis' : 'Ujian Berhasil Dikumpulkan'}
+          </h2>
+          {isAutoSubmitLogout ? (
+            <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 text-left leading-relaxed">
+              <strong>Pemberitahuan Sistem:</strong> Ujian Anda untuk <strong>{exam.title}</strong> telah ditutup dan dikumpulkan secara otomatis karena mencapai batas maksimal <strong>3 kali keluar akun (logout) / pelanggaran saat ujian berlangsung</strong>. Nilai Anda telah dihitung dari jawaban terakhir dan langsung tersimpan ke Rekap Nilai Operator.
+            </div>
+          ) : (
+            <p className="text-xs text-slate-500 mt-1">
+              Terima kasih {student.name}, jawaban Anda untuk <strong>{exam.title}</strong> telah tersimpan dengan aman di server Supabase CBT.
+            </p>
+          )}
         </div>
 
         {schoolSetting.allowStudentViewResult && (

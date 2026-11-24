@@ -172,6 +172,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
         isLocked: false,
         lockReason: undefined,
         lockCount: 0,
+        logoutCount: 0,
         unlockCooldownUntil: undefined,
         deviceSessionId: undefined,
         adminActionAt: Date.now(),
@@ -202,6 +203,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
             isLocked: false,
             lockReason: undefined,
             lockCount: 0,
+            logoutCount: 0,
             unlockCooldownUntil: undefined,
             deviceSessionId: undefined,
             adminActionAt: now,
@@ -1210,10 +1212,21 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                           : 0;
                       const isInCooldown = cooldownRemainingSec > 0;
                       const lockCountNum = Math.max(0, s.lockCount || 0);
+                      const logoutCountNum = Math.max(0, s.logoutCount || 0);
+                      const isLogoutCooldown =
+                        isInCooldown &&
+                        logoutCountNum > 0 &&
+                        (Boolean(s.lockReason?.includes('Logout')) || lockCountNum === 0);
+                      const isEscalatedCooldown =
+                        isInCooldown && Boolean(s.lockReason?.includes('Masa Tunggu'));
+                      const isAutoSubmittedLogout =
+                        isSessionDone &&
+                        (logoutCountNum >= 3 || Boolean(s.lockReason?.includes('3x keluar akun')));
                       const canResetAccount =
                         isSessionLocked ||
                         isInCooldown ||
                         lockCountNum > 0 ||
+                        logoutCountNum > 0 ||
                         s.violationsCount > 0 ||
                         s.status !== 'not_started' ||
                         isSessionDone ||
@@ -1281,27 +1294,50 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                   </span>
                                 )}
                               </div>
+                            ) : isLogoutCooldown ? (
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-800 bg-orange-100 border border-orange-300 px-2 py-0.5 rounded font-mono">
+                                  <Clock className="w-3 h-3 text-orange-700 animate-pulse" /> Sanksi Logout ke-{logoutCountNum} (Tunggu {formatCooldownMMSS(cooldownRemainingSec)})
+                                </span>
+                                <span className="text-[10px] font-medium text-orange-700">
+                                  {isEscalatedCooldown
+                                    ? 'Keluar saat masa tunggu · Dinaikkan 7 menit'
+                                    : 'Keluar akun saat ujian berlangsung'}
+                                </span>
+                              </div>
                             ) : isInCooldown ? (
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded font-mono">
-                                  <Clock className="w-3 h-3 text-amber-700 animate-pulse" /> Masa Tunggu Sanksi ({formatCooldownMMSS(cooldownRemainingSec)})
+                                  <Clock className="w-3 h-3 text-amber-700 animate-pulse" /> {isEscalatedCooldown ? 'Sanksi Tambahan' : 'Masa Tunggu Sanksi'} ({formatCooldownMMSS(cooldownRemainingSec)})
                                 </span>
                                 <span className="text-[10px] font-medium text-amber-700">
-                                  Pemblokiran ke-{Math.max(1, lockCountNum)} · Menunggu sanksi selesai
+                                  {isEscalatedCooldown
+                                    ? 'Keluar saat masa tunggu · Dinaikkan 7 menit'
+                                    : `Pemblokiran ke-${Math.max(1, lockCountNum)} · Menunggu sanksi selesai`}
                                 </span>
                               </div>
                             ) : isSessionDone ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
-                                <CheckCircle className="w-3 h-3" /> Selesai
-                              </span>
+                              <div className="flex flex-col items-start gap-0.5">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded">
+                                  <CheckCircle className="w-3 h-3" /> Selesai
+                                </span>
+                                {isAutoSubmittedLogout && (
+                                  <span className="text-[10px] font-semibold text-rose-600">
+                                    Auto-Submit (3x Logout)
+                                  </span>
+                                )}
+                              </div>
                             ) : s.status === 'in_progress' ? (
                               <div className="flex flex-col items-start gap-0.5">
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
                                   <Clock className="w-3 h-3" /> Sedang Mengerjakan
                                 </span>
-                                {lockCountNum > 0 && (
+                                {(lockCountNum > 0 || logoutCountNum > 0) && (
                                   <span className="text-[10px] text-slate-500">
-                                    Riwayat blokir: {lockCountNum}x
+                                    {[
+                                      lockCountNum > 0 ? `Blokir: ${lockCountNum}x` : '',
+                                      logoutCountNum > 0 ? `Logout: ${logoutCountNum}x` : '',
+                                    ].filter(Boolean).join(' · ')}
                                   </span>
                                 )}
                               </div>
@@ -1329,7 +1365,7 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                                 className={`font-mono font-bold px-2 py-0.5 rounded text-[11px] border ${
                                   isSessionLocked || s.violationsCount >= maxViolationsAllowed
                                     ? 'bg-rose-100 text-rose-800 border-rose-300'
-                                    : s.violationsCount > 0
+                                    : s.violationsCount > 0 || logoutCountNum > 0
                                       ? 'bg-amber-100 text-amber-800 border-amber-300'
                                       : 'bg-slate-50 text-slate-500 border-slate-200'
                                 }`}
@@ -1339,6 +1375,11 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               {lockCountNum > 0 && (
                                 <span className="text-[10px] font-mono text-slate-500">
                                   Blokir: {lockCountNum}x
+                                </span>
+                              )}
+                              {logoutCountNum > 0 && (
+                                <span className="text-[10px] font-mono font-semibold text-orange-700">
+                                  Logout: {logoutCountNum}/3
                                 </span>
                               )}
                             </div>
