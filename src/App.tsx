@@ -30,7 +30,8 @@ import {
   reconcileOfficialMathQuestions,
   reconcileOfficialGrade7Banks,
   reconcileOfficialGrade8Banks,
-  reconcileOfficialGrade9Banks
+  reconcileOfficialGrade9Banks,
+  reconcileOfficialPaiBtqPjokIpa9Banks
 } from './data/seedData';
 import { 
   loadFromStorage, 
@@ -152,16 +153,21 @@ export default function App() {
       grade8Reconciled.questionBank,
       grade8Reconciled.exams
     );
+    const paiBtqPjokIpa9Reconciled = reconcileOfficialPaiBtqPjokIpa9Banks(
+      grade9Reconciled.questionBank,
+      grade9Reconciled.exams
+    );
     if (
       mathReconciled.migrated ||
       grade7Reconciled.migrated ||
       grade8Reconciled.migrated ||
-      grade9Reconciled.migrated
+      grade9Reconciled.migrated ||
+      paiBtqPjokIpa9Reconciled.migrated
     ) {
-      saveToStorage(STORAGE_KEYS.QUESTIONS, grade9Reconciled.questionBank);
-      saveToStorage(STORAGE_KEYS.EXAMS, grade9Reconciled.exams);
+      saveToStorage(STORAGE_KEYS.QUESTIONS, paiBtqPjokIpa9Reconciled.questionBank);
+      saveToStorage(STORAGE_KEYS.EXAMS, paiBtqPjokIpa9Reconciled.exams);
     }
-    return grade9Reconciled.questionBank;
+    return paiBtqPjokIpa9Reconciled.questionBank;
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
@@ -176,9 +182,13 @@ export default function App() {
         grade7Reconciled.questionBank,
         grade7Reconciled.exams
       );
-      return reconcileOfficialGrade9Banks(
+      const grade9Reconciled = reconcileOfficialGrade9Banks(
         grade8Reconciled.questionBank,
         grade8Reconciled.exams
+      );
+      return reconcileOfficialPaiBtqPjokIpa9Banks(
+        grade9Reconciled.questionBank,
+        grade9Reconciled.exams
       ).exams;
     }
     return INITIAL_EXAMS;
@@ -591,19 +601,23 @@ export default function App() {
           serverGrade8Reconciled.questionBank,
           serverGrade8Reconciled.exams
         );
+        const serverPaiBtqPjokIpa9Reconciled = reconcileOfficialPaiBtqPjokIpa9Banks(
+          serverGrade9Reconciled.questionBank,
+          serverGrade9Reconciled.exams
+        );
         // Never let local server fallback overwrite schedules fetched from Supabase
         if (!hasSupabaseSchedules && Array.isArray(d.exams) && d.exams.length > 0) {
-          setExams(serverGrade9Reconciled.exams);
-          examsRef.current = serverGrade9Reconciled.exams;
-          defaultExam = serverGrade9Reconciled.exams[0];
+          setExams(serverPaiBtqPjokIpa9Reconciled.exams);
+          examsRef.current = serverPaiBtqPjokIpa9Reconciled.exams;
+          defaultExam = serverPaiBtqPjokIpa9Reconciled.exams[0];
         }
         if (!isSupabaseConfigured && Array.isArray(d.sessions)) {
           baseSessions = d.sessions;
         }
         if (d.questionBank) {
-          nextQuestionBank = serverGrade9Reconciled.questionBank;
-          setQuestionBank(serverGrade9Reconciled.questionBank);
-          questionBankRef.current = serverGrade9Reconciled.questionBank;
+          nextQuestionBank = serverPaiBtqPjokIpa9Reconciled.questionBank;
+          setQuestionBank(serverPaiBtqPjokIpa9Reconciled.questionBank);
+          questionBankRef.current = serverPaiBtqPjokIpa9Reconciled.questionBank;
         }
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
       }

@@ -14,6 +14,16 @@ import { IPS_KELAS_9_QUESTIONS } from './grade9IpsQuestions';
 import { BIN_KELAS_9_QUESTIONS } from './grade9BinQuestions';
 import { BIG_KELAS_9_QUESTIONS } from './grade9BigQuestions';
 import { PPKN_KELAS_9_QUESTIONS } from './grade9PpknQuestions';
+import { IPA_KELAS_9_QUESTIONS } from './grade9IpaQuestions';
+import { PAI_KELAS_7_QUESTIONS } from './grade7PaiQuestions';
+import { PAI_KELAS_8_QUESTIONS } from './grade8PaiQuestions';
+import { PAI_KELAS_9_QUESTIONS } from './grade9PaiQuestions';
+import { BTQ_KELAS_7_QUESTIONS } from './grade7BtqQuestions';
+import { BTQ_KELAS_8_QUESTIONS } from './grade8BtqQuestions';
+import { BTQ_KELAS_9_QUESTIONS } from './grade9BtqQuestions';
+import { PJOK_KELAS_7_QUESTIONS } from './grade7PjokQuestions';
+import { PJOK_KELAS_8_QUESTIONS } from './grade8PjokQuestions';
+import { PJOK_KELAS_9_QUESTIONS } from './grade9PjokQuestions';
 
 // =========================================================================
 // 1. BAHASA INGGRIS (BIG) - 25 SOAL (20 PG + 5 URAIAN)
@@ -2479,25 +2489,28 @@ export const GRADE_9_UPLOADED_OFFICIAL_QUESTIONS: Question[] = [
   ...PPKN_KELAS_9_QUESTIONS
 ];
 
-// Scope legacy generic IPA curriculum bank to Kelas IX only (Kelas VII & VIII have uploaded verbatim IPA PDFs;
-// IPS & Bahasa Inggris now have uploaded verbatim PDFs for ALL grades VII, VIII, and IX).
-const scopeToGrade9Only = (list: Question[]): Question[] =>
-  list.map(q => ({
-    ...q,
-    classId: 'cls-9',
-    grade: 'IX'
-  }));
+// 10 verbatim uploaded PDF banks: PAI (VII/VIII/IX = 90) + BTQ (VII/VIII/IX = 90) + PJOK (VII/VIII/IX = 106) + IPA IX (25) = 311 total
+export const PAI_BTQ_PJOK_IPA9_UPLOADED_OFFICIAL_QUESTIONS: Question[] = [
+  ...PAI_KELAS_7_QUESTIONS,
+  ...PAI_KELAS_8_QUESTIONS,
+  ...PAI_KELAS_9_QUESTIONS,
+  ...BTQ_KELAS_7_QUESTIONS,
+  ...BTQ_KELAS_8_QUESTIONS,
+  ...BTQ_KELAS_9_QUESTIONS,
+  ...PJOK_KELAS_7_QUESTIONS,
+  ...PJOK_KELAS_8_QUESTIONS,
+  ...PJOK_KELAS_9_QUESTIONS,
+  ...IPA_KELAS_9_QUESTIONS
+];
 
-// Combine all official curriculum questions:
-// 60 MTK (20 VII + 20 VIII + 20 IX) + 136 Kelas VII + 136 Kelas VIII + 111 Kelas IX (IPS/BIN/BIG/PPKn) + 71 existing (IPA IX + PAI + PJOK) = 514 total
+// Combine all official curriculum questions (100% verbatim uploaded PDFs across all 9 subjects & 3 grades):
+// 60 MTK (20 VII + 20 VIII + 20 IX) + 136 Kelas VII + 136 Kelas VIII + 111 Kelas IX (IPS/BIN/BIG/PPKn) + 311 (PAI/BTQ/PJOK/IPA IX) = 754 total
 export const CURRICULUM_OFFICIAL_QUESTIONS: Question[] = [
   ...MTK_OFFICIAL_QUESTIONS,
   ...GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
   ...GRADE_8_UPLOADED_OFFICIAL_QUESTIONS,
   ...GRADE_9_UPLOADED_OFFICIAL_QUESTIONS,
-  ...scopeToGrade9Only(IPA_OFFICIAL_QUESTIONS),
-  ...PAI_OFFICIAL_QUESTIONS,
-  ...PJOK_OFFICIAL_QUESTIONS
+  ...PAI_BTQ_PJOK_IPA9_UPLOADED_OFFICIAL_QUESTIONS
 ];
 
 const getTodayDateStr = () => {
@@ -2638,7 +2651,26 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-pai',
-    totalQuestions: 21,
+    totalQuestions: 30,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-btq-2026',
+    title: "UAS Semester Ganjil - Baca Tulis Al-Qur'an (BTQ)",
+    subjectId: 'sbj-btq',
+    subjectName: "Baca Tulis Al-Qur'an (BTQ)",
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 60,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-btq',
+    totalQuestions: 30,
     status: 'ongoing' as const,
     tokenRequired: true
   },
@@ -2657,7 +2689,7 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-pjok',
-    totalQuestions: 25,
+    totalQuestions: 36,
     status: 'ongoing' as const,
     tokenRequired: true
   }

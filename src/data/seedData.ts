@@ -49,7 +49,7 @@ export const INITIAL_TEACHERS: UserAccount[] = [
     email: 'ahmad.fathoni@smpn12bjb.sch.id',
     password: 'guru123',
     mustChangePassword: false,
-    assignedSubjectIds: ['sbj-pai'],
+    assignedSubjectIds: ['sbj-pai', 'sbj-btq'],
     assignedClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9']
   },
   {
@@ -179,6 +179,7 @@ export const INITIAL_SUBJECTS: Subject[] = [
   { id: 'sbj-bin', code: 'BIN-SMP', name: 'Bahasa Indonesia', grade: 'Semua', assignedTeacherIds: ['guru-4'] },
   { id: 'sbj-big', code: 'BIG-SMP', name: 'Bahasa Inggris', grade: 'Semua', assignedTeacherIds: ['guru-6'] },
   { id: 'sbj-pai', code: 'PAI-SMP', name: 'Pendidikan Agama Islam', grade: 'Semua', assignedTeacherIds: ['guru-1'] },
+  { id: 'sbj-btq', code: 'BTQ-SMP', name: "Baca Tulis Al-Qur'an (BTQ)", grade: 'Semua', assignedTeacherIds: ['guru-1'] },
   { id: 'sbj-ppkn', code: 'PPKN-SMP', name: 'Pendidikan Kewarganegaraan (PPKn)', grade: 'Semua', assignedTeacherIds: ['guru-2'] },
   { id: 'sbj-ips', code: 'IPS-SMP', name: 'Ilmu Pengetahuan Sosial (IPS)', grade: 'Semua', assignedTeacherIds: ['guru-2'] },
   { id: 'sbj-inf', code: 'INF-SMP', name: 'Teknologi dan Informatika', grade: 'Semua', assignedTeacherIds: ['guru-7'] },
@@ -193,6 +194,7 @@ import {
   GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
   GRADE_8_UPLOADED_OFFICIAL_QUESTIONS,
   GRADE_9_UPLOADED_OFFICIAL_QUESTIONS,
+  PAI_BTQ_PJOK_IPA9_UPLOADED_OFFICIAL_QUESTIONS,
   OFFICIAL_EXAM_SCHEDULES_ALL
 } from './officialCurriculumQuestions';
 
@@ -315,10 +317,41 @@ export function reconcileOfficialTeachersAndSubjects(
   );
 
   if (!isLegacyTeacherSeed) {
+    let migrated = false;
+    let nextSubjects = safeSubjects;
+    let nextTeachers = safeTeachers;
+
+    const btqOfficial = INITIAL_SUBJECTS.find(s => s.id === 'sbj-btq');
+    if (btqOfficial && !safeSubjects.some(s => s.id === 'sbj-btq')) {
+      nextSubjects = [...safeSubjects, btqOfficial];
+      migrated = true;
+    }
+
+    const hasGuru1MissingBtq = safeTeachers.some(
+      t =>
+        (t.id === 'guru-1' || t.usernameOrNip === '197910132014061002') &&
+        (!Array.isArray(t.assignedSubjectIds) || !t.assignedSubjectIds.includes('sbj-btq'))
+    );
+    if (hasGuru1MissingBtq) {
+      nextTeachers = safeTeachers.map(t => {
+        if (t.id === 'guru-1' || t.usernameOrNip === '197910132014061002') {
+          const existingIds = Array.isArray(t.assignedSubjectIds) ? t.assignedSubjectIds : [];
+          return {
+            ...t,
+            assignedSubjectIds: existingIds.includes('sbj-btq')
+              ? existingIds
+              : [...existingIds, 'sbj-btq'],
+          };
+        }
+        return t;
+      });
+      migrated = true;
+    }
+
     return {
-      teachers: safeTeachers,
-      subjects: safeSubjects,
-      migrated: false,
+      teachers: nextTeachers,
+      subjects: nextSubjects,
+      migrated,
     };
   }
 
@@ -722,6 +755,93 @@ export function reconcileOfficialGrade9Banks(
     migrated: true,
   };
 }
+
+/**
+ * Reconciles cached localStorage / server-disk questionBank & exams with the 10 newly uploaded
+ * verbatim official banks: PAI (VII/VIII/IX = 90), BTQ (VII/VIII/IX = 90), PJOK (VII/VIII/IX = 106),
+ * and IPA IX (25). Replaces all remaining legacy generic IPA/PAI/PJOK seed questions (ipa-*, pai-*, pjok-*),
+ * ensures ex-btq-2026 exists, and updates ex-pai-2026 (30) and ex-pjok-2026 (36) question counts without
+ * clobbering previously uploaded banks or custom teacher questions.
+ */
+export function reconcileOfficialPaiBtqPjokIpa9Banks(
+  loadedBank?: QuestionBank | null,
+  loadedExams?: ExamSchedule[] | null
+): { questionBank: QuestionBank; exams: ExamSchedule[]; migrated: boolean } {
+  const safeBank: QuestionBank =
+    loadedBank && Array.isArray(loadedBank.questions) ? loadedBank : INITIAL_QUESTION_BANK;
+  const safeExams: ExamSchedule[] =
+    Array.isArray(loadedExams) && loadedExams.length > 0 ? loadedExams : INITIAL_EXAMS;
+
+  const existingIds = new Set(safeBank.questions.map(q => q.id));
+  const hasAllMarkers =
+    existingIds.has('pai-vii-1') &&
+    existingIds.has('pai-viii-1') &&
+    existingIds.has('pai-ix-1') &&
+    existingIds.has('btq-vii-1') &&
+    existingIds.has('btq-viii-1') &&
+    existingIds.has('btq-ix-1') &&
+    existingIds.has('pjok-vii-1') &&
+    existingIds.has('pjok-viii-1') &&
+    existingIds.has('pjok-ix-1') &&
+    existingIds.has('ipa-ix-1');
+
+  const hasLegacyGenericBanks = safeBank.questions.some(q => /^(ipa|pai|pjok)-\d+$/.test(q.id));
+
+  const paiExam = safeExams.find(e => e.id === 'ex-pai-2026');
+  const btqExam = safeExams.find(e => e.id === 'ex-btq-2026');
+  const pjokExam = safeExams.find(e => e.id === 'ex-pjok-2026');
+  const schedulesUpToDate =
+    Boolean(btqExam) &&
+    paiExam?.totalQuestions === 30 &&
+    pjokExam?.totalQuestions === 36;
+
+  if (hasAllMarkers && !hasLegacyGenericBanks && schedulesUpToDate) {
+    return {
+      questionBank: safeBank,
+      exams: safeExams,
+      migrated: false,
+    };
+  }
+
+  const incomingIds = new Set(PAI_BTQ_PJOK_IPA9_UPLOADED_OFFICIAL_QUESTIONS.map(q => q.id));
+
+  const preservedQuestions = safeBank.questions.filter(
+    q => !incomingIds.has(q.id) && !/^(ipa|pai|pjok)-\d+$/.test(q.id)
+  );
+
+  const mergedQuestions = [...PAI_BTQ_PJOK_IPA9_UPLOADED_OFFICIAL_QUESTIONS, ...preservedQuestions];
+
+  const existingExamIds = new Set(safeExams.map(e => e.id));
+  const updatedExams = safeExams.map(ex => {
+    if (ex.id === 'ex-pai-2026' && ex.totalQuestions !== 30) {
+      return { ...ex, totalQuestions: 30 };
+    }
+    if (ex.id === 'ex-pjok-2026' && ex.totalQuestions !== 36) {
+      return { ...ex, totalQuestions: 36 };
+    }
+    return ex;
+  });
+
+  for (const reqId of ['ex-pai-2026', 'ex-btq-2026', 'ex-pjok-2026']) {
+    if (!existingExamIds.has(reqId)) {
+      const template = OFFICIAL_EXAM_SCHEDULES_ALL.find(e => e.id === reqId);
+      if (template) {
+        updatedExams.push(template);
+      }
+    }
+  }
+
+  return {
+    questionBank: {
+      ...safeBank,
+      totalQuestions: mergedQuestions.length,
+      questions: mergedQuestions,
+    },
+    exams: updatedExams,
+    migrated: true,
+  };
+}
+
 
 
 

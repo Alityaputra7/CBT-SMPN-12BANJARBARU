@@ -22,6 +22,7 @@ import {
   reconcileOfficialGrade7Banks,
   reconcileOfficialGrade8Banks,
   reconcileOfficialGrade9Banks,
+  reconcileOfficialPaiBtqPjokIpa9Banks,
 } from './src/data/seedData';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -107,17 +108,22 @@ try {
         grade8Reconciled.questionBank,
         grade8Reconciled.exams
       );
+      const paiBtqPjokIpa9Reconciled = reconcileOfficialPaiBtqPjokIpa9Banks(
+        grade9Reconciled.questionBank,
+        grade9Reconciled.exams
+      );
       if (
         diskReconciled.migrated ||
         mathReconciled.migrated ||
         grade7Reconciled.migrated ||
         grade8Reconciled.migrated ||
-        grade9Reconciled.migrated
+        grade9Reconciled.migrated ||
+        paiBtqPjokIpa9Reconciled.migrated
       ) {
         inMemoryStore.teachers = diskReconciled.teachers;
         inMemoryStore.subjects = diskReconciled.subjects;
-        inMemoryStore.questionBank = grade9Reconciled.questionBank;
-        inMemoryStore.exams = grade9Reconciled.exams;
+        inMemoryStore.questionBank = paiBtqPjokIpa9Reconciled.questionBank;
+        inMemoryStore.exams = paiBtqPjokIpa9Reconciled.exams;
         storeVersion++;
         lastUpdated = Date.now();
         saveStoreToDisk();
