@@ -191,6 +191,7 @@ import { OFFICIAL_QUESTION_LIST, OFFICIAL_EXAM_SCHEDULES } from './officialQuest
 import { MTK_ALL_OFFICIAL_QUESTIONS } from './mathOfficialQuestions';
 import {
   GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
+  GRADE_8_UPLOADED_OFFICIAL_QUESTIONS,
   OFFICIAL_EXAM_SCHEDULES_ALL
 } from './officialCurriculumQuestions';
 
@@ -505,5 +506,130 @@ export function reconcileOfficialGrade7Banks(
     migrated: true,
   };
 }
+
+/**
+ * Reconciles cached localStorage / server-disk questionBank & exams with the 5 verbatim
+ * Kelas VIII official banks (IPS 30, Bahasa Indonesia 30, IPA 25, Bahasa Inggris 21, PPKn 30)
+ * and ensures legacy generic IPA/IPS/BIG seed questions are narrowed to Kelas IX only so they
+ * never bleed into Kelas VIII exams, while ensuring Bahasa Indonesia & PPKn schedules include
+ * Kelas VIII-A & VIII-B and preserving all custom teacher questions and other subjects.
+ */
+export function reconcileOfficialGrade8Banks(
+  loadedBank?: QuestionBank | null,
+  loadedExams?: ExamSchedule[] | null
+): { questionBank: QuestionBank; exams: ExamSchedule[]; migrated: boolean } {
+  const safeBank: QuestionBank =
+    loadedBank && Array.isArray(loadedBank.questions) ? loadedBank : INITIAL_QUESTION_BANK;
+  const safeExams: ExamSchedule[] =
+    Array.isArray(loadedExams) && loadedExams.length > 0 ? loadedExams : INITIAL_EXAMS;
+
+  const existingIds = new Set(safeBank.questions.map(q => q.id));
+  const hasAllGrade8Markers =
+    existingIds.has('ips-viii-1') &&
+    existingIds.has('bin-viii-1') &&
+    existingIds.has('ipa-viii-1') &&
+    existingIds.has('big-viii-1') &&
+    existingIds.has('ppkn-viii-1');
+
+  const hasLegacyBleedingIntoGrade8 = safeBank.questions.some(
+    q =>
+      /^(ipa|ips|big)-\d+$/.test(q.id) &&
+      (!q.classId ||
+        q.classId === 'all' ||
+        q.grade === 'Semua' ||
+        q.classId.includes('cls-8') ||
+        (q.grade || '').split(',').some(g => g.trim().toUpperCase() === 'VIII'))
+  );
+
+  const binExam = safeExams.find(e => e.id === 'ex-bin-2026');
+  const ppknExam = safeExams.find(e => e.id === 'ex-ppkn-2026');
+  const hasGrade8InBinAndPpknSchedules =
+    Boolean(binExam?.targetClassIds?.includes('cls-8a') && binExam?.targetClassIds?.includes('cls-8b')) &&
+    Boolean(ppknExam?.targetClassIds?.includes('cls-8a') && ppknExam?.targetClassIds?.includes('cls-8b'));
+
+  if (hasAllGrade8Markers && !hasLegacyBleedingIntoGrade8 && hasGrade8InBinAndPpknSchedules) {
+    return {
+      questionBank: safeBank,
+      exams: safeExams,
+      migrated: false,
+    };
+  }
+
+  const incomingIds = new Set(GRADE_8_UPLOADED_OFFICIAL_QUESTIONS.map(q => q.id));
+
+  // Narrow legacy generic IPA/IPS/BIG seed questions to Kelas IX only, and deduplicate incoming Grade 8 IDs
+  const preservedQuestions = safeBank.questions
+    .filter(q => !incomingIds.has(q.id))
+    .map(q => {
+      if (
+        /^(ipa|ips|big)-\d+$/.test(q.id) &&
+        (!q.classId ||
+          q.classId === 'all' ||
+          q.grade === 'Semua' ||
+          q.classId.includes('cls-8') ||
+          (q.grade || '').split(',').some(g => g.trim().toUpperCase() === 'VIII'))
+      ) {
+        return {
+          ...q,
+          classId: 'cls-9',
+          grade: 'IX',
+        };
+      }
+      return q;
+    });
+
+  const mergedQuestions = [...GRADE_8_UPLOADED_OFFICIAL_QUESTIONS, ...preservedQuestions];
+
+  const ensureGrade8Classes = (ex: ExamSchedule): ExamSchedule => {
+    const classIds = Array.isArray(ex.targetClassIds) ? [...ex.targetClassIds] : [];
+    const classNames = Array.isArray(ex.targetClassNames) ? [...ex.targetClassNames] : [];
+    let changed = false;
+    if (!classIds.includes('cls-8a')) {
+      classIds.push('cls-8a');
+      changed = true;
+    }
+    if (!classIds.includes('cls-8b')) {
+      classIds.push('cls-8b');
+      changed = true;
+    }
+    if (!classNames.includes('VIII-A')) {
+      classNames.push('VIII-A');
+      changed = true;
+    }
+    if (!classNames.includes('VIII-B')) {
+      classNames.push('VIII-B');
+      changed = true;
+    }
+    return changed ? { ...ex, targetClassIds: classIds, targetClassNames: classNames } : ex;
+  };
+
+  const existingExamIds = new Set(safeExams.map(e => e.id));
+  const updatedExams = safeExams.map(ex => {
+    if (ex.id === 'ex-bin-2026' || ex.id === 'ex-ppkn-2026') {
+      return ensureGrade8Classes(ex);
+    }
+    return ex;
+  });
+
+  for (const reqId of ['ex-bin-2026', 'ex-ppkn-2026']) {
+    if (!existingExamIds.has(reqId)) {
+      const template = OFFICIAL_EXAM_SCHEDULES_ALL.find(e => e.id === reqId);
+      if (template) {
+        updatedExams.push(template);
+      }
+    }
+  }
+
+  return {
+    questionBank: {
+      ...safeBank,
+      totalQuestions: mergedQuestions.length,
+      questions: mergedQuestions,
+    },
+    exams: updatedExams,
+    migrated: true,
+  };
+}
+
 
 
