@@ -26,7 +26,8 @@ import {
   INITIAL_AUDIT_LOGS,
   createInitialStudentSessions,
   reconcileOfficialTeachersAndSubjects,
-  reconcileOfficialMathQuestions
+  reconcileOfficialMathQuestions,
+  reconcileOfficialGrade7Banks
 } from './data/seedData';
 import { 
   loadFromStorage, 
@@ -131,13 +132,26 @@ export default function App() {
     if (!loaded || !Array.isArray(loaded.questions)) {
       return INITIAL_QUESTION_BANK;
     }
-    return reconcileOfficialMathQuestions(loaded, loadedExams).questionBank;
+    const mathReconciled = reconcileOfficialMathQuestions(loaded, loadedExams);
+    const grade7Reconciled = reconcileOfficialGrade7Banks(
+      mathReconciled.questionBank,
+      mathReconciled.exams
+    );
+    if (mathReconciled.migrated || grade7Reconciled.migrated) {
+      saveToStorage(STORAGE_KEYS.QUESTIONS, grade7Reconciled.questionBank);
+      saveToStorage(STORAGE_KEYS.EXAMS, grade7Reconciled.exams);
+    }
+    return grade7Reconciled.questionBank;
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
     const loadedBank = loadFromStorage<QuestionBank | null>(STORAGE_KEYS.QUESTIONS, null);
     if (loaded !== null && Array.isArray(loaded)) {
-      return reconcileOfficialMathQuestions(loadedBank, loaded).exams;
+      const mathReconciled = reconcileOfficialMathQuestions(loadedBank, loaded);
+      return reconcileOfficialGrade7Banks(
+        mathReconciled.questionBank,
+        mathReconciled.exams
+      ).exams;
     }
     return INITIAL_EXAMS;
   });

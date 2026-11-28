@@ -189,6 +189,10 @@ export const INITIAL_SUBJECTS: Subject[] = [
 
 import { OFFICIAL_QUESTION_LIST, OFFICIAL_EXAM_SCHEDULES } from './officialQuestions';
 import { MTK_ALL_OFFICIAL_QUESTIONS } from './mathOfficialQuestions';
+import {
+  GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
+  OFFICIAL_EXAM_SCHEDULES_ALL
+} from './officialCurriculumQuestions';
 
 export const INITIAL_STUDENTS: Student[] = OFFICIAL_STUDENTS;
 
@@ -407,4 +411,99 @@ export function reconcileOfficialMathQuestions(
     migrated: true,
   };
 }
+
+/**
+ * Reconciles cached localStorage / server-disk questionBank & exams with the 5 verbatim
+ * Kelas VII official banks (IPS 30, Bahasa Indonesia 30, IPA 25, Bahasa Inggris 21, PPKn 30)
+ * and ensures legacy IPA/IPS/BIG seed questions are scoped to Kelas VIII & IX so they never
+ * bleed into Kelas VII exams, while preserving all custom teacher questions and other subjects.
+ */
+export function reconcileOfficialGrade7Banks(
+  loadedBank?: QuestionBank | null,
+  loadedExams?: ExamSchedule[] | null
+): { questionBank: QuestionBank; exams: ExamSchedule[]; migrated: boolean } {
+  const safeBank: QuestionBank =
+    loadedBank && Array.isArray(loadedBank.questions) ? loadedBank : INITIAL_QUESTION_BANK;
+  const safeExams: ExamSchedule[] =
+    Array.isArray(loadedExams) && loadedExams.length > 0 ? loadedExams : INITIAL_EXAMS;
+
+  const existingIds = new Set(safeBank.questions.map(q => q.id));
+  const hasAllGrade7Markers =
+    existingIds.has('ips-vii-1') &&
+    existingIds.has('bin-vii-1') &&
+    existingIds.has('ipa-vii-1') &&
+    existingIds.has('big-vii-1') &&
+    existingIds.has('ppkn-vii-1');
+
+  const hasLegacyUnscopedForGrade7 = safeBank.questions.some(
+    q =>
+      /^(ipa|ips|big)-\d+$/.test(q.id) &&
+      (q.classId === 'all' || q.grade === 'Semua')
+  );
+
+  const existingExamIds = new Set(safeExams.map(e => e.id));
+  const hasBinAndPpknSchedules =
+    existingExamIds.has('ex-bin-2026') && existingExamIds.has('ex-ppkn-2026');
+
+  if (hasAllGrade7Markers && !hasLegacyUnscopedForGrade7 && hasBinAndPpknSchedules) {
+    return {
+      questionBank: safeBank,
+      exams: safeExams,
+      migrated: false,
+    };
+  }
+
+  const incomingIds = new Set(GRADE_7_UPLOADED_OFFICIAL_QUESTIONS.map(q => q.id));
+
+  // Scope legacy generic IPA/IPS/BIG seed questions to Kelas VIII & IX, and deduplicate incoming IDs
+  const preservedQuestions = safeBank.questions
+    .filter(q => !incomingIds.has(q.id))
+    .map(q => {
+      if (
+        /^(ipa|ips|big)-\d+$/.test(q.id) &&
+        (!q.classId || q.classId === 'all' || q.grade === 'Semua')
+      ) {
+        return {
+          ...q,
+          classId: 'cls-8,cls-9',
+          grade: 'VIII,IX',
+        };
+      }
+      return q;
+    });
+
+  const mergedQuestions = [...GRADE_7_UPLOADED_OFFICIAL_QUESTIONS, ...preservedQuestions];
+
+  // Update existing schedule counts & ensure Bahasa Indonesia + PPKn schedules exist
+  const updatedExams = safeExams.map(ex => {
+    if (ex.id === 'ex-ips-2026' && ex.totalQuestions === 38) {
+      return { ...ex, totalQuestions: 30 };
+    }
+    if (ex.id === 'ex-big-2026' && ex.totalQuestions === 25) {
+      return { ...ex, totalQuestions: 21 };
+    }
+    return ex;
+  });
+
+  const requiredNewExamIds = ['ex-bin-2026', 'ex-ppkn-2026'];
+  for (const reqId of requiredNewExamIds) {
+    if (!existingExamIds.has(reqId)) {
+      const template = OFFICIAL_EXAM_SCHEDULES_ALL.find(e => e.id === reqId);
+      if (template) {
+        updatedExams.push(template);
+      }
+    }
+  }
+
+  return {
+    questionBank: {
+      ...safeBank,
+      totalQuestions: mergedQuestions.length,
+      questions: mergedQuestions,
+    },
+    exams: updatedExams,
+    migrated: true,
+  };
+}
+
 

@@ -2016,14 +2016,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
 
                 {/* Prompt with KaTeX */}
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-800 leading-relaxed overflow-x-auto">
-                  <MathTextRenderer content={q.prompt} />
                   {q.imageUrl && (
-                    <img 
-                      src={q.imageUrl} 
-                      alt="Gambar Soal" 
-                      className="max-h-40 object-contain rounded mt-2 border border-slate-200" 
-                    />
+                    <div className="mb-3 flex justify-center">
+                      <img 
+                        src={q.imageUrl} 
+                        alt={`Gambar Soal No. ${q.number}`}
+                        className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white" 
+                      />
+                    </div>
                   )}
+                  <MathTextRenderer content={q.prompt} />
                 </div>
 
                 {/* Question Type Details */}
@@ -2093,9 +2095,16 @@ export const OperatorDashboard: React.FC<OperatorDashboardProps> = ({
                               : 'bg-white border-slate-200 text-slate-700'
                           }`}
                         >
-                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <div className="flex items-start gap-1.5 min-w-0 flex-1">
                             <span className="font-mono font-bold shrink-0">{opt.id}.</span>
-                            <div className="min-w-0 flex-1 overflow-x-auto">
+                            <div className="min-w-0 flex-1 overflow-x-auto space-y-1.5">
+                              {opt.imageUrl && (
+                                <img
+                                  src={opt.imageUrl}
+                                  alt={`Gambar Opsi ${opt.id}`}
+                                  className="object-contain max-h-32 w-auto max-w-full rounded border border-slate-200 bg-white"
+                                />
+                              )}
                               <MathTextRenderer content={opt.text} />
                             </div>
                           </div>

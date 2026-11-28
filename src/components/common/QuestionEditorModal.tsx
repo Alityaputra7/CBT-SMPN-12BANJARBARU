@@ -839,17 +839,19 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
               <span>Pratinjau Lengkap Tampilan di Layar Siswa:</span>
             </span>
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-3">
+              {imageUrl && (
+                <div className="flex justify-center">
+                  <img
+                    src={imageUrl}
+                    alt="Ilustrasi Soal"
+                    className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white"
+                  />
+                </div>
+              )}
+
               <div className="text-sm text-slate-900 leading-relaxed">
                 <MathTextRenderer content={prompt} />
               </div>
-
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt="Ilustrasi Soal"
-                  className="max-h-48 object-contain rounded-lg border border-slate-200"
-                />
-              )}
 
               {qType === 'benar_salah' && statements.length > 0 && (
                 <div className="space-y-1.5 pt-1">
@@ -887,13 +889,13 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                     return (
                       <div
                         key={opt.id}
-                        className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 text-xs ${
+                        className={`p-2.5 rounded-lg border flex items-start justify-between gap-2 text-xs ${
                           isCorrect
                             ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-medium'
                             : 'bg-slate-50 border-slate-200 text-slate-700'
                         }`}
                       >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <div className="flex items-start gap-2 min-w-0 flex-1">
                           <span
                             className={`w-6 h-6 rounded-md font-mono font-bold flex items-center justify-center shrink-0 ${
                               isCorrect ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-700'
@@ -901,7 +903,14 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                           >
                             {opt.id}
                           </span>
-                          <div className="min-w-0 flex-1 overflow-x-auto">
+                          <div className="min-w-0 flex-1 overflow-x-auto space-y-1.5">
+                            {opt.imageUrl && (
+                              <img
+                                src={opt.imageUrl}
+                                alt={`Gambar Opsi ${opt.id}`}
+                                className="object-contain max-h-32 w-auto max-w-full rounded border border-slate-200 bg-white"
+                              />
+                            )}
                             <MathTextRenderer content={opt.text || `(Kosong)`} inline />
                           </div>
                         </div>

@@ -19,6 +19,7 @@ import {
   INITIAL_AUDIT_LOGS,
   reconcileOfficialTeachersAndSubjects,
   reconcileOfficialMathQuestions,
+  reconcileOfficialGrade7Banks,
 } from './src/data/seedData';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -92,15 +93,19 @@ try {
         inMemoryStore.questionBank,
         inMemoryStore.exams
       );
-      if (diskReconciled.migrated || mathReconciled.migrated) {
+      const grade7Reconciled = reconcileOfficialGrade7Banks(
+        mathReconciled.questionBank,
+        mathReconciled.exams
+      );
+      if (diskReconciled.migrated || mathReconciled.migrated || grade7Reconciled.migrated) {
         inMemoryStore.teachers = diskReconciled.teachers;
         inMemoryStore.subjects = diskReconciled.subjects;
-        inMemoryStore.questionBank = mathReconciled.questionBank;
-        inMemoryStore.exams = mathReconciled.exams;
+        inMemoryStore.questionBank = grade7Reconciled.questionBank;
+        inMemoryStore.exams = grade7Reconciled.exams;
         storeVersion++;
         lastUpdated = Date.now();
         saveStoreToDisk();
-        console.log('[CBT Server] Migrated legacy teachers/subjects/math questions on disk to latest official database');
+        console.log('[CBT Server] Migrated legacy teachers/subjects/question banks on disk to latest official database');
       }
       console.log(`[CBT Server] Loaded existing shared database from ${DATA_FILE} (Version ${storeVersion})`);
     } else {

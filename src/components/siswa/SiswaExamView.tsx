@@ -3573,14 +3573,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             className="text-slate-800 text-sm leading-relaxed p-4 bg-slate-50 rounded-xl border border-slate-200 notranslate cbt-secure-text overflow-x-auto"
             translate="no"
           >
-            <MathTextRenderer content={currentQ.prompt} />
             {currentQ.imageUrl && (
-              <img 
-                src={currentQ.imageUrl} 
-                alt="Gambar Soal" 
-                className="max-h-60 object-contain rounded-lg border border-slate-200 mt-3 pointer-events-none" 
-              />
+              <div className="mb-3 flex justify-center">
+                <img 
+                  src={currentQ.imageUrl} 
+                  alt={`Gambar Soal No. ${currentQ.number}`}
+                  loading="eager"
+                  className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white shadow-xs pointer-events-none select-none" 
+                />
+              </div>
             )}
+            <MathTextRenderer content={currentQ.prompt} />
           </div>
 
           {/* Answer Options */}
@@ -3595,7 +3598,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       key={opt.id}
                       type="button"
                       onClick={() => handleSelectOption(currentQ.id, opt.id)}
-                      className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-center gap-3 cursor-pointer ${
+                      className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-medium shadow-xs'
                           : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
@@ -3606,7 +3609,14 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       }`}>
                         {opt.id}
                       </span>
-                      <div className="min-w-0 flex-1 overflow-x-auto">
+                      <div className="min-w-0 flex-1 overflow-x-auto space-y-2">
+                        {opt.imageUrl && (
+                          <img
+                            src={opt.imageUrl}
+                            alt={`Gambar Opsi ${opt.id}`}
+                            className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white pointer-events-none select-none"
+                          />
+                        )}
                         <MathTextRenderer content={opt.text} />
                       </div>
                     </button>
@@ -3629,7 +3639,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       key={opt.id}
                       type="button"
                       onClick={() => handleToggleComplexOption(currentQ.id, opt.id)}
-                      className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-center gap-3 cursor-pointer ${
+                      className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-medium shadow-xs'
                           : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
@@ -3639,10 +3649,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                         type="checkbox"
                         checked={isSelected}
                         readOnly
-                        className="w-4 h-4 rounded text-blue-600 shrink-0"
+                        className="w-4 h-4 mt-0.5 rounded text-blue-600 shrink-0"
                       />
                       <span className="font-bold font-mono text-slate-700 shrink-0">{opt.id}.</span>
-                      <div className="min-w-0 flex-1 overflow-x-auto">
+                      <div className="min-w-0 flex-1 overflow-x-auto space-y-2">
+                        {opt.imageUrl && (
+                          <img
+                            src={opt.imageUrl}
+                            alt={`Gambar Opsi ${opt.id}`}
+                            className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white pointer-events-none select-none"
+                          />
+                        )}
                         <MathTextRenderer content={opt.text} />
                       </div>
                     </button>

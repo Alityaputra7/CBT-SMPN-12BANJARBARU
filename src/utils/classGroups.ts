@@ -57,6 +57,14 @@ export const isQuestionMatchingClass = (
     return true;
   }
 
+  // Support comma-separated multi-grade scoping (e.g., classId: 'cls-8,cls-9', grade: 'VIII,IX')
+  const classTokens = questionClassId
+    ? questionClassId.split(',').map(t => t.trim()).filter(Boolean)
+    : [];
+  const gradeTokens = questionGrade
+    ? questionGrade.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
+    : [];
+
   // Student in Kelas VIII (VIII-A or VIII-B)
   if (
     studentClassId === 'cls-8' || 
@@ -65,30 +73,30 @@ export const isQuestionMatchingClass = (
     studentClassId === 'VIII'
   ) {
     return (
-      questionClassId === 'cls-8' ||
-      questionClassId === 'cls-8a' ||
-      questionClassId === 'cls-8b' ||
-      questionGrade === 'VIII'
+      classTokens.includes('cls-8') ||
+      classTokens.includes('cls-8a') ||
+      classTokens.includes('cls-8b') ||
+      gradeTokens.includes('VIII')
     );
   }
 
   // Student in Kelas VII
   if (studentClassId === 'cls-1' || studentClassId === 'VII') {
     return (
-      questionClassId === 'cls-1' ||
-      questionGrade === 'VII'
+      classTokens.includes('cls-1') ||
+      gradeTokens.includes('VII')
     );
   }
 
   // Student in Kelas IX
   if (studentClassId === 'cls-9' || studentClassId === 'IX') {
     return (
-      questionClassId === 'cls-9' ||
-      questionGrade === 'IX'
+      classTokens.includes('cls-9') ||
+      gradeTokens.includes('IX')
     );
   }
 
-  return questionClassId === studentClassId;
+  return classTokens.includes(studentClassId);
 };
 
 /**
@@ -129,6 +137,9 @@ export const isExamMatchingStudentClass = (
  * Returns formatted label for question's assigned class
  */
 export const getQuestionClassLabel = (classId?: string, grade?: string): string => {
+  if (classId === 'cls-8,cls-9' || grade === 'VIII,IX') {
+    return 'Kelas VIII & IX';
+  }
   if (classId === 'cls-8' || classId === 'cls-8a' || classId === 'cls-8b' || grade === 'VIII') {
     return 'Kelas VIII (A & B)';
   }

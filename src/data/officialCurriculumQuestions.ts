@@ -1,5 +1,10 @@
 import { Question, ExamSchedule } from '../types/cbt';
 import { MTK_ALL_OFFICIAL_QUESTIONS } from './mathOfficialQuestions';
+import { IPS_KELAS_7_QUESTIONS } from './grade7IpsQuestions';
+import { BIN_KELAS_7_QUESTIONS } from './grade7BinQuestions';
+import { IPA_KELAS_7_QUESTIONS } from './grade7IpaQuestions';
+import { BIG_KELAS_7_QUESTIONS } from './grade7BigQuestions';
+import { PPKN_KELAS_7_QUESTIONS } from './grade7PpknQuestions';
 
 // =========================================================================
 // 1. BAHASA INGGRIS (BIG) - 25 SOAL (20 PG + 5 URAIAN)
@@ -2440,12 +2445,33 @@ export const PJOK_OFFICIAL_QUESTIONS: Question[] = [
   }
 ];
 
-// Combine all official curriculum questions (194 total: 60 MTK [20 VII + 20 VIII + 20 IX] + 134 other subjects)
+// All 5 newly uploaded verbatim Kelas VII official banks (136 questions total):
+// IPS (30) + Bahasa Indonesia (30) + IPA (25) + Bahasa Inggris (21) + PPKn (30)
+export const GRADE_7_UPLOADED_OFFICIAL_QUESTIONS: Question[] = [
+  ...IPS_KELAS_7_QUESTIONS,
+  ...BIN_KELAS_7_QUESTIONS,
+  ...IPA_KELAS_7_QUESTIONS,
+  ...BIG_KELAS_7_QUESTIONS,
+  ...PPKN_KELAS_7_QUESTIONS
+];
+
+// Scope legacy generic IPA/IPS/BIG curriculum banks to Kelas VIII & IX so Kelas VII
+// strictly receives only the newly uploaded verbatim Kelas VII official PDF questions.
+const scopeToGrade8And9 = (list: Question[]): Question[] =>
+  list.map(q => ({
+    ...q,
+    classId: 'cls-8,cls-9',
+    grade: 'VIII,IX'
+  }));
+
+// Combine all official curriculum questions:
+// 60 MTK (20 VII + 20 VIII + 20 IX) + 136 Kelas VII (IPS/BIN/IPA/BIG/PPKn) + 134 existing (IPA/IPS/BIG VIII&IX + PAI + PJOK) = 330 total
 export const CURRICULUM_OFFICIAL_QUESTIONS: Question[] = [
   ...MTK_OFFICIAL_QUESTIONS,
-  ...IPA_OFFICIAL_QUESTIONS,
-  ...IPS_OFFICIAL_QUESTIONS,
-  ...BIG_OFFICIAL_QUESTIONS,
+  ...GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
+  ...scopeToGrade8And9(IPA_OFFICIAL_QUESTIONS),
+  ...scopeToGrade8And9(IPS_OFFICIAL_QUESTIONS),
+  ...scopeToGrade8And9(BIG_OFFICIAL_QUESTIONS),
   ...PAI_OFFICIAL_QUESTIONS,
   ...PJOK_OFFICIAL_QUESTIONS
 ];
@@ -2475,6 +2501,25 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     randomizeOptions: true,
     questionBankId: 'qbank-mat',
     totalQuestions: 20,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-bin-2026',
+    title: 'UAS Semester Ganjil - Bahasa Indonesia',
+    subjectId: 'sbj-bin',
+    subjectName: 'Bahasa Indonesia',
+    targetClassIds: ['cls-1'],
+    targetClassNames: ['VII'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-bin',
+    totalQuestions: 30,
     status: 'ongoing' as const,
     tokenRequired: true
   },
@@ -2512,7 +2557,7 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-ips',
-    totalQuestions: 38,
+    totalQuestions: 30,
     status: 'ongoing' as const,
     tokenRequired: true
   },
@@ -2531,7 +2576,26 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     randomizeQuestions: true,
     randomizeOptions: true,
     questionBankId: 'qbank-big',
-    totalQuestions: 25,
+    totalQuestions: 21,
+    status: 'ongoing' as const,
+    tokenRequired: true
+  },
+  {
+    id: 'ex-ppkn-2026',
+    title: 'UAS Semester Ganjil - Pendidikan Kewarganegaraan (PPKn)',
+    subjectId: 'sbj-ppkn',
+    subjectName: 'Pendidikan Kewarganegaraan (PPKn)',
+    targetClassIds: ['cls-1'],
+    targetClassNames: ['VII'],
+    date: getTodayDateStr(),
+    startTime: '07:00',
+    endTime: '23:59',
+    durationMinutes: 90,
+    kkm: 75,
+    randomizeQuestions: true,
+    randomizeOptions: true,
+    questionBankId: 'qbank-ppkn',
+    totalQuestions: 30,
     status: 'ongoing' as const,
     tokenRequired: true
   },

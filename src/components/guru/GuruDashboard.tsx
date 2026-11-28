@@ -796,14 +796,16 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                       Teks Pertanyaan &amp; Formula KaTeX:
                     </h4>
                     <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm leading-relaxed overflow-x-auto">
-                      <MathTextRenderer content={selectedQuestion.prompt} />
                       {selectedQuestion.imageUrl && (
-                        <img 
-                          src={selectedQuestion.imageUrl} 
-                          alt="Ilustrasi" 
-                          className="max-h-48 object-contain rounded mt-3 border border-slate-200" 
-                        />
+                        <div className="mb-3 flex justify-center">
+                          <img 
+                            src={selectedQuestion.imageUrl} 
+                            alt={`Ilustrasi Soal No. ${selectedQuestion.number}`}
+                            className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white" 
+                          />
+                        </div>
                       )}
+                      <MathTextRenderer content={selectedQuestion.prompt} />
                     </div>
                   </div>
 
@@ -862,11 +864,18 @@ export const GuruDashboard: React.FC<GuruDashboardProps> = ({
                                 : 'bg-white border-slate-200 text-slate-700'
                               }`}
                             >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div className="flex items-start gap-2 min-w-0 flex-1">
                                 <span className="w-6 h-6 rounded-md bg-slate-100 flex items-center justify-center font-bold font-mono text-slate-700 shrink-0">
                                   {opt.id}
                                 </span>
-                                <div className="min-w-0 flex-1 overflow-x-auto">
+                                <div className="min-w-0 flex-1 overflow-x-auto space-y-1.5">
+                                  {opt.imageUrl && (
+                                    <img
+                                      src={opt.imageUrl}
+                                      alt={`Gambar Opsi ${opt.id}`}
+                                      className="object-contain max-h-36 w-auto max-w-full rounded border border-slate-200 bg-white"
+                                    />
+                                  )}
                                   <MathTextRenderer content={opt.text} />
                                 </div>
                               </div>
