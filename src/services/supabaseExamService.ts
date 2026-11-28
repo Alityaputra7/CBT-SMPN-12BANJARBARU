@@ -2564,3 +2564,285 @@ export function subscribeToExamSchedulesRealtime(callbacks: {
   };
 }
 
+// ============================================================================
+// QUESTION BANK & QUESTION IMAGES SYNC (`public.cbt_questions`)
+// Stores question text, options, `image_url`, and `option_images` JSONB map
+// ============================================================================
+
+export interface SupabaseQuestionRow {
+  id: string;
+  bank_id: string;
+  number: number;
+  type: string;
+  subject_id: string | null;
+  class_id: string | null;
+  grade: string | null;
+  prompt: string;
+  image_url: string | null;
+  option_images: Record<string, string> | string | null;
+  options_json: Question['options'] | string | null;
+  matching_pairs_json: Question['matchingPairs'] | string | null;
+  matching_right_options_json: string[] | string | null;
+  statements_json: Question['statements'] | string | null;
+  correct_answers_json: string[] | string | null;
+  correct_answer_text: string | null;
+  essay_rubric: string | null;
+  points: number;
+  difficulty: string;
+  updated_at?: string;
+}
+
+function isMissingQuestionsTableError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const e = error as { code?: string; message?: string; details?: string };
+  if (e.code === '42P01' || e.code === 'PGRST205') return true;
+  const combined = `${e.message || ''} ${e.details || ''}`.toLowerCase();
+  return (
+    combined.includes('cbt_questions') &&
+    (combined.includes('does not exist') ||
+      combined.includes('schema cache') ||
+      combined.includes('not found'))
+  );
+}
+
+function safeParseJsonField<T>(val: T | string | null | undefined, fallback: T): T {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') {
+    try {
+      return JSON.parse(val) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return val;
+}
+
+export function mapQuestionToSupabaseRow(q: Question): SupabaseQuestionRow {
+  const optionImages: Record<string, string> = {};
+  const normalizedOptions = (q.options || []).map(opt => {
+    const cleanImg = opt.imageUrl?.trim() || undefined;
+    if (cleanImg) {
+      optionImages[opt.id] = cleanImg;
+    }
+    return {
+      id: opt.id,
+      text: opt.text || '',
+      ...(cleanImg ? { imageUrl: cleanImg } : {}),
+    };
+  });
+
+  return {
+    id: q.id,
+    bank_id: q.bankId || 'bank-default',
+    number: Number(q.number) || 1,
+    type: q.type || 'pg',
+    subject_id: q.subjectId || null,
+    class_id: q.classId || null,
+    grade: q.grade || null,
+    prompt: q.prompt || '',
+    image_url: q.imageUrl?.trim() || null,
+    option_images: optionImages,
+    options_json: normalizedOptions,
+    matching_pairs_json: q.matchingPairs || null,
+    matching_right_options_json: q.matchingRightOptions || null,
+    statements_json: q.statements || null,
+    correct_answers_json: q.correctAnswers || null,
+    correct_answer_text: q.correctAnswerText ?? null,
+    essay_rubric: q.essayRubric ?? null,
+    points: Number(q.points) || 5,
+    difficulty: q.difficulty || 'sedang',
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function mapSupabaseRowToQuestion(row: SupabaseQuestionRow): Question {
+  const rawOptions = safeParseJsonField<Question['options']>(row.options_json, []);
+  const optionImages = safeParseJsonField<Record<string, string>>(row.option_images, {});
+  const hydratedOptions = Array.isArray(rawOptions)
+    ? rawOptions.map(opt => {
+        const mergedImg = (opt.imageUrl && opt.imageUrl.trim()) || (optionImages && optionImages[opt.id]) || undefined;
+        return {
+          id: opt.id,
+          text: opt.text || '',
+          ...(mergedImg ? { imageUrl: mergedImg } : {}),
+        };
+      })
+    : [];
+
+  const matchingPairs = safeParseJsonField<Question['matchingPairs'] | null>(row.matching_pairs_json, null);
+  const matchingRightOptions = safeParseJsonField<string[] | null>(row.matching_right_options_json, null);
+  const statements = safeParseJsonField<Question['statements'] | null>(row.statements_json, null);
+  const correctAnswers = safeParseJsonField<string[] | null>(row.correct_answers_json, null);
+
+  return {
+    id: row.id,
+    bankId: row.bank_id || 'bank-default',
+    number: Number(row.number) || 1,
+    type: (row.type as Question['type']) || 'pg',
+    subjectId: row.subject_id || undefined,
+    classId: row.class_id || undefined,
+    grade: row.grade || undefined,
+    prompt: row.prompt || '',
+    imageUrl: row.image_url?.trim() || undefined,
+    options: hydratedOptions,
+    matchingPairs: Array.isArray(matchingPairs) && matchingPairs.length > 0 ? matchingPairs : undefined,
+    matchingRightOptions:
+      Array.isArray(matchingRightOptions) && matchingRightOptions.length > 0
+        ? matchingRightOptions
+        : undefined,
+    statements: Array.isArray(statements) && statements.length > 0 ? statements : undefined,
+    correctAnswers: Array.isArray(correctAnswers) ? correctAnswers : undefined,
+    correctAnswerText: row.correct_answer_text ?? undefined,
+    essayRubric: row.essay_rubric ?? undefined,
+    points: Number(row.points) || 5,
+    difficulty: (row.difficulty as Question['difficulty']) || 'sedang',
+  };
+}
+
+export async function fetchQuestionsFromSupabase(): Promise<{
+  questions: Question[] | null;
+  error?: string;
+  tableMissing?: boolean;
+}> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { questions: null };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('cbt_questions')
+      .select('*')
+      .order('number', { ascending: true });
+
+    if (error) {
+      if (isMissingQuestionsTableError(error)) {
+        return { questions: null, tableMissing: true };
+      }
+      const exactMessage = formatSupabaseError(error);
+      console.error('[Supabase] fetchQuestions failed:', exactMessage);
+      return { questions: null, error: exactMessage };
+    }
+
+    const mapped = ((data || []) as SupabaseQuestionRow[]).map(mapSupabaseRowToQuestion);
+    return { questions: mapped };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] fetchQuestions network error:', exactMessage);
+    return { questions: null, error: exactMessage };
+  }
+}
+
+export async function upsertQuestionToSupabase(
+  question: Question
+): Promise<{ success: boolean; error?: string; skipped?: boolean; tableMissing?: boolean }> {
+  return upsertMultipleQuestionsToSupabase([question]);
+}
+
+export async function upsertMultipleQuestionsToSupabase(
+  questions: Question[]
+): Promise<{ success: boolean; error?: string; skipped?: boolean; tableMissing?: boolean }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      success: false,
+      skipped: true,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  if (!questions || questions.length === 0) {
+    return { success: true };
+  }
+
+  try {
+    // Chunk upserts (max 20 rows per batch) so compressed base64 images never hit payload caps
+    const CHUNK_SIZE = 20;
+    for (let i = 0; i < questions.length; i += CHUNK_SIZE) {
+      const batchRows = questions.slice(i, i + CHUNK_SIZE).map(mapQuestionToSupabaseRow);
+      const { error } = await supabase
+        .from('cbt_questions')
+        .upsert(batchRows, { onConflict: 'id' });
+
+      if (error) {
+        if (isMissingQuestionsTableError(error)) {
+          return { success: false, skipped: true, tableMissing: true };
+        }
+        const exactMessage = formatSupabaseError(error);
+        console.error('[Supabase] upsertMultipleQuestions failed:', exactMessage);
+        return { success: false, error: exactMessage };
+      }
+    }
+    return { success: true };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] upsertMultipleQuestions network error:', exactMessage);
+    return { success: false, error: exactMessage };
+  }
+}
+
+export async function deleteQuestionsFromSupabase(
+  questionIds: string[]
+): Promise<{ success: boolean; error?: string; skipped?: boolean; tableMissing?: boolean }> {
+  if (!isSupabaseConfigured || !supabase) {
+    return {
+      success: false,
+      skipped: true,
+      error: supabaseConfigError || 'Supabase belum dikonfigurasi.',
+    };
+  }
+  if (!questionIds || questionIds.length === 0) {
+    return { success: true };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('cbt_questions')
+      .delete()
+      .in('id', questionIds);
+
+    if (error) {
+      if (isMissingQuestionsTableError(error)) {
+        return { success: false, skipped: true, tableMissing: true };
+      }
+      const exactMessage = formatSupabaseError(error);
+      console.error('[Supabase] deleteQuestions failed:', exactMessage);
+      return { success: false, error: exactMessage };
+    }
+    return { success: true };
+  } catch (err) {
+    const exactMessage = err instanceof Error ? err.message : String(err);
+    console.error('[Supabase] deleteQuestions network error:', exactMessage);
+    return { success: false, error: exactMessage };
+  }
+}
+
+export function subscribeToQuestionsRealtime(callbacks: {
+  onChange: () => void;
+  onStatusChange?: (status: string) => void;
+}): () => void {
+  if (!isSupabaseConfigured || !supabase) {
+    return () => {};
+  }
+
+  const client = supabase;
+  const channel = client
+    .channel(`cbt-questions-realtime-${Date.now()}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'cbt_questions',
+      },
+      () => {
+        callbacks.onChange();
+      }
+    )
+    .subscribe(status => {
+      callbacks.onStatusChange?.(status);
+    });
+
+  return () => {
+    client.removeChannel(channel);
+  };
+}
+
+

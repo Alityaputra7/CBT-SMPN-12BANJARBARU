@@ -25,7 +25,8 @@ import {
   WifiOff,
   X,
   PauseCircle,
-  Info
+  Info,
+  ZoomIn
 } from 'lucide-react';
 import { 
   Student, 
@@ -38,6 +39,7 @@ import {
   isSessionCompleted
 } from '../../types/cbt';
 import { MathTextRenderer, containsMathSyntax } from '../common/MathTextRenderer';
+import { ImageZoomModal } from '../common/ImageZoomModal';
 import { isQuestionMatchingClass, isExamMatchingStudentClass } from '../../utils/classGroups';
 import { fetchServerData } from '../../utils/apiSync';
 import { isSupabaseConfigured, supabaseConfigError } from '../../lib/supabaseClient';
@@ -206,6 +208,7 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
       defaultSec;
   });
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [zoomedImage, setZoomedImage] = useState<{ src: string; caption: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitRetryStatus, setSubmitRetryStatus] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -3574,13 +3577,31 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
             translate="no"
           >
             {currentQ.imageUrl && (
-              <div className="mb-3 flex justify-center">
-                <img 
-                  src={currentQ.imageUrl} 
-                  alt={`Gambar Soal No. ${currentQ.number}`}
-                  loading="eager"
-                  className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white shadow-xs pointer-events-none select-none" 
-                />
+              <div className="mb-3 flex flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setZoomedImage({
+                      src: currentQ.imageUrl!,
+                      caption: `Gambar Soal Nomor ${currentQuestionIndex + 1}`,
+                    })
+                  }
+                  className="group relative inline-flex flex-col items-center rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-zoom-in"
+                  title="Ketuk untuk memperbesar gambar soal"
+                >
+                  <img
+                    src={currentQ.imageUrl}
+                    alt={`Gambar Soal No. ${currentQ.number}`}
+                    loading="eager"
+                    draggable={false}
+                    onContextMenu={e => e.preventDefault()}
+                    className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white shadow-xs select-none transition-transform group-hover:scale-[1.01]"
+                  />
+                  <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-800/80 text-white text-[10px] font-medium group-hover:bg-blue-700 transition-colors">
+                    <ZoomIn className="w-3 h-3" />
+                    <span>Ketuk gambar untuk memperbesar</span>
+                  </span>
+                </button>
               </div>
             )}
             <MathTextRenderer content={currentQ.prompt} />
@@ -3594,10 +3615,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                 {currentQ.options.map(opt => {
                   const isSelected = studentAns === opt.id;
                   return (
-                    <button
+                    <div
                       key={opt.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectOption(currentQ.id, opt.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectOption(currentQ.id, opt.id);
+                        }
+                      }}
                       className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-medium shadow-xs'
@@ -3611,15 +3639,34 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                       </span>
                       <div className="min-w-0 flex-1 overflow-x-auto space-y-2">
                         {opt.imageUrl && (
-                          <img
-                            src={opt.imageUrl}
-                            alt={`Gambar Opsi ${opt.id}`}
-                            className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white pointer-events-none select-none"
-                          />
+                          <div className="flex flex-wrap items-end gap-2">
+                            <img
+                              src={opt.imageUrl}
+                              alt={`Gambar Opsi ${opt.id}`}
+                              draggable={false}
+                              onContextMenu={e => e.preventDefault()}
+                              className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white select-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setZoomedImage({
+                                  src: opt.imageUrl!,
+                                  caption: `Gambar Opsi ${opt.id} — Soal Nomor ${currentQuestionIndex + 1}`,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 text-[10px] font-semibold transition-colors cursor-zoom-in shrink-0"
+                              title={`Perbesar gambar opsi ${opt.id}`}
+                            >
+                              <ZoomIn className="w-3 h-3" />
+                              <span>Perbesar</span>
+                            </button>
+                          </div>
                         )}
-                        <MathTextRenderer content={opt.text} />
+                        {opt.text.trim().length > 0 && <MathTextRenderer content={opt.text} />}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -3635,10 +3682,17 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                   const selectedList = Array.isArray(studentAns) ? studentAns : [];
                   const isSelected = selectedList.includes(opt.id);
                   return (
-                    <button
+                    <div
                       key={opt.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleToggleComplexOption(currentQ.id, opt.id)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleToggleComplexOption(currentQ.id, opt.id);
+                        }
+                      }}
                       className={`w-full p-3.5 rounded-xl border text-left text-xs transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
                           ? 'border-blue-600 bg-blue-50/70 text-blue-950 font-medium shadow-xs'
@@ -3649,20 +3703,39 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
                         type="checkbox"
                         checked={isSelected}
                         readOnly
-                        className="w-4 h-4 mt-0.5 rounded text-blue-600 shrink-0"
+                        className="w-4 h-4 mt-0.5 rounded text-blue-600 shrink-0 pointer-events-none"
                       />
                       <span className="font-bold font-mono text-slate-700 shrink-0">{opt.id}.</span>
                       <div className="min-w-0 flex-1 overflow-x-auto space-y-2">
                         {opt.imageUrl && (
-                          <img
-                            src={opt.imageUrl}
-                            alt={`Gambar Opsi ${opt.id}`}
-                            className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white pointer-events-none select-none"
-                          />
+                          <div className="flex flex-wrap items-end gap-2">
+                            <img
+                              src={opt.imageUrl}
+                              alt={`Gambar Opsi ${opt.id}`}
+                              draggable={false}
+                              onContextMenu={e => e.preventDefault()}
+                              className="object-contain max-h-40 w-auto max-w-full rounded-lg border border-slate-200 bg-white select-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setZoomedImage({
+                                  src: opt.imageUrl!,
+                                  caption: `Gambar Opsi ${opt.id} — Soal Nomor ${currentQuestionIndex + 1}`,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 text-[10px] font-semibold transition-colors cursor-zoom-in shrink-0"
+                              title={`Perbesar gambar opsi ${opt.id}`}
+                            >
+                              <ZoomIn className="w-3 h-3" />
+                              <span>Perbesar</span>
+                            </button>
+                          </div>
                         )}
-                        <MathTextRenderer content={opt.text} />
+                        {opt.text.trim().length > 0 && <MathTextRenderer content={opt.text} />}
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
@@ -4212,6 +4285,13 @@ export const SiswaExamView: React.FC<SiswaExamViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Full-Screen Image Lightbox / Zoom Modal for Question & Option Images */}
+      <ImageZoomModal
+        src={zoomedImage?.src || null}
+        caption={zoomedImage?.caption}
+        onClose={() => setZoomedImage(null)}
+      />
     </div>
   );
 };

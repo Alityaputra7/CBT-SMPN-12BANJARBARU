@@ -1,17 +1,33 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   Plus,
   Trash2,
   Image as ImageIcon,
+  ImagePlus,
+  Upload,
+  ClipboardPaste,
   Eye,
   CheckCircle2,
-  Calculator
+  Calculator,
+  Loader2,
+  AlertCircle,
+  RefreshCw,
+  ZoomIn,
+  Link2
 } from 'lucide-react';
 import { Question, QuestionType, Subject, ClassRoom, MatchingPair, TrueFalseStatement } from '../../types/cbt';
 import { MathTextRenderer, containsMathSyntax } from './MathTextRenderer';
 import { MathFormulaToolbar } from './MathFormulaToolbar';
+import { ImageZoomModal } from './ImageZoomModal';
 import { QUESTION_CLASS_GROUPS } from '../../utils/classGroups';
+import {
+  compressImageFile,
+  extractImageFileFromClipboardEvent,
+  readImageFileFromNavigatorClipboard,
+  formatFileSize,
+  estimateDataUrlBytes
+} from '../../utils/imageCompression';
 
 interface QuestionEditorModalProps {
   isOpen: boolean;
@@ -109,6 +125,170 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
   // Track currently focused field & DOM refs for cursor-accurate LaTeX insertion
   const [activeField, setActiveField] = useState<ActiveFieldTarget>({ kind: 'prompt' });
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+
+  // Image upload, drag-drop, clipboard paste, compression & preview states
+  const [isCompressingQuestionImg, setIsCompressingQuestionImg] = useState(false);
+  const [isDraggingQuestionImg, setIsDraggingQuestionImg] = useState(false);
+  const [questionImgError, setQuestionImgError] = useState<string | null>(null);
+  const [questionImgMeta, setQuestionImgMeta] = useState<{
+    width: number;
+    height: number;
+    bytes: number;
+    format: string;
+  } | null>(null);
+  const [showImageUrlInput, setShowImageUrlInput] = useState<boolean>(
+    Boolean(initialQuestion?.imageUrl && !initialQuestion.imageUrl.startsWith('data:'))
+  );
+  const [compressingOptionId, setCompressingOptionId] = useState<string | null>(null);
+  const [draggingOptionId, setDraggingOptionId] = useState<string | null>(null);
+  const [optionImgError, setOptionImgError] = useState<Record<string, string>>({});
+  const [optionImgMeta, setOptionImgMeta] = useState<
+    Record<string, { width: number; height: number; bytes: number; format: string }>
+  >({});
+  const [formValidationError, setFormValidationError] = useState<string | null>(null);
+  const [zoomPreview, setZoomPreview] = useState<{ src: string; caption: string } | null>(null);
+
+  const questionImageInputRef = useRef<HTMLInputElement | null>(null);
+  const optionImageInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const activeFieldRef = useRef<ActiveFieldTarget>(activeField);
+  const qTypeRef = useRef<QuestionType>(qType);
+
+  useEffect(() => {
+    activeFieldRef.current = activeField;
+  }, [activeField]);
+
+  useEffect(() => {
+    qTypeRef.current = qType;
+  }, [qType]);
+
+  const handleProcessQuestionImage = useCallback(async (file: File) => {
+    setQuestionImgError(null);
+    setIsCompressingQuestionImg(true);
+    try {
+      const compressed = await compressImageFile(file, {
+        maxWidth: 800,
+        quality: 0.75,
+        maxBytes: 98 * 1024,
+      });
+      setImageUrl(compressed.dataUrl);
+      setQuestionImgMeta({
+        width: compressed.width,
+        height: compressed.height,
+        bytes: compressed.compressedSizeBytes,
+        format: compressed.format.toUpperCase(),
+      });
+    } catch (err) {
+      setQuestionImgError(
+        err instanceof Error ? err.message : 'Gagal memproses gambar soal. Coba file JPG/PNG/WEBP lain.'
+      );
+    } finally {
+      setIsCompressingQuestionImg(false);
+    }
+  }, []);
+
+  const handleProcessOptionImage = useCallback(async (optId: string, file: File) => {
+    setOptionImgError(prev => {
+      const next = { ...prev };
+      delete next[optId];
+      return next;
+    });
+    setFormValidationError(null);
+    setCompressingOptionId(optId);
+    try {
+      const compressed = await compressImageFile(file, {
+        maxWidth: 800,
+        quality: 0.75,
+        maxBytes: 98 * 1024,
+      });
+      setOptions(prev =>
+        prev.map(o => (o.id === optId ? { ...o, imageUrl: compressed.dataUrl } : o))
+      );
+      setOptionImgMeta(prev => ({
+        ...prev,
+        [optId]: {
+          width: compressed.width,
+          height: compressed.height,
+          bytes: compressed.compressedSizeBytes,
+          format: compressed.format.toUpperCase(),
+        },
+      }));
+    } catch (err) {
+      setOptionImgError(prev => ({
+        ...prev,
+        [optId]:
+          err instanceof Error
+            ? err.message
+            : `Gagal memproses gambar untuk opsi ${optId}.`,
+      }));
+    } finally {
+      setCompressingOptionId(null);
+    }
+  }, []);
+
+  // Global Ctrl+V / Cmd+V paste listener while modal is open:
+  // Automatically detects pasted screenshots/images from Snipping Tool, Word, PDF, or Browser.
+  // If an Option A-E field is currently focused (in PG/PG Kompleks), pastes directly into that option;
+  // otherwise pastes into the main Question Image box! Plain text paste is untouched.
+  useEffect(() => {
+    const onWindowPaste = (e: ClipboardEvent) => {
+      const pastedImage = extractImageFileFromClipboardEvent(e);
+      if (!pastedImage) return;
+      e.preventDefault();
+      const currentTarget = activeFieldRef.current;
+      const currentType = qTypeRef.current;
+      if (
+        currentTarget.kind === 'option' &&
+        (currentType === 'pg' || currentType === 'pg_kompleks')
+      ) {
+        void handleProcessOptionImage(currentTarget.id, pastedImage);
+      } else {
+        void handleProcessQuestionImage(pastedImage);
+      }
+    };
+    window.addEventListener('paste', onWindowPaste);
+    return () => window.removeEventListener('paste', onWindowPaste);
+  }, [handleProcessOptionImage, handleProcessQuestionImage]);
+
+  const handlePasteFromClipboardButton = async (target: { kind: 'question' } | { kind: 'option'; id: string }) => {
+    if (target.kind === 'question') {
+      setQuestionImgError(null);
+    } else {
+      setOptionImgError(prev => {
+        const next = { ...prev };
+        delete next[target.id];
+        return next;
+      });
+    }
+
+    let clipboardFile: File | null = null;
+    let clipboardErr: string | null = null;
+    try {
+      clipboardFile = await readImageFileFromNavigatorClipboard();
+      if (!clipboardFile) {
+        clipboardErr = 'Tidak ada gambar di clipboard. Salin gambar / screenshot terlebih dahulu lalu tekan Ctrl+V.';
+      }
+    } catch {
+      clipboardErr = 'Browser membatasi tombol tempel otomatis. Silakan langsung tekan Ctrl+V (atau Cmd+V) pada keyboard.';
+    }
+
+    if (!clipboardFile) {
+      if (target.kind === 'question') {
+        setQuestionImgError(clipboardErr);
+      } else {
+        setOptionImgError(prev => ({
+          ...prev,
+          [target.id]: clipboardErr || 'Gagal membaca clipboard.',
+        }));
+      }
+      return;
+    }
+
+    if (target.kind === 'question') {
+      await handleProcessQuestionImage(clipboardFile);
+    } else {
+      await handleProcessOptionImage(target.id, clipboardFile);
+    }
+  };
 
   const getFieldKey = (target: ActiveFieldTarget): string => {
     if (target.kind === 'prompt') return 'prompt';
@@ -261,13 +441,31 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormValidationError(null);
 
-    if (!prompt.trim()) {
+    if (!prompt.trim() && !imageUrl.trim()) {
+      setFormValidationError('Teks pertanyaan atau gambar soal wajib diisi.');
       return;
+    }
+
+    if (['pg', 'pg_kompleks'].includes(qType)) {
+      const emptyOpt = options.find(o => !o.text.trim() && !o.imageUrl?.trim());
+      if (emptyOpt) {
+        setFormValidationError(
+          `Opsi ${emptyOpt.id} masih kosong. Isi teks jawaban atau unggah gambar pada opsi ${emptyOpt.id}.`
+        );
+        return;
+      }
     }
 
     const gradeVal =
       selectedClassId === 'cls-8' ? 'VIII' : selectedClassId === 'cls-9' ? 'IX' : 'VII';
+
+    const cleanedOptions = options.map(o => ({
+      id: o.id,
+      text: o.text,
+      ...(o.imageUrl?.trim() ? { imageUrl: o.imageUrl.trim() } : {}),
+    }));
 
     // Preserve literal backslashes & dollar signs cleanly without escaping/trimming math tokens
     const savedQ: Question = {
@@ -284,7 +482,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
       grade: gradeVal,
       options:
         ['pg', 'pg_kompleks'].includes(qType) || (qType === 'benar_salah' && statements.length === 0)
-          ? options
+          ? cleanedOptions
           : [],
       matchingPairs: qType === 'mencocokkan' ? matchingPairs : undefined,
       matchingRightOptions:
@@ -448,7 +646,7 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                 fieldRefs.current['prompt'] = el;
               }}
               rows={4}
-              required
+              required={!imageUrl.trim()}
               value={prompt}
               onFocus={() => setActiveField({ kind: 'prompt' })}
               onChange={e => setPrompt(e.target.value)}
@@ -474,32 +672,224 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             )}
           </div>
 
-          {/* Optional Image URL */}
-          <div>
-            <label className="font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-              <ImageIcon className="w-3.5 h-3.5 text-slate-500" />
-              <span>URL Gambar Soal (Opsional):</span>
-            </label>
+          {/* Question Image Upload: File Picker, Drag & Drop, Ctrl+V Paste, Canvas Compression & Preview */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                <span>Gambar Soal (Opsional · Otomatis dikompresi &lt; 100 KB):</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowImageUrlInput(prev => !prev)}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 cursor-pointer"
+              >
+                <Link2 className="w-3 h-3" />
+                <span>{showImageUrlInput ? 'Sembunyikan input URL' : 'Atau tempel URL / path'}</span>
+              </button>
+            </div>
+
             <input
-              type="text"
-              value={imageUrl}
-              onChange={e => setImageUrl(e.target.value)}
-              placeholder="Contoh: https://example.com/diagram_geometri.png"
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none font-mono text-xs"
+              ref={questionImageInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/svg+xml,.jpg,.jpeg,.png,.webp,.svg"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) {
+                  void handleProcessQuestionImage(file);
+                }
+              }}
             />
+
+            {!imageUrl.trim() ? (
+              <div
+                onDragOver={e => {
+                  e.preventDefault();
+                  setIsDraggingQuestionImg(true);
+                }}
+                onDragLeave={() => setIsDraggingQuestionImg(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setIsDraggingQuestionImg(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    void handleProcessQuestionImage(file);
+                  }
+                }}
+                className={`rounded-xl border-2 border-dashed p-4 transition-colors text-center space-y-2.5 ${
+                  isDraggingQuestionImg
+                    ? 'border-blue-500 bg-blue-50/70'
+                    : 'border-slate-300 bg-slate-50/70 hover:border-blue-400 hover:bg-blue-50/30'
+                }`}
+              >
+                {isCompressingQuestionImg ? (
+                  <div className="py-3 flex flex-col items-center gap-2 text-blue-700">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <span className="text-xs font-semibold">
+                      Mengompresi gambar agar ringan di HP siswa...
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                        <Upload className="w-4 h-4" />
+                      </div>
+                      <p className="text-xs font-semibold text-slate-700">
+                        Seret &amp; lepas gambar di sini, pilih file, atau langsung tekan{' '}
+                        <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-white border border-slate-300 rounded shadow-2xs">
+                          Ctrl+V
+                        </kbd>
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Mendukung JPG, PNG, WEBP, SVG &amp; hasil screenshot / Snipping Tool dari Word atau PDF.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => questionImageInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[11px] font-semibold shadow-xs cursor-pointer transition-colors"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Pilih File Gambar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handlePasteFromClipboardButton({ kind: 'question' })}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors"
+                      >
+                        <ClipboardPaste className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Tempel dari Clipboard</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div
+                onDragOver={e => {
+                  e.preventDefault();
+                  setIsDraggingQuestionImg(true);
+                }}
+                onDragLeave={() => setIsDraggingQuestionImg(false)}
+                onDrop={e => {
+                  e.preventDefault();
+                  setIsDraggingQuestionImg(false);
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) {
+                    void handleProcessQuestionImage(file);
+                  }
+                }}
+                className={`p-3 rounded-xl border transition-colors space-y-2.5 ${
+                  isDraggingQuestionImg
+                    ? 'border-blue-500 bg-blue-50/70'
+                    : 'border-slate-200 bg-slate-50'
+                }`}
+              >
+                <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setZoomPreview({
+                        src: imageUrl,
+                        caption: 'Pratinjau Gambar Soal',
+                      })
+                    }
+                    className="group relative inline-flex flex-col items-center cursor-zoom-in"
+                    title="Klik untuk memperbesar gambar"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Pratinjau Gambar Soal"
+                      className="object-contain max-h-56 w-auto max-w-full rounded-lg border border-slate-200 bg-white shadow-2xs"
+                    />
+                    <span className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 group-hover:text-blue-600">
+                      <ZoomIn className="w-3 h-3" />
+                      <span>Klik gambar untuk perbesar</span>
+                    </span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200">
+                  <div className="text-[11px] text-slate-600 flex flex-wrap items-center gap-1.5">
+                    {questionImgMeta ? (
+                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                        {questionImgMeta.format} · {formatFileSize(questionImgMeta.bytes)} · {questionImgMeta.width}×{questionImgMeta.height}px
+                      </span>
+                    ) : imageUrl.startsWith('data:') ? (
+                      <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
+                        Tersimpan lokal · {formatFileSize(estimateDataUrlBytes(imageUrl))}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 font-mono truncate max-w-[260px]">
+                        {imageUrl}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={isCompressingQuestionImg}
+                      onClick={() => questionImageInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isCompressingQuestionImg ? 'animate-spin' : ''}`} />
+                      <span>Ganti Gambar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImageUrl('');
+                        setQuestionImgMeta(null);
+                        setQuestionImgError(null);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-[11px] font-semibold cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Hapus Gambar</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {questionImgError && (
+              <div className="flex items-start gap-1.5 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px]">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <span>{questionImgError}</span>
+              </div>
+            )}
+
+            {showImageUrlInput && (
+              <input
+                type="text"
+                value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                onChange={e => {
+                  setImageUrl(e.target.value);
+                  setQuestionImgMeta(null);
+                  setQuestionImgError(null);
+                }}
+                placeholder="Contoh: /images/soal/diagram_geometri.jpg atau https://..."
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-mono text-xs bg-white"
+              />
+            )}
           </div>
 
           {/* TYPE-SPECIFIC EDITORS */}
-          {/* 1. PG / PG KOMPLEKS (Supports A-E + Per-Option Math Target & Live Preview) */}
+          {/* 1. PG / PG KOMPLEKS (Supports A-E + Per-Option Math Target, Image Upload/Drop/Paste & Live Preview) */}
           {['pg', 'pg_kompleks'].includes(qType) && (
             <div className="space-y-2.5 pt-2 border-t border-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="font-semibold text-slate-700 block">
-                    Pilihan Opsi Jawaban A–E (Klik huruf untuk kunci jawaban · Klik kolom untuk sisip rumus):
+                    Pilihan Opsi Jawaban A–E (Klik huruf untuk kunci · Bisa tambah gambar atau tekan Ctrl+V saat fokus di opsi):
                   </span>
                   <span className="text-[11px] text-blue-600 font-medium">
-                    {qType === 'pg' ? 'Pilih 1 kunci benar' : 'Bisa centang lebih dari 1 kunci'}
+                    {qType === 'pg' ? 'Pilih 1 kunci benar' : 'Bisa centang lebih dari 1 kunci'} · Opsi dapat berupa teks, rumus, gambar, atau kombinasi keduanya
                   </span>
                 </div>
                 {options.length < 5 && (
@@ -519,9 +909,51 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                   const isChecked = correctAnswers.includes(opt.id);
                   const isFocusedOpt = activeField.kind === 'option' && activeField.id === opt.id;
                   const hasMath = containsMathSyntax(opt.text);
+                  const isCompressingThis = compressingOptionId === opt.id;
+                  const isDraggingThis = draggingOptionId === opt.id;
+                  const optMeta = optionImgMeta[opt.id];
+                  const optErr = optionImgError[opt.id];
 
                   return (
-                    <div key={opt.id} className="space-y-1">
+                    <div
+                      key={opt.id}
+                      onDragOver={e => {
+                        e.preventDefault();
+                        setDraggingOptionId(opt.id);
+                      }}
+                      onDragLeave={() => setDraggingOptionId(prev => (prev === opt.id ? null : prev))}
+                      onDrop={e => {
+                        e.preventDefault();
+                        setDraggingOptionId(null);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) {
+                          void handleProcessOptionImage(opt.id, file);
+                        }
+                      }}
+                      className={`space-y-1.5 rounded-xl p-2 border transition-colors ${
+                        isDraggingThis
+                          ? 'border-blue-500 bg-blue-50/70'
+                          : opt.imageUrl
+                            ? 'border-slate-200 bg-slate-50/60'
+                            : 'border-transparent p-0'
+                      }`}
+                    >
+                      <input
+                        ref={el => {
+                          optionImageInputRefs.current[opt.id] = el;
+                        }}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/svg+xml,.jpg,.jpeg,.png,.webp,.svg"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          e.target.value = '';
+                          if (file) {
+                            void handleProcessOptionImage(opt.id, file);
+                          }
+                        }}
+                      />
+
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -540,22 +972,51 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                             fieldRefs.current[`option:${opt.id}`] = el;
                           }}
                           type="text"
-                          required
+                          required={!opt.imageUrl}
                           value={opt.text}
                           onFocus={() => setActiveField({ kind: 'option', id: opt.id })}
                           onChange={e => {
                             const val = e.target.value;
+                            setFormValidationError(null);
                             setOptions(
                               options.map(o => (o.id === opt.id ? { ...o, text: val } : o))
                             );
                           }}
-                          placeholder={`Teks / rumus pilihan ${opt.id}... (contoh: $\\frac{1}{2}$)`}
-                          className={`flex-1 px-3 py-1.5 font-mono text-xs border rounded-lg outline-none transition-colors ${
+                          placeholder={
+                            opt.imageUrl
+                              ? `Keterangan teks opsi ${opt.id} (opsional karena sudah ada gambar)...`
+                              : `Teks / rumus pilihan ${opt.id}... (atau tekan Ctrl+V untuk tempel gambar)`
+                          }
+                          className={`flex-1 px-3 py-1.5 font-mono text-xs border rounded-lg outline-none bg-white transition-colors ${
                             isFocusedOpt
                               ? 'border-blue-500 ring-2 ring-blue-100'
                               : 'border-slate-300 focus:border-blue-500'
                           }`}
                         />
+                        <button
+                          type="button"
+                          disabled={isCompressingThis}
+                          onClick={() => optionImageInputRefs.current[opt.id]?.click()}
+                          title={
+                            opt.imageUrl
+                              ? `Ganti gambar Opsi ${opt.id}`
+                              : `Tambah gambar pada Opsi ${opt.id} (atau seret file ke baris ini)`
+                          }
+                          className={`px-2 py-1.5 rounded-lg border text-[11px] font-semibold flex items-center gap-1 cursor-pointer shrink-0 transition-colors ${
+                            opt.imageUrl
+                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-blue-50 hover:text-blue-700'
+                          }`}
+                        >
+                          {isCompressingThis ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <ImagePlus className="w-3.5 h-3.5" />
+                          )}
+                          <span className="hidden md:inline">
+                            {opt.imageUrl ? 'Ganti Gbr' : 'Gambar'}
+                          </span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => {
@@ -583,6 +1044,76 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                           </button>
                         )}
                       </div>
+
+                      {opt.imageUrl && (
+                        <div className="ml-9 p-2 bg-white border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setZoomPreview({
+                                  src: opt.imageUrl!,
+                                  caption: `Pratinjau Gambar Opsi ${opt.id}`,
+                                })
+                              }
+                              className="cursor-zoom-in shrink-0"
+                              title="Klik untuk perbesar gambar opsi"
+                            >
+                              <img
+                                src={opt.imageUrl}
+                                alt={`Pratinjau Opsi ${opt.id}`}
+                                className="object-contain max-h-24 w-auto max-w-[180px] rounded border border-slate-200 bg-slate-50"
+                              />
+                            </button>
+                            <div className="text-[11px] text-slate-600 space-y-0.5">
+                              <span className="font-semibold text-slate-700 block">
+                                Gambar Opsi {opt.id}
+                              </span>
+                              <span className="text-[10px] text-emerald-700 font-medium block">
+                                {optMeta
+                                  ? `${optMeta.format} · ${formatFileSize(optMeta.bytes)} · ${optMeta.width}×${optMeta.height}px`
+                                  : opt.imageUrl.startsWith('data:')
+                                    ? formatFileSize(estimateDataUrlBytes(opt.imageUrl))
+                                    : 'Tautan gambar'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => optionImageInputRefs.current[opt.id]?.click()}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                              <span>Ganti</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOptions(prev =>
+                                  prev.map(o => (o.id === opt.id ? { ...o, imageUrl: undefined } : o))
+                                );
+                                setOptionImgMeta(prev => {
+                                  const next = { ...prev };
+                                  delete next[opt.id];
+                                  return next;
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded cursor-pointer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>Hapus</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {optErr && (
+                        <div className="ml-9 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px]">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          <span>{optErr}</span>
+                        </div>
+                      )}
 
                       {hasMath && (
                         <div className="ml-9 px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-2 text-xs text-slate-800">
@@ -841,11 +1372,23 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-3">
               {imageUrl && (
                 <div className="flex justify-center">
-                  <img
-                    src={imageUrl}
-                    alt="Ilustrasi Soal"
-                    className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white"
-                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setZoomPreview({
+                        src: imageUrl,
+                        caption: 'Pratinjau Gambar Soal (Tampilan Siswa)',
+                      })
+                    }
+                    className="cursor-zoom-in"
+                    title="Klik untuk memperbesar"
+                  >
+                    <img
+                      src={imageUrl}
+                      alt="Ilustrasi Soal"
+                      className="object-contain max-h-72 w-auto max-w-full mx-auto rounded-lg border border-slate-200 bg-white"
+                    />
+                  </button>
                 </div>
               )}
 
@@ -905,13 +1448,27 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
                           </span>
                           <div className="min-w-0 flex-1 overflow-x-auto space-y-1.5">
                             {opt.imageUrl && (
-                              <img
-                                src={opt.imageUrl}
-                                alt={`Gambar Opsi ${opt.id}`}
-                                className="object-contain max-h-32 w-auto max-w-full rounded border border-slate-200 bg-white"
-                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setZoomPreview({
+                                    src: opt.imageUrl!,
+                                    caption: `Pratinjau Gambar Opsi ${opt.id}`,
+                                  })
+                                }
+                                className="cursor-zoom-in block"
+                                title="Klik untuk memperbesar gambar opsi"
+                              >
+                                <img
+                                  src={opt.imageUrl}
+                                  alt={`Gambar Opsi ${opt.id}`}
+                                  className="object-contain max-h-32 w-auto max-w-full rounded border border-slate-200 bg-white"
+                                />
+                              </button>
                             )}
-                            <MathTextRenderer content={opt.text || `(Kosong)`} inline />
+                            {(opt.text.trim().length > 0 || !opt.imageUrl) && (
+                              <MathTextRenderer content={opt.text || `(Kosong)`} inline />
+                            )}
                           </div>
                         </div>
                         {isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
@@ -957,6 +1514,13 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             </div>
           </div>
 
+          {formValidationError && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{formValidationError}</span>
+            </div>
+          )}
+
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
             <button
@@ -968,13 +1532,20 @@ export const QuestionEditorModal: React.FC<QuestionEditorModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm cursor-pointer"
+              disabled={isCompressingQuestionImg || Boolean(compressingOptionId)}
+              className="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg transition-colors shadow-sm cursor-pointer"
             >
-              Simpan Soal
+              {isCompressingQuestionImg || compressingOptionId ? 'Memproses Gambar...' : 'Simpan Soal'}
             </button>
           </div>
         </form>
       </div>
+
+      <ImageZoomModal
+        src={zoomPreview?.src || null}
+        caption={zoomPreview?.caption}
+        onClose={() => setZoomPreview(null)}
+      />
     </div>
   );
 };

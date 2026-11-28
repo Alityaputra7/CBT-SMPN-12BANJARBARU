@@ -6,6 +6,7 @@ import {
   StudentExamSession, 
   ViolationType,
   ExamSchedule, 
+  Question,
   QuestionBank, 
   ClassRoom, 
   Subject, 
@@ -66,6 +67,10 @@ import {
   upsertMultipleExamSchedulesToSupabase,
   deleteExamScheduleFromSupabase,
   subscribeToExamSchedulesRealtime,
+  fetchQuestionsFromSupabase,
+  upsertMultipleQuestionsToSupabase,
+  deleteQuestionsFromSupabase,
+  subscribeToQuestionsRealtime,
   getPendingSubmissions,
   flushPendingSubmissionsToSupabase,
   recordForcedLogoutToSupabase,
@@ -233,7 +238,29 @@ export default function App() {
 
   const studentsRef = useRef<Student[]>(students);
   const examsRef = useRef<ExamSchedule[]>(exams);
+  const questionBankRef = useRef<QuestionBank>(questionBank);
   const hasRemoteSchedulesRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    questionBankRef.current = questionBank;
+  }, [questionBank]);
+
+  const mergeRemoteQuestionsIntoBank = (
+    baseBank: QuestionBank,
+    remoteQuestions: Question[]
+  ): QuestionBank => {
+    if (!remoteQuestions || remoteQuestions.length === 0) return baseBank;
+    const remoteById = new Map(remoteQuestions.map(q => [q.id, q]));
+    const mergedExisting = baseBank.questions.map(q => remoteById.get(q.id) || q);
+    const existingIds = new Set(baseBank.questions.map(q => q.id));
+    const newlyAdded = remoteQuestions.filter(q => !existingIds.has(q.id));
+    const combined = [...mergedExisting, ...newlyAdded];
+    return {
+      ...baseBank,
+      questions: combined,
+      totalQuestions: combined.length,
+    };
+  };
 
   // Forced-logout confirmation modal state (blocks accidental/intentional mid-exam logout loophole)
   const [forcedLogoutTarget, setForcedLogoutTarget] = useState<{
@@ -490,10 +517,12 @@ export default function App() {
       isSupabaseConfigured ? fetchExamResultsWithStatusFromSupabase() : Promise.resolve({ sessions: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? fetchViolationLogsWithStatusFromSupabase() : Promise.resolve({ logs: null, error: undefined as string | undefined }),
       isSupabaseConfigured ? fetchExamSchedulesFromSupabase() : Promise.resolve({ schedules: null, error: undefined as string | undefined }),
-    ]).then(([serverRes, supSessionsRes, supLogsRes, supSchedulesRes]) => {
+      isSupabaseConfigured ? fetchQuestionsFromSupabase() : Promise.resolve({ questions: null, error: undefined as string | undefined, tableMissing: false }),
+    ]).then(([serverRes, supSessionsRes, supLogsRes, supSchedulesRes, supQuestionsRes]) => {
       let currentStudentsList = studentsRef.current;
       let defaultExam = examsRef.current[0] || INITIAL_EXAMS[0];
       let baseSessions = sessionsRef.current;
+      let nextQuestionBank = questionBankRef.current;
 
       const hasSupabaseSchedules = Boolean(
         isSupabaseConfigured && supSchedulesRes.schedules && supSchedulesRes.schedules.length > 0
@@ -532,8 +561,21 @@ export default function App() {
         if (!isSupabaseConfigured && Array.isArray(d.sessions)) {
           baseSessions = d.sessions;
         }
-        if (d.questionBank) setQuestionBank(d.questionBank);
+        if (d.questionBank) {
+          nextQuestionBank = d.questionBank;
+          setQuestionBank(d.questionBank);
+          questionBankRef.current = d.questionBank;
+        }
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
+      }
+
+      // Overlay Supabase cbt_questions (with compressed question & option images) on top of local bank
+      if (isSupabaseConfigured && supQuestionsRes.questions && supQuestionsRes.questions.length > 0) {
+        const mergedBank = mergeRemoteQuestionsIntoBank(nextQuestionBank, supQuestionsRes.questions);
+        nextQuestionBank = mergedBank;
+        questionBankRef.current = mergedBank;
+        setQuestionBank(mergedBank);
+        saveToStorage(STORAGE_KEYS.QUESTIONS, mergedBank);
       }
 
       if (isSupabaseConfigured && supSessionsRes.error) {
@@ -664,8 +706,22 @@ export default function App() {
       void handleRefreshSchedulesFromSupabase({ silent: true });
     }, 7000);
 
+    const unsubscribeQuestions = subscribeToQuestionsRealtime({
+      onChange: () => {
+        void fetchQuestionsFromSupabase().then(res => {
+          if (res.questions && res.questions.length > 0) {
+            const merged = mergeRemoteQuestionsIntoBank(questionBankRef.current, res.questions);
+            questionBankRef.current = merged;
+            setQuestionBank(merged);
+            saveToStorage(STORAGE_KEYS.QUESTIONS, merged);
+          }
+        });
+      },
+    });
+
     return () => {
       unsubscribeSchedules();
+      unsubscribeQuestions();
       clearInterval(schedulePollInterval);
     };
   }, []);
@@ -1095,8 +1151,35 @@ export default function App() {
 
   // Synchronized question bank updater: auto-updates exams and active questions
   const handleUpdateQuestionBank = (newBank: QuestionBank) => {
+    const prevQuestions = questionBankRef.current.questions || [];
+    const prevById = new Map(prevQuestions.map(q => [q.id, q]));
+    const newIds = new Set(newBank.questions.map(q => q.id));
+
+    const changedQuestions = newBank.questions.filter(q => {
+      const prev = prevById.get(q.id);
+      if (!prev) return true;
+      return JSON.stringify(prev) !== JSON.stringify(q);
+    });
+    const deletedIds = prevQuestions
+      .filter(q => !newIds.has(q.id))
+      .map(q => q.id);
+
+    questionBankRef.current = newBank;
     setQuestionBank(newBank);
     saveToStorage(STORAGE_KEYS.QUESTIONS, newBank);
+
+    if (isSupabaseConfigured) {
+      if (changedQuestions.length > 0) {
+        void upsertMultipleQuestionsToSupabase(changedQuestions).then(res => {
+          if (!res.success && !res.skipped && !res.tableMissing && res.error) {
+            triggerSupabaseErrorNotification(`Gagal sinkronisasi soal ke Supabase: ${res.error}`);
+          }
+        });
+      }
+      if (deletedIds.length > 0) {
+        void deleteQuestionsFromSupabase(deletedIds);
+      }
+    }
 
     // Sync all exams with new question count based on subject or questionBankId
     setExams(prev => {
