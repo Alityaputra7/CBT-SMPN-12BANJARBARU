@@ -192,6 +192,7 @@ import { MTK_ALL_OFFICIAL_QUESTIONS } from './mathOfficialQuestions';
 import {
   GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
   GRADE_8_UPLOADED_OFFICIAL_QUESTIONS,
+  GRADE_9_UPLOADED_OFFICIAL_QUESTIONS,
   OFFICIAL_EXAM_SCHEDULES_ALL
 } from './officialCurriculumQuestions';
 
@@ -630,6 +631,98 @@ export function reconcileOfficialGrade8Banks(
     migrated: true,
   };
 }
+
+/**
+ * Reconciles cached localStorage / server-disk questionBank & exams with the 4 verbatim
+ * Kelas IX official banks (IPS 30, Bahasa Indonesia 30, Bahasa Inggris 21, PPKn 30),
+ * replaces legacy generic IPS/BIG seed questions (ips-1..38, big-1..25) that were previously
+ * serving Kelas IX so they never bleed into the new verbatim Kelas IX exams, keeps IPA IX intact,
+ * and ensures Bahasa Indonesia & PPKn schedules include Kelas IX.
+ */
+export function reconcileOfficialGrade9Banks(
+  loadedBank?: QuestionBank | null,
+  loadedExams?: ExamSchedule[] | null
+): { questionBank: QuestionBank; exams: ExamSchedule[]; migrated: boolean } {
+  const safeBank: QuestionBank =
+    loadedBank && Array.isArray(loadedBank.questions) ? loadedBank : INITIAL_QUESTION_BANK;
+  const safeExams: ExamSchedule[] =
+    Array.isArray(loadedExams) && loadedExams.length > 0 ? loadedExams : INITIAL_EXAMS;
+
+  const existingIds = new Set(safeBank.questions.map(q => q.id));
+  const hasAllGrade9Markers =
+    existingIds.has('ips-ix-1') &&
+    existingIds.has('bin-ix-1') &&
+    existingIds.has('big-ix-1') &&
+    existingIds.has('ppkn-ix-1');
+
+  const hasLegacyIpsOrBig = safeBank.questions.some(q => /^(ips|big)-\d+$/.test(q.id));
+
+  const binExam = safeExams.find(e => e.id === 'ex-bin-2026');
+  const ppknExam = safeExams.find(e => e.id === 'ex-ppkn-2026');
+  const hasGrade9InBinAndPpknSchedules =
+    Boolean(binExam?.targetClassIds?.includes('cls-9')) &&
+    Boolean(ppknExam?.targetClassIds?.includes('cls-9'));
+
+  if (hasAllGrade9Markers && !hasLegacyIpsOrBig && hasGrade9InBinAndPpknSchedules) {
+    return {
+      questionBank: safeBank,
+      exams: safeExams,
+      migrated: false,
+    };
+  }
+
+  const incomingIds = new Set(GRADE_9_UPLOADED_OFFICIAL_QUESTIONS.map(q => q.id));
+
+  // Remove legacy generic ips-1..38 & big-1..25 (now fully replaced across VII, VIII, IX) and deduplicate incoming Grade 9 IDs
+  const preservedQuestions = safeBank.questions.filter(
+    q => !incomingIds.has(q.id) && !/^(ips|big)-\d+$/.test(q.id)
+  );
+
+  const mergedQuestions = [...GRADE_9_UPLOADED_OFFICIAL_QUESTIONS, ...preservedQuestions];
+
+  const ensureGrade9Class = (ex: ExamSchedule): ExamSchedule => {
+    const classIds = Array.isArray(ex.targetClassIds) ? [...ex.targetClassIds] : [];
+    const classNames = Array.isArray(ex.targetClassNames) ? [...ex.targetClassNames] : [];
+    let changed = false;
+    if (!classIds.includes('cls-9')) {
+      classIds.push('cls-9');
+      changed = true;
+    }
+    if (!classNames.includes('IX')) {
+      classNames.push('IX');
+      changed = true;
+    }
+    return changed ? { ...ex, targetClassIds: classIds, targetClassNames: classNames } : ex;
+  };
+
+  const existingExamIds = new Set(safeExams.map(e => e.id));
+  const updatedExams = safeExams.map(ex => {
+    if (ex.id === 'ex-bin-2026' || ex.id === 'ex-ppkn-2026') {
+      return ensureGrade9Class(ex);
+    }
+    return ex;
+  });
+
+  for (const reqId of ['ex-bin-2026', 'ex-ppkn-2026']) {
+    if (!existingExamIds.has(reqId)) {
+      const template = OFFICIAL_EXAM_SCHEDULES_ALL.find(e => e.id === reqId);
+      if (template) {
+        updatedExams.push(template);
+      }
+    }
+  }
+
+  return {
+    questionBank: {
+      ...safeBank,
+      totalQuestions: mergedQuestions.length,
+      questions: mergedQuestions,
+    },
+    exams: updatedExams,
+    migrated: true,
+  };
+}
+
 
 
 

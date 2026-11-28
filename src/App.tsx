@@ -29,7 +29,8 @@ import {
   reconcileOfficialTeachersAndSubjects,
   reconcileOfficialMathQuestions,
   reconcileOfficialGrade7Banks,
-  reconcileOfficialGrade8Banks
+  reconcileOfficialGrade8Banks,
+  reconcileOfficialGrade9Banks
 } from './data/seedData';
 import { 
   loadFromStorage, 
@@ -147,11 +148,20 @@ export default function App() {
       grade7Reconciled.questionBank,
       grade7Reconciled.exams
     );
-    if (mathReconciled.migrated || grade7Reconciled.migrated || grade8Reconciled.migrated) {
-      saveToStorage(STORAGE_KEYS.QUESTIONS, grade8Reconciled.questionBank);
-      saveToStorage(STORAGE_KEYS.EXAMS, grade8Reconciled.exams);
+    const grade9Reconciled = reconcileOfficialGrade9Banks(
+      grade8Reconciled.questionBank,
+      grade8Reconciled.exams
+    );
+    if (
+      mathReconciled.migrated ||
+      grade7Reconciled.migrated ||
+      grade8Reconciled.migrated ||
+      grade9Reconciled.migrated
+    ) {
+      saveToStorage(STORAGE_KEYS.QUESTIONS, grade9Reconciled.questionBank);
+      saveToStorage(STORAGE_KEYS.EXAMS, grade9Reconciled.exams);
     }
-    return grade8Reconciled.questionBank;
+    return grade9Reconciled.questionBank;
   });
   const [exams, setExams] = useState<ExamSchedule[]>(() => {
     const loaded = loadFromStorage<ExamSchedule[] | null>(STORAGE_KEYS.EXAMS, null);
@@ -162,9 +172,13 @@ export default function App() {
         mathReconciled.questionBank,
         mathReconciled.exams
       );
-      return reconcileOfficialGrade8Banks(
+      const grade8Reconciled = reconcileOfficialGrade8Banks(
         grade7Reconciled.questionBank,
         grade7Reconciled.exams
+      );
+      return reconcileOfficialGrade9Banks(
+        grade8Reconciled.questionBank,
+        grade8Reconciled.exams
       ).exams;
     }
     return INITIAL_EXAMS;
@@ -573,19 +587,23 @@ export default function App() {
           serverGrade7Reconciled.questionBank,
           serverGrade7Reconciled.exams
         );
+        const serverGrade9Reconciled = reconcileOfficialGrade9Banks(
+          serverGrade8Reconciled.questionBank,
+          serverGrade8Reconciled.exams
+        );
         // Never let local server fallback overwrite schedules fetched from Supabase
         if (!hasSupabaseSchedules && Array.isArray(d.exams) && d.exams.length > 0) {
-          setExams(serverGrade8Reconciled.exams);
-          examsRef.current = serverGrade8Reconciled.exams;
-          defaultExam = serverGrade8Reconciled.exams[0];
+          setExams(serverGrade9Reconciled.exams);
+          examsRef.current = serverGrade9Reconciled.exams;
+          defaultExam = serverGrade9Reconciled.exams[0];
         }
         if (!isSupabaseConfigured && Array.isArray(d.sessions)) {
           baseSessions = d.sessions;
         }
         if (d.questionBank) {
-          nextQuestionBank = serverGrade8Reconciled.questionBank;
-          setQuestionBank(serverGrade8Reconciled.questionBank);
-          questionBankRef.current = serverGrade8Reconciled.questionBank;
+          nextQuestionBank = serverGrade9Reconciled.questionBank;
+          setQuestionBank(serverGrade9Reconciled.questionBank);
+          questionBankRef.current = serverGrade9Reconciled.questionBank;
         }
         if (Array.isArray(d.auditLogs)) setAuditLogs(d.auditLogs);
       }

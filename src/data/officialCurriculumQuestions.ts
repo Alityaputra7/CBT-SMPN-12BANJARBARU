@@ -10,6 +10,10 @@ import { BIN_KELAS_8_QUESTIONS } from './grade8BinQuestions';
 import { IPA_KELAS_8_QUESTIONS } from './grade8IpaQuestions';
 import { BIG_KELAS_8_QUESTIONS } from './grade8BigQuestions';
 import { PPKN_KELAS_8_QUESTIONS } from './grade8PpknQuestions';
+import { IPS_KELAS_9_QUESTIONS } from './grade9IpsQuestions';
+import { BIN_KELAS_9_QUESTIONS } from './grade9BinQuestions';
+import { BIG_KELAS_9_QUESTIONS } from './grade9BigQuestions';
+import { PPKN_KELAS_9_QUESTIONS } from './grade9PpknQuestions';
 
 // =========================================================================
 // 1. BAHASA INGGRIS (BIG) - 25 SOAL (20 PG + 5 URAIAN)
@@ -2468,8 +2472,15 @@ export const GRADE_8_UPLOADED_OFFICIAL_QUESTIONS: Question[] = [
   ...PPKN_KELAS_8_QUESTIONS
 ];
 
-// Scope legacy generic IPA/IPS/BIG curriculum banks to Kelas IX only so Kelas VII & VIII
-// strictly receive only the newly uploaded verbatim official PDF questions.
+export const GRADE_9_UPLOADED_OFFICIAL_QUESTIONS: Question[] = [
+  ...IPS_KELAS_9_QUESTIONS,
+  ...BIN_KELAS_9_QUESTIONS,
+  ...BIG_KELAS_9_QUESTIONS,
+  ...PPKN_KELAS_9_QUESTIONS
+];
+
+// Scope legacy generic IPA curriculum bank to Kelas IX only (Kelas VII & VIII have uploaded verbatim IPA PDFs;
+// IPS & Bahasa Inggris now have uploaded verbatim PDFs for ALL grades VII, VIII, and IX).
 const scopeToGrade9Only = (list: Question[]): Question[] =>
   list.map(q => ({
     ...q,
@@ -2478,14 +2489,13 @@ const scopeToGrade9Only = (list: Question[]): Question[] =>
   }));
 
 // Combine all official curriculum questions:
-// 60 MTK (20 VII + 20 VIII + 20 IX) + 136 Kelas VII + 136 Kelas VIII + 134 existing (IPA/IPS/BIG IX + PAI + PJOK) = 466 total
+// 60 MTK (20 VII + 20 VIII + 20 IX) + 136 Kelas VII + 136 Kelas VIII + 111 Kelas IX (IPS/BIN/BIG/PPKn) + 71 existing (IPA IX + PAI + PJOK) = 514 total
 export const CURRICULUM_OFFICIAL_QUESTIONS: Question[] = [
   ...MTK_OFFICIAL_QUESTIONS,
   ...GRADE_7_UPLOADED_OFFICIAL_QUESTIONS,
   ...GRADE_8_UPLOADED_OFFICIAL_QUESTIONS,
+  ...GRADE_9_UPLOADED_OFFICIAL_QUESTIONS,
   ...scopeToGrade9Only(IPA_OFFICIAL_QUESTIONS),
-  ...scopeToGrade9Only(IPS_OFFICIAL_QUESTIONS),
-  ...scopeToGrade9Only(BIG_OFFICIAL_QUESTIONS),
   ...PAI_OFFICIAL_QUESTIONS,
   ...PJOK_OFFICIAL_QUESTIONS
 ];
@@ -2523,8 +2533,8 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     title: 'UAS Semester Ganjil - Bahasa Indonesia',
     subjectId: 'sbj-bin',
     subjectName: 'Bahasa Indonesia',
-    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b'],
-    targetClassNames: ['VII', 'VIII-A', 'VIII-B'],
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
     date: getTodayDateStr(),
     startTime: '07:00',
     endTime: '23:59',
@@ -2599,8 +2609,8 @@ export const OFFICIAL_EXAM_SCHEDULES_ALL: ExamSchedule[] = [
     title: 'UAS Semester Ganjil - Pendidikan Kewarganegaraan (PPKn)',
     subjectId: 'sbj-ppkn',
     subjectName: 'Pendidikan Kewarganegaraan (PPKn)',
-    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b'],
-    targetClassNames: ['VII', 'VIII-A', 'VIII-B'],
+    targetClassIds: ['cls-1', 'cls-8a', 'cls-8b', 'cls-9'],
+    targetClassNames: ['VII', 'VIII-A', 'VIII-B', 'IX'],
     date: getTodayDateStr(),
     startTime: '07:00',
     endTime: '23:59',
